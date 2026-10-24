@@ -1,0 +1,136 @@
+// Cmail — incoming email handler (Cloudflare Email Routing → Worker)
+import PostalMime from 'postal-mime';
+import type { Env, } from './util';
+import { uid, now, previewOf, randomLocalPart } from './util';
+
+const MAX_HTML = 900_000;      // ~0.9 MB html stored
+const MAX_TEXT = 400_000;
+const MAX_ATTACHMENT_B64 = 900_000; // stored base64 cap
+
+export async function handleEmail(message: ForwardableEmailMessage, env: Env): Promise<void> {
+  const to = message.to.toLowerCase();
+  const [local, domainName] = to.split('@');
+  if (!local || !domainName) return;
+
+  const db = env.DB;
+
+  // find domain
+  const domain = await db.prepare('SELECT id, catch_all, active FROM domains WHERE name = ?').bind(domainName).first<{ id: string; catch_all: number; active: number }>();
+
+  // find address
+  let addr = await db.prepare('SELECT id, user_id, expires_at, forward_to, kind FROM addresses WHERE address = ?').bind(to)
+    .first<{ id: string; user_id: string; expires_at: number | null; forward_to: string | null; kind: string }>();
+
+  // catch-all: create a temporary inbox on the fly for unknown recipients
+  if (!addr && domain && domain.active && domain.catch_all) {
+    const owner = await firstAdminId(env);
+    if (owner) {
+      const ttlHours = parseInt((await db.prepare("SELECT value FROM settings WHERE key='temp_ttl_default'").first<{ value: string }>())?.value ?? '24', 10) || 24;
+      // local part may contain tags (user+tag@) — keep full local part as generated address
+      let localSafe = local.toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 32);
+      if (!localSafe || !/^[a-z0-9]/.test(localSafe)) localSafe = randomLocalPart();
+      let full = `${localSafe}@${domainName}`;
+      const exists = await db.prepare('SELECT id FROM addresses WHERE address = ?').bind(full).first<{ id: string }>();
+      if (exists) {
+        addr = await db.prepare('SELECT id, user_id, expires_at, forward_to, kind FROM addresses WHERE address = ?').bind(full)
+          .first<{ id: string; user_id: string; expires_at: number | null; forward_to: string | null; kind: string }>();
+      } else {
+        const id = uid('adr_');
+        await db.prepare(
+          'INSERT INTO addresses (id, user_id, domain_id, address, kind, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).bind(id, owner, domain.id, full, 'temp', now() + ttlHours * 3600_000, now()).run();
+        addr = { id, user_id: owner, expires_at: now() + ttlHours * 3600_000, forward_to: null, kind: 'temp' };
+      }
+    }
+  }
+
+  if (!addr) return; // unknown recipient, drop silently
+
+  // parse
+  const raw = new Uint8Array(await new Response(message.raw).arrayBuffer());
+  let parsed: Awaited<ReturnType<typeof PostalMime.parse>>;
+  try {
+    parsed = await PostalMime.parse(raw);
+  } catch {
+    parsed = { subject: '(unparsable message)', text: '', html: '', from: { address: message.from }, attachments: [] } as never;
+  }
+
+  const fromName = parsed.from?.name ?? null;
+  const fromAddr = parsed.from?.address ?? message.from;
+  const subject = parsed.subject ?? '(no subject)';
+  const text = (parsed.text ?? '').slice(0, MAX_TEXT);
+  const html = (parsed.html ?? '').slice(0, MAX_HTML);
+  const preview = previewOf(text || stripHtml(html), 180);
+
+  const emailId = uid('eml_');
+  await db.prepare(
+    `INSERT INTO emails (id, address_id, user_id, from_name, from_addr, to_addr, subject, preview, text_body, html_body, size, received_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    emailId, addr.id, addr.user_id, fromName, fromAddr, to, subject, preview, text, html,
+    raw.length, now()
+  ).run();
+
+  // attachments (store small ones inline in D1)
+  for (const att of (parsed.attachments ?? []).slice(0, 8)) {
+    let bytes: Uint8Array | null = null;
+    const c0: unknown = att.content;
+    if (c0 instanceof Uint8Array) bytes = c0;
+    else if (typeof c0 === 'string') bytes = new TextEncoder().encode(c0);
+    else if (c0 instanceof ArrayBuffer) bytes = new Uint8Array(c0);
+    const b64 = bytes ? arrToB64(bytes) : null;
+    await db.prepare(
+      'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(uid('att_'), emailId, att.filename ?? 'attachment', att.mimeType ?? 'application/octet-stream',
+      bytes?.length ?? 0,
+      b64 && b64.length <= MAX_ATTACHMENT_B64 ? b64 : null).run();
+  }
+
+  await db.prepare('UPDATE addresses SET last_mail_at = ? WHERE id = ?').bind(now(), addr.id).run();
+
+  // optional forwarding via Email Routing (destination must be verified in CF dashboard)
+  const fwd = addr.forward_to;
+  if (fwd) {
+    try { await message.forward(fwd); } catch { /* destination not verified yet — ignore */ }
+  }
+
+  // auto-reply could be added here later
+}
+
+function arrToB64(u8: Uint8Array): string {
+  let s = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < u8.length; i += chunk) {
+    s += String.fromCharCode(...u8.subarray(i, i + chunk));
+  }
+  return btoa(s);
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export async function firstAdminId(env: Env): Promise<string | null> {
+  const row = await env.DB.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1").first<{ id: string }>();
+  return row?.id ?? null;
+}
+
+// hourly cleanup: expired temp addresses + retention
+export async function scheduledCleanup(env: Env): Promise<void> {
+  const t = now();
+  // delete emails of expired temp addresses, then addresses themselves
+  await env.DB.prepare(
+    `DELETE FROM emails WHERE address_id IN (SELECT id FROM addresses WHERE kind='temp' AND expires_at IS NOT NULL AND expires_at < ?)`
+  ).bind(t).run();
+  await env.DB.prepare(`DELETE FROM addresses WHERE kind='temp' AND expires_at IS NOT NULL AND expires_at < ?`).bind(t).run();
+
+  const days = parseInt((await env.DB.prepare("SELECT value FROM settings WHERE key='retention_days'").first<{ value: string }>())?.value ?? '0', 10);
+  if (days > 0) {
+    await env.DB.prepare('DELETE FROM emails WHERE received_at < ?').bind(t - days * 86400_000).run();
+  }
+  // stale sessions
+  await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(t).run();
+  // old rate-limit rows
+  await env.DB.prepare('DELETE FROM auth_attempts WHERE window_start < ?').bind(t - 3600_000).run();
+}

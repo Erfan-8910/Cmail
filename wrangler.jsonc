@@ -1,0 +1,31 @@
+// Cmail — Cloudflare Workers configuration
+// deploy.sh fills <D1_ID> automatically during installation.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cmail",
+  "main": "src/worker.ts",
+  "compatibility_date": "2024-11-01",
+  "workers_dev": true,
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cmail-db",
+      "database_id": "REPLACE_WITH_D1_ID"
+    }
+  ],
+
+  "triggers": {
+    // hourly cleanup: expire temporary addresses & purge old mail
+    "crons": ["17 * * * *"]
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

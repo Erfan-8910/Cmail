@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Cmail — صندوق ایمیل شیشه‌ای شما</title>
+  <meta name="description" content="Cmail — پلتفرم ایمیل روی Cloudflare: ایمیل موقت و دائمی، یادداشت‌گذاری روی ایمیل‌ها، گاوصندوق کدهای 2FA و پشتیبانی چند دامنه." />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="64x64" href="assets/img/favicon-64.png" />
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png" />
+  <link rel="stylesheet" href="assets/css/app.css" />
+</head>
+<body>
+  <!-- aurora background -->
+  <div class="aurora" aria-hidden="true">
+    <div class="aurora__blob a1"></div>
+    <div class="aurora__blob a2"></div>
+    <div class="aurora__blob a3"></div>
+    <div class="aurora__blob a4"></div>
+    <div class="aurora__grain"></div>
+  </div>
+
+  <!-- dynamic island -->
+  <nav class="island" id="island" hidden>
+    <div class="island__side island__brand">
+      <img class="island__logo" id="island-logo" src="assets/img/icon-white.png" alt="Cmail" />
+      <span class="island__name" id="island-name">Cmail</span>
+    </div>
+    <div class="island__center" id="island-center"></div>
+    <div class="island__side island__actions" id="island-actions"></div>
+  </nav>
+
+  <!-- app root -->
+  <main class="view" id="app" aria-live="polite"></main>
+
+  <!-- overlays -->
+  <div class="toasts" id="toasts" aria-live="assertive"></div>
+  <div class="modal-root" id="modals"></div>
+
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
