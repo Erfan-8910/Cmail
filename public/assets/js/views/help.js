@@ -7,7 +7,7 @@ export function renderHelp(root) {
   const fa = lang === 'fa';
   const view = h('div', { class: 'view' });
   view.append(h('div', { class: 'page-head' },
-    h('div', {}, h('h2', { class: 'page-title' }, icon('help'), t('helpTitle')), h('div', { class: 'page-sub' }, t('helpSub'))),
+    h('div', {}, h('div', { class: 'eyebrow' }, t('eyebrowHelp')), h('h2', { class: 'page-title' }, t('helpTitle')), h('div', { class: 'page-sub' }, t('helpSub'))),
   ));
 
   const content = h('div', { class: 'glass card' });

@@ -7,7 +7,7 @@ import { createAddressModal } from './mail.js';
 export async function renderAddresses(root) {
   const view = h('div', { class: 'view' });
   view.append(h('div', { class: 'page-head' },
-    h('div', {}, h('h2', { class: 'page-title' }, icon('mail'), t('addressesTitle')), h('div', { class: 'page-sub' }, t('addressesSub'))),
+    h('div', {}, h('div', { class: 'eyebrow' }, t('eyebrowAddresses')), h('h2', { class: 'page-title' }, t('addressesTitle')), h('div', { class: 'page-sub' }, t('addressesSub'))),
     h('button', { class: 'btn btn--primary', onclick: () => createAddressModal(load) }, icon('plus'), t('createAddress')),
   ));
 

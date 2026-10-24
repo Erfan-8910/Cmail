@@ -2,12 +2,16 @@
 import { api, state, errText } from '../api.js';
 import { t, lang, setLang } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, fmtBytes, fmtDate } from '../ui.js';
-import { setTheme } from '../app.js';
+import { setTheme, setAccent } from '../app.js';
 
 export async function renderSettings(root) {
+  clear(root);
   const view = h('div', { class: 'view' });
   view.append(h('div', { class: 'page-head' },
-    h('div', {}, h('h2', { class: 'page-title' }, icon('settings'), t('settingsTitle')), h('div', { class: 'page-sub' }, 'Cmail')),
+    h('div', {},
+      h('div', { class: 'eyebrow' }, t('eyebrowSettings')),
+      h('h2', { class: 'page-title' }, t('settingsTitle')),
+      h('div', { class: 'page-sub' }, t('paletteSub'))),
   ));
 
   const isAdmin = state.user?.role === 'admin';
@@ -52,14 +56,6 @@ async function appearancePane() {
       h('button', { class: `chip ${document.documentElement.dataset.theme === 'dark' ? 'is-on' : ''}`, onclick: () => { setTheme('dark'); redraw(); } }, icon('moon'), t('dark')),
       h('button', { class: `chip ${document.documentElement.dataset.theme === 'light' ? 'is-on' : ''}`, onclick: () => { setTheme('light'); redraw(); } }, icon('sun'), t('light'))));
 
-  // glass strength
-  const slider = h('input', { type: 'range', min: 0.4, max: 1.8, step: 0.05, value: localStorage.getItem('cmail_glass') ?? '1' });
-  slider.addEventListener('input', () => {
-    const v = parseFloat(slider.value);
-    document.documentElement.style.setProperty('--glass-alpha', String(v));
-    localStorage.setItem('cmail_glass', String(v));
-  });
-
   // language
   const langRow = h('div', { class: 'set-row' },
     h('div', {}, h('div', { class: 'set-row__t' }, t('language'))),
@@ -72,10 +68,35 @@ async function appearancePane() {
   pane.append(
     h('div', { class: 'glass card' }, h('h3', { style: { margin: '0 0 6px', fontSize: '15px' } }, t('appearance')),
       themeRow,
-      h('div', { class: 'set-row' }, h('div', {}, h('div', { class: 'set-row__t' }, t('glassStrength'))), slider),
       langRow),
+    paletteCard(),
   );
   return pane;
+}
+
+// ---------- accent palette picker ----------
+function paletteCard() {
+  const palettes = [
+    { key: 'sage', name: () => t('paletteSage'), light: '#b9cda3', deep: '#56725c' },
+    { key: 'blue', name: () => t('paletteBlue'), light: '#a7cbd6', deep: '#4e7684' },
+    { key: 'violet', name: () => t('paletteViolet'), light: '#cab6da', deep: '#7d6a8e' },
+    { key: 'amber', name: () => t('paletteAmber'), light: '#e3c795', deep: '#8a6d3b' },
+  ];
+  const cur = document.documentElement.dataset.accent || 'sage';
+  const grid = h('div', { class: 'palette-grid' });
+  for (const p of palettes) {
+    grid.append(h('button', {
+      class: `palette-card ${cur === p.key ? 'is-on' : ''}`,
+      onclick: () => { setAccent(p.key); renderSettings(document.getElementById('app')); },
+    },
+      h('span', { class: 'palette-card__swatch', style: { background: `linear-gradient(125deg, ${p.light}, ${p.deep})` } },
+        h('i', { style: { background: p.light } }), h('i', { style: { background: p.deep } })),
+      h('span', { class: 'palette-card__name' }, p.name(), icon('check'))));
+  }
+  return h('div', { class: 'glass card' },
+    h('h3', { style: { margin: '0 0 4px', fontSize: '15px' } }, t('palette')),
+    h('p', { class: 'small muted', style: { margin: '0 0 14px' } }, t('paletteSub')),
+    grid);
 }
 
 // ---------- security (account) ----------

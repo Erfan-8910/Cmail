@@ -1,4 +1,5 @@
-// Cmail — mail view: 3-pane inbox (sidebar / list / viewer) + notes + compose
+// Cmail — mail view: 3-pane inbox (inboxes / list / viewer) + notes + compose
+// HTML emails are sanitized and rendered in a height-adaptive sandboxed frame.
 import { api, state, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avatarColor, fmtBytes } from '../ui.js';
@@ -6,7 +7,6 @@ import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avata
 let box = 'inbox';
 let search = '';
 let selected = new Set();
-let pollTimer = null;
 let viewerState = null;
 
 export function renderMail(root, arg) {
@@ -35,7 +35,7 @@ function emptyViewer() {
   return h('div', { class: 'empty' }, icon('mail'), h('div', { class: 'empty__t' }, t('selectEmail')), h('div', { class: 'empty__d' }, t('selectEmailSub')));
 }
 
-// ---------- sidebar: addresses ----------
+// ---------- sidebar: inboxes ----------
 async function loadAddresses() {
   try {
     const r = await api.get('/api/addresses');
@@ -65,13 +65,14 @@ function buildSidebar() {
 function drawSidebar() {
   const box2 = clear(document.getElementById('addr-list') ?? sidebarScroll);
   for (const a of state.addresses) {
-    const color = a.kind === 'temp' ? '#fbbf24' : '#34d399';
+    const color = a.kind === 'temp' ? 'var(--warn)' : 'var(--acc)';
     box2.append(h('button', {
       class: `addr-item ${a.id === state.currentAddressId ? 'is-on' : ''}`,
       onclick: () => {
         state.currentAddressId = a.id;
         selected.clear();
         drawSidebar(); drawList(); loadEmails();
+        document.querySelector('.mail')?.classList.remove('show-sidebar');
       },
     },
       h('span', { class: 'addr-item__dot', style: { background: color, opacity: a.id === state.currentAddressId ? 1 : .45 } }),
@@ -79,7 +80,7 @@ function drawSidebar() {
         h('span', { class: 'addr-item__addr' }, a.address),
         h('span', { class: 'addr-item__meta' },
           h('span', { class: `kind-tag kind-tag--${a.kind === 'temp' ? 'temp' : 'perm'}` }, a.kind === 'temp' ? t('temporary') : t('permanent')),
-          ' ', a.label ? `· ${a.label}` : '')),
+          a.label ? h('span', {}, a.label) : '')),
       a.unread > 0 ? h('span', { class: 'addr-item__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : ''));
   }
 }
@@ -91,15 +92,14 @@ let emails = [];
 function buildList() {
   const head = h('div', { class: 'mail__head' },
     h('h3', {}, icon('inbox'), t('inbox')),
-    h('div', { class: 'row', style: { gap: '2px' } },
-      h('button', { class: 'icon-btn', title: t('navAddresses'), onclick: (e) => { e.currentTarget.closest('.mail').classList.toggle('show-sidebar'); }, dataset: { mobile: 'menu' } }, icon('menu')),
-      h('button', { class: 'icon-btn', title: t('refresh'), onclick: (e) => { e.currentTarget.querySelector('svg')?.classList.add('spin'); loadEmails(true); setTimeout(() => document.querySelector('.icon-btn svg.spin')?.classList.remove('spin'), 700); } }, icon('refresh')),
-      h('button', { class: 'icon-btn', title: t('newAlias'), onclick: () => createAddressModal(() => { loadAddresses(); }) }, icon('plus')),
+    h('div', { class: 'row', style: { gap: '4px' } },
+      h('button', { class: 'btn btn--sm btn--primary', onclick: () => openCompose() }, icon('send'), h('span', { class: 'hide-sm' }, t('compose'))),
+      h('button', { class: 'icon-btn', title: t('refresh'), onclick: (e) => { e.currentTarget.querySelector('svg')?.classList.add('spin'); loadEmails(true); setTimeout(() => document.querySelector('.mail .icon-btn svg.spin')?.classList.remove('spin'), 700); } }, icon('refresh')),
+      h('button', { class: 'icon-btn', title: t('navAddresses'), onclick: () => document.querySelector('.mail')?.classList.toggle('show-sidebar'), dataset: { mobile: 'menu' } }, icon('menu')),
     ));
 
   const searchInput = h('input', {
-    class: 'input', type: 'search', placeholder: t('search'),
-    style: { margin: '0 16px 8px', padding: '8px 14px', borderRadius: '12px' },
+    class: 'input mail__search', type: 'search', placeholder: t('search'),
     oninput: (e) => { search = e.target.value.trim(); clearTimeout(searchInput._t); searchInput._t = setTimeout(() => loadEmails(true), 350); },
   });
 
@@ -213,10 +213,65 @@ async function openEmail(id) {
     drawViewer(col, r);
     const row = document.querySelector(`.email-row[data-id="${id}"]`);
     if (row) row.classList.remove('is-unread');
-    // refresh unread badge silently
     const me = await api.get('/api/auth/me').catch(() => null);
     if (me) { state.unread = me.unread ?? 0; }
   } catch (e) { toast(errText(e), 'err'); clear(col).append(emptyViewer()); }
+}
+
+/* ---------- HTML email sanitizing & rendering ---------- */
+
+// strip scripts / event handlers / dangerous urls — keep full visual structure
+function sanitizeEmailHtml(raw) {
+  const doc = new DOMParser().parseFromString(String(raw ?? ''), 'text/html');
+  doc.querySelectorAll('script, iframe, object, embed, link[rel="import"], base, form, input, button, textarea, select').forEach((n) => n.remove());
+  for (const el of [...doc.querySelectorAll('*')]) {
+    for (const attr of [...el.attributes]) {
+      const name = attr.name.toLowerCase();
+      const val = String(attr.value ?? '');
+      if (name.startsWith('on')) { el.removeAttribute(attr.name); continue; }
+      if (['href', 'src', 'srcset', 'xlink:href', 'action', 'formaction', 'background', 'poster'].includes(name)
+        && /^\s*(javascript|vbscript|data\s*:\s*text\/html)/i.test(val)) { el.removeAttribute(attr.name); continue; }
+      if (name === 'style' && /expression\s*\(|javascript\s*:/i.test(val)) el.removeAttribute(attr.name);
+    }
+  }
+  return doc;
+}
+
+function detectDir(doc) {
+  const html = doc.documentElement;
+  const langAttr = (html.getAttribute('lang') || doc.body?.getAttribute('dir') || html.getAttribute('dir') || '').toLowerCase();
+  if (html.getAttribute('dir') === 'rtl' || langAttr.startsWith('fa') || langAttr.startsWith('ar') || langAttr.startsWith('he')) return 'rtl';
+  const text = (doc.body?.textContent || '').slice(0, 800);
+  const rtlChars = (text.match(/[\u0600-\u06FF]/g) || []).length;
+  return rtlChars > text.length * 0.25 ? 'rtl' : 'ltr';
+}
+
+// the base stylesheet injected into every rendered email
+function mailFrameCss() {
+  return `
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font: 14.5px/1.7 -apple-system, 'Segoe UI', 'Vazirmatn', Tahoma, sans-serif;
+      color: #20261f; background: transparent;
+      padding: 18px 20px 26px;
+      word-break: break-word; overflow-wrap: break-word;
+      -webkit-text-size-adjust: 100%;
+    }
+    img, video { max-width: 100% !important; height: auto; border-radius: 6px; }
+    table { max-width: 100% !important; border-collapse: collapse; }
+    td, th { word-break: break-word; }
+    a { color: #4a7a5a; }
+    hr { border: 0; border-top: 1px solid #e4e8e0; margin: 18px 0; }
+    blockquote { margin: 12px 0; padding: 4px 14px; border-inline-start: 3px solid #cdd8c6; color: #5a655a; }
+    pre, code { font-family: ui-monospace, monospace; font-size: 12.5px; background: #f4f6f1; border-radius: 6px; }
+    pre { padding: 12px 14px; overflow-x: auto; }
+    code { padding: 1.5px 6px; }
+    h1, h2, h3 { line-height: 1.4; }
+    p { margin: 0 0 10px; }
+    [data-cmail-removed] { display: none; }
+  `;
 }
 
 function drawViewer(col, r) {
@@ -225,20 +280,22 @@ function drawViewer(col, r) {
 
   const actions = h('div', { class: 'viewer__actions' });
   actions.append(
-    h('button', { class: 'btn btn--sm btn--ghost', title: t('reply'), onclick: () => openCompose({ to: em.from_addr, subject: `Re: ${em.subject ?? ''}` }) }, icon('arrow'), h('span', {}, t('reply'))),
-    h('button', { class: 'btn btn--sm btn--ghost', title: t('star'), onclick: async (e) => {
+    h('button', { class: 'btn btn--sm btn--ghost', title: t('reply'), onclick: () => openCompose({ to: em.from_addr, subject: `Re: ${em.subject ?? ''}` }) }, icon('arrow'), h('span', { class: 'hide-sm' }, t('reply'))),
+    h('button', { class: `btn btn--sm btn--ghost ${em.starred ? 'is-on' : ''}`, title: t('star'), onclick: async (e) => {
       const on = !em.starred;
       await api.patch(`/api/emails/${em.id}`, { starred: on });
       em.starred = on ? 1 : 0;
       e.currentTarget.classList.toggle('is-on', on);
       loadEmails(true);
-    }, class: em.starred ? 'btn btn--sm btn--ghost is-on' : 'btn btn--sm btn--ghost' }, icon('star'), h('span', {}, t('star'))),
+    } }, icon('star'), h('span', { class: 'hide-sm' }, t('star'))),
     h('button', { class: 'btn btn--sm btn--ghost', title: t('delete'), onclick: async () => {
       await api.del(`/api/emails/${em.id}`);
       toast(t('deletedN'), 'ok', 1500);
+      viewerState = null;
       clear(col).append(emptyViewer());
+      document.querySelector('.mail')?.classList.remove('show-viewer');
       loadEmails(true);
-    } }, icon('trash'), h('span', {}, t('delete'))),
+    } }, icon('trash'), h('span', { class: 'hide-sm' }, t('delete'))),
     h('button', { class: 'btn btn--sm btn--ghost', title: t('copy'), onclick: async () => { await copyText(em.from_addr); toast(t('copied'), 'ok', 1400); } }, icon('copy')),
   );
 
@@ -253,34 +310,79 @@ function drawViewer(col, r) {
     h('h2', { class: 'viewer__subj' }, em.subject || '(no subject)'),
     meta);
 
-  // body
-  const bodyWrap = h('div', { class: 'viewer__body' });
-  if (em.html_body) {
-    const frame = h('iframe', {
-      class: 'mail-frame',
-      sandbox: 'allow-popups',
-      referrerpolicy: 'no-referrer',
-    });
-    frame.setAttribute('srcdoc',
-      `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><base target="_blank">` +
-      `<style>body{margin:14px;font:14px/1.65 -apple-system,'Segoe UI',sans-serif;color:#111;word-break:break-word}img{max-width:100%;height:auto}table{max-width:100%}a{color:#4f46e5}</style>` +
-      `</head><body>${em.html_body}</body></html>`);
-    bodyWrap.append(frame);
-  } else {
-    bodyWrap.append(h('div', { class: 'viewer__plain' }, em.text_body || '—'));
-  }
-
   col.append(head);
 
-  // attachments
+  // attachments row (above body, mail-client style)
   if (r.attachments?.length) {
-    const atts = h('div', { class: 'attachments' },
-      h('span', { class: 'small muted', style: { width: '100%' } }, `${t('attachments')} (${r.attachments.length})`),
+    col.append(h('div', { class: 'attachments' },
       r.attachments.map((a) => a.available
         ? h('a', { class: 'att-chip', href: `/api/emails/attachment/${a.id}`, download: a.filename ?? 'file' }, icon('download'), a.filename ?? 'file', h('span', { class: 'faint small' }, fmtBytes(a.size)))
-        : h('span', { class: 'att-chip', title: t('attachmentTooBig'), style: { opacity: .5 } }, icon('paperclip'), a.filename ?? 'file')));
-    col.append(atts);
+        : h('span', { class: 'att-chip', title: t('attachmentTooBig'), style: { opacity: .5 } }, icon('paperclip'), a.filename ?? 'file'))));
   }
+
+  // ----- render mode state -----
+  let mode = em.html_body ? 'html' : 'text';
+  let narrow = false;
+  const bodyWrap = h('div', { class: 'viewer__body' });
+
+  const seg = h('div', { class: 'seg' });
+  const bHtml = h('button', { type: 'button' }, icon('eye'), t('viewRendered'));
+  const bText = h('button', { type: 'button' }, icon('code'), t('viewSource'));
+  const bWidth = h('button', { type: 'button', class: 'chip', title: t('viewNarrow') }, icon('columns'), h('span', { class: 'hide-sm' }, t('viewNarrow')));
+
+  function drawSeg() {
+    bHtml.classList.toggle('is-on', mode === 'html');
+    bText.classList.toggle('is-on', mode === 'text');
+    bHtml.style.display = em.html_body ? '' : 'none';
+    bWidth.querySelector('span:not(.icn)').textContent = narrow ? t('viewWide') : t('viewNarrow');
+    bWidth.style.display = mode === 'html' ? '' : 'none';
+  }
+  bHtml.onclick = () => { mode = 'html'; drawSeg(); drawBody(); };
+  bText.onclick = () => { mode = 'text'; drawSeg(); drawBody(); };
+  bWidth.onclick = () => { narrow = !narrow; drawBody(); };
+  drawSeg();
+
+  col.append(h('div', { class: 'mtools' }, seg, bWidth));
+
+  let frame = null;
+  function buildFrame() {
+    const doc = sanitizeEmailHtml(em.html_body);
+    const dir = detectDir(doc);
+    const f = h('iframe', {
+      class: `mail-frame ${narrow ? 'mail-frame--narrow' : ''}`,
+      sandbox: 'allow-same-origin allow-popups allow-popups-to-escape-sandbox',
+      referrerpolicy: 'no-referrer',
+      title: em.subject || 'email',
+    });
+    f.setAttribute('srcdoc',
+      `<!doctype html><html dir="${dir}" lang="${doc.documentElement.getAttribute('lang') || 'en'}"><head>` +
+      `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank">` +
+      `<style>${mailFrameCss()}</style>${doc.head.innerHTML}</head>` +
+      `<body>${doc.body.innerHTML}</body></html>`);
+    f.addEventListener('load', () => {
+      try {
+        const d = f.contentDocument;
+        if (!d) return;
+        const hh = Math.max(d.documentElement?.scrollHeight ?? 0, d.body?.scrollHeight ?? 0);
+        if (hh > 120) f.style.height = `${hh + 20}px`;
+        else f.style.height = '100%';
+      } catch { f.style.height = '100%'; }
+    });
+    return f;
+  }
+
+  function drawBody() {
+    clear(bodyWrap);
+    if (mode === 'html' && em.html_body) {
+      frame = buildFrame();
+      bodyWrap.append(h('div', { class: 'mail-frame-wrap' }, frame));
+    } else {
+      frame = null;
+      bodyWrap.append(h('div', { class: 'mail-frame-wrap' },
+        h('div', { class: 'viewer__plain', style: { flex: 1 } }, em.text_body || em.preview || '—')));
+    }
+  }
+  drawBody();
 
   col.append(bodyWrap);
 
@@ -312,7 +414,7 @@ function drawViewer(col, r) {
     noteBody, colorRow));
 
   // mobile back
-  col.append(h('button', { class: 'btn btn--sm btn--ghost', style: { margin: '8px 14px 12px', alignSelf: 'flex-start' }, onclick: () => document.querySelector('.mail')?.classList.remove('show-viewer') }, icon('arrow'), h('span', {}, t('navMail'))));
+  col.append(h('button', { class: 'btn btn--sm btn--ghost viewer-back', style: { margin: '8px 14px 12px', alignSelf: 'flex-start' }, onclick: () => { document.querySelector('.mail')?.classList.remove('show-viewer'); viewerState = null; } }, icon('arrow'), h('span', {}, t('navMail'))));
 }
 
 // ---------- compose ----------
@@ -339,7 +441,6 @@ export async function openCompose(prefill = {}) {
     ],
   });
 
-  m.el.closest('.modal-back').querySelector('form, .modal__body')?.addEventListener('submit', () => {});
   btn.addEventListener('click', async () => {
     btn.disabled = true; btn.textContent = t('sending');
     try {
@@ -361,7 +462,7 @@ function randLocal() {
   return `${w}.${n}`;
 }
 
-// ---------- create address modal (shared with addresses view) ----------
+// ---------- create inbox modal (shared with addresses view) ----------
 export async function createAddressModal(onDone) {
   try {
     if (!state.domains.length) {

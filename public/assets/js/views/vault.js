@@ -10,7 +10,7 @@ let tick = null;
 export async function renderVault(root) {
   const view = h('div', { class: 'view' });
   view.append(h('div', { class: 'page-head' },
-    h('div', {}, h('h2', { class: 'page-title' }, icon('key'), t('vaultTitle')), h('div', { class: 'page-sub' }, t('vaultSub'))),
+    h('div', {}, h('div', { class: 'eyebrow' }, t('eyebrowVault')), h('h2', { class: 'page-title' }, t('vaultTitle')), h('div', { class: 'page-sub' }, t('vaultSub'))),
     h('button', { class: 'btn btn--primary', onclick: () => entryModal() }, icon('plus'), t('addCode')),
   ));
 

@@ -70,6 +70,8 @@ export const icons = {
   archive: I('<rect x="2" y="4" width="20" height="5" rx="1.5"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>'),
   info: I('<circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M12 12v5"/>'),
   alarm: I('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M5 3 2 6"/><path d="m19 3 3 3"/>'),
+  leaf: I('<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>'),
+  columns: I('<rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M12 3v18"/>'),
 };
 
 export function icon(name, cls = '') {
@@ -174,7 +176,7 @@ export function fmtCountdown(ms, t) {
 }
 
 export function avatarColor(str) {
-  const palette = ['#7c8cff', '#37d5e6', '#34d399', '#fbbf24', '#fb7185', '#a78bfa', '#f97316', '#14b8a6'];
+  const palette = ['#8fae7e', '#7ea3b1', '#a08cb5', '#c9a86a', '#c2848a', '#7fae9a', '#a38f6f', '#8b9e78'];
   let x = 0;
   for (const ch of String(str ?? '?')) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
   return palette[x % palette.length];
