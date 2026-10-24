@@ -9,19 +9,56 @@ const app = new Hono<AppEnv>();
 // public bootstrap: what still needs configuration
 app.get('/status', async (c) => {
   const env = c.env;
-  const [adminCount, domainCount, settings] = await Promise.all([
-    env.DB.prepare("SELECT COUNT(*) AS n FROM users").first<{ n: number }>(),
-    env.DB.prepare('SELECT COUNT(*) AS n FROM domains WHERE active = 1').first<{ n: number }>(),
-    getSettings(env, ['sending_provider', 'registration', 'app_name']),
-  ]);
-  const appName = settings.app_name || 'Cmail';
+
+  // 1) database reachable?
+  let database = false;
+  try {
+    await env.DB.prepare('SELECT 1').first();
+    database = true;
+  } catch { database = false; }
+
+  let admin_created = false;
+  let domain = false;
+  const settings: Record<string, string> = {};
+
+  if (database) {
+    try {
+      const [adminCount, domainCount, s] = await Promise.all([
+        env.DB.prepare("SELECT COUNT(*) AS n FROM users").first<{ n: number }>(),
+        env.DB.prepare('SELECT COUNT(*) AS n FROM domains WHERE active = 1').first<{ n: number }>(),
+        getSettings(env, ['sending_provider', 'sending_api_key', 'sending_from_email', 'registration', 'app_name']),
+      ]);
+      admin_created = (adminCount?.n ?? 0) > 0;
+      domain = (domainCount?.n ?? 0) > 0;
+      Object.assign(settings, s);
+    } catch { /* tables may not exist yet */ }
+  }
+
+  const sendingProvider = settings.sending_provider || 'none';
+  const sending = (sendingProvider === 'brevo' || sendingProvider === 'resend')
+    && !!settings.sending_api_key
+    && !!settings.sending_from_email;
+
+  const checks = [
+    { id: 'database', ok: database },
+    { id: 'admin', ok: admin_created },
+    { id: 'domain', ok: domain },
+    { id: 'sending', ok: sending },
+  ];
+  const ready = checks.every((x) => x.ok);
+
   return c.json({
     ok: true,
-    admin_created: (adminCount?.n ?? 0) > 0,
-    domains_configured: (domainCount?.n ?? 0) > 0,
-    sending_provider: settings.sending_provider || 'none',
+    ready,
+    checks,
+    admin_created,
+    domains_configured: domain,
+    sending_provider: sendingProvider,
+    sending_from: settings.sending_from_email || '',
+    sending_ready: sending,
     registration: settings.registration || 'closed',
-    app_name: appName,
+    app_name: settings.app_name || 'Cmail',
+    version: c.env.APP_VERSION || '',
   });
 });
 
