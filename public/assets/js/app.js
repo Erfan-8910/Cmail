@@ -3,12 +3,13 @@ import { api, state, errText } from './api.js';
 import { t, setLang, lang } from './i18n.js';
 import { h, clear, icon, toast, dropdown, timeAgo } from './ui.js';
 import { renderLogin, renderSetup } from './views/auth.js';
+import { renderGate } from './views/gate.js';
 import { renderMail } from './views/mail.js';
 import { renderAddresses } from './views/addresses.js';
 import { renderVault } from './views/vault.js';
 import { renderDomains } from './views/domains.js';
 import { renderSettings } from './views/settings.js';
-import { renderCreator } from './views/creator.js';
+import { renderAbout } from './views/about.js';
 import { renderHelp } from './views/help.js';
 
 const app = document.getElementById('app');
@@ -36,10 +37,11 @@ const routes = {
   vault: renderVault,
   domains: renderDomains,
   settings: renderSettings,
-  creator: renderCreator,
+  about: renderAbout,
   help: renderHelp,
   login: renderLogin,
   setup: renderSetup,
+  status: renderGate,
 };
 
 const viewMeta = {
@@ -48,7 +50,7 @@ const viewMeta = {
   vault: { icon: 'key', title: () => t('navVault'), eyebrow: () => t('eyebrowVault') },
   domains: { icon: 'globe', title: () => t('navDomains'), eyebrow: () => t('eyebrowDomains') },
   settings: { icon: 'settings', title: () => t('navSettings'), eyebrow: () => t('eyebrowSettings') },
-  creator: { icon: 'heart', title: () => t('navCreator'), eyebrow: () => t('eyebrowCreator') },
+  about: { icon: 'heart', title: () => t('navAbout'), eyebrow: () => t('eyebrowAbout') },
   help: { icon: 'help', title: () => t('navHelp'), eyebrow: () => t('eyebrowHelp') },
 };
 
@@ -63,26 +65,35 @@ function currentRoute() {
 async function route() {
   const { page } = currentRoute();
 
-  // guards
+  // fetch system status (may be offline)
   if (!state.setup) {
     try { state.setup = await api.get('/api/setup/status'); }
-    catch { toast(t('network'), 'err'); return; }
+    catch { state.setup = null; }
   }
-  if (!state.setup.admin_created && page !== 'setup') { location.hash = '#/setup'; return; }
-  if (state.setup.admin_created && page === 'setup' && state.user) { location.hash = '#/mail'; return; }
+  const ready = !!state.setup?.ready;
 
-  const needsAuth = page !== 'login' && page !== 'setup';
+  // GATE — the main app stays closed until every prerequisite is connected
+  if (!ready) {
+    const allowed = page === 'status' || page === 'login' || (page === 'setup' && !state.setup?.admin_created);
+    if (!allowed) { location.hash = state.setup?.admin_created ? '#/status' : '#/setup'; return; }
+  } else if (page === 'status' && !location.hash.includes('stay')) {
+    location.hash = state.user ? '#/mail' : '#/login'; return;
+  }
+
+  const needsAuth = page !== 'login' && page !== 'setup' && page !== 'status';
   if (needsAuth && !state.user) { location.hash = '#/login'; return; }
-  if (page === 'login' && state.user) { location.hash = '#/mail'; return; }
+  if (page === 'login' && state.user) { location.hash = ready ? '#/mail' : '#/status'; return; }
 
-  const authView = page === 'login' || page === 'setup';
+  const authView = page === 'login' || page === 'setup' || page === 'status';
   renderShell(page, authView);
   clear(app);
   window.scrollTo({ top: 0 });
 
   if (authView) {
     app.className = 'view view--auth';
-    return page === 'login' ? renderLogin(app) : renderSetup(app);
+    if (page === 'login') return renderLogin(app);
+    if (page === 'setup') return renderSetup(app);
+    return renderGate(app);
   }
 
   app.className = 'view';
@@ -103,13 +114,12 @@ function navItems() {
     { key: 'addresses', icon: 'mail', label: t('navAddresses'), href: '#/addresses' },
     { key: 'vault', icon: 'key', label: t('navVault'), href: '#/vault' },
     { key: 'help', icon: 'help', label: t('navHelp'), href: '#/help' },
+    { key: 'about', icon: 'heart', label: t('navAbout'), href: '#/about' },
   ];
   if (state.user?.role === 'admin') {
     items.push({ key: 'domains', icon: 'globe', label: t('navDomains'), href: '#/domains', cls: 'nav-item--admin' });
-    items.push({ key: 'settings', icon: 'settings', label: t('navSettings'), href: '#/settings' });
-  } else {
-    items.push({ key: 'settings', icon: 'settings', label: t('navSettings'), href: '#/settings' });
   }
+  items.push({ key: 'settings', icon: 'settings', label: t('navSettings'), href: '#/settings' });
   return items;
 }
 
@@ -118,7 +128,7 @@ function tabItems() {
     { key: 'mail', icon: 'inbox', label: t('navMail') },
     { key: 'addresses', icon: 'mail', label: t('navAddresses') },
     { key: 'vault', icon: 'key', label: t('navVault') },
-    { key: 'help', icon: 'help', label: t('navHelp') },
+    { key: 'about', icon: 'heart', label: t('navAbout') },
     { key: 'settings', icon: 'settings', label: t('navSettings') },
   ];
 }
@@ -210,7 +220,8 @@ function userMenu() {
     items.push({ label: `${t('account')} — ${state.user.username}`, icon: 'user', fn: () => nav('/settings') });
     if (state.user.role === 'admin') items.push({ label: t('navDomains'), icon: 'globe', fn: () => nav('/domains') });
     items.push('-');
-    items.push({ label: t('navCreator'), icon: 'heart', fn: () => nav('/creator') });
+    if (state.user.role === 'admin') items.push({ label: t('navStatus'), icon: 'spark', fn: () => nav('/status?stay') });
+    items.push({ label: t('navAbout'), icon: 'heart', fn: () => nav('/about') });
     items.push({ label: t('logout'), icon: 'logout', fn: async () => { await api.post('/api/auth/logout').catch(() => {}); state.user = null; nav('/login'); } });
   }
   return items;

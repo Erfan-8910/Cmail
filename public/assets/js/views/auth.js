@@ -13,7 +13,7 @@ export function renderLogin(root) {
   // header controls
   const ctrls = h('div', { class: 'auth-ctrls' },
     h('button', { class: 'glass-btn', title: t('theme'), onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon('sun')),
-    h('button', { class: 'glass-btn', title: t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); renderLogin(root); } }, icon('globe')),
+    h('button', { class: 'glass-btn', title: t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); clear(root); renderLogin(root); } }, icon('globe')),
   );
   view.append(ctrls);
 
@@ -122,7 +122,7 @@ export async function renderSetup(root) {
 
   view.append(h('div', { class: 'auth-ctrls' },
     h('button', { class: 'glass-btn', title: t('theme'), onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon('sun')),
-    h('button', { class: 'glass-btn', title: t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); renderSetup(root); } }, icon('globe')),
+    h('button', { class: 'glass-btn', title: t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); clear(root); renderSetup(root); } }, icon('globe')),
   ));
 
   root.append(view);
@@ -272,7 +272,7 @@ export async function renderSetup(root) {
   draw();
 }
 
-function dnsTable(rows) {
+export function dnsTable(rows) {
   return h('table', { class: 'dns-table' },
     h('thead', {}, h('tr', {}, h('th', {}, 'Type'), h('th', {}, 'Name'), h('th', {}, 'Value'), h('th', {}, 'Priority'))),
     h('tbody', {}, rows.map((r) => h('tr', {}, r.map((c) => h('td', {}, c))))));
