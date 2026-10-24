@@ -22,7 +22,7 @@ Temporary & permanent inboxes · notes on emails · built-in 2FA codes vault · 
 
 | Daylight theme | Creator |
 |---|---|
-| ![Light](docs/screenshot-light.png) | ![Creator](docs/screenshot-creator.png) |
+| ![Light](docs/screenshot-light.png) | ![Mobile](docs/screenshot-mobile.png) |
 
 ## ✨ What is Cmail?
 

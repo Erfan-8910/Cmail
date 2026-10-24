@@ -6,7 +6,7 @@ import { h, clear, icon, toast, modal, confirmBox, copyText } from '../ui.js';
 export async function renderDomains(root) {
   const view = h('div', { class: 'view' });
   view.append(h('div', { class: 'page-head' },
-    h('div', {}, h('h2', { class: 'page-title' }, icon('globe'), t('domainsTitle')), h('div', { class: 'page-sub' }, t('domainsSub'))),
+    h('div', {}, h('div', { class: 'eyebrow' }, t('eyebrowDomains')), h('h2', { class: 'page-title' }, t('domainsTitle')), h('div', { class: 'page-sub' }, t('domainsSub'))),
     h('button', { class: 'btn btn--primary', onclick: () => addModal(load) }, icon('plus'), t('addDomain')),
   ));
 

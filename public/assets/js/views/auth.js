@@ -11,14 +11,15 @@ export function renderLogin(root) {
   root.append(view);
 
   // header controls
-  const ctrls = h('div', { class: 'row', style: { position: 'fixed', top: '18px', insetInlineEnd: '18px', zIndex: 50 } },
-    h('button', { class: 'icon-btn glass', style: { borderRadius: '14px' }, onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon('sun')),
-    h('button', { class: 'icon-btn glass', style: { borderRadius: '14px' }, onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); renderLogin(root); } }, icon('globe')),
+  const ctrls = h('div', { class: 'auth-ctrls' },
+    h('button', { class: 'glass-btn', title: t('theme'), onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon('sun')),
+    h('button', { class: 'glass-btn', title: t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); renderLogin(root); } }, icon('globe')),
   );
   view.append(ctrls);
 
   const logo = h('img', { class: 'auth-logo', src: 'assets/img/logo-dark.png', alt: 'Cmail' });
   wrap.append(logo);
+  wrap.append(h('p', { class: 'auth-foot' }, t('tagline')));
 
   let mode = 'login'; // login | register
   let pending = null;
@@ -26,16 +27,6 @@ export function renderLogin(root) {
 
   const card = h('div', { class: 'auth-card glass' });
   wrap.append(card);
-  const hint = state.setup?.demo
-    ? h('button', { class: 'demo-pill', onclick: () => fillDemo() }, icon('zap'), t('demoHint'))
-    : null;
-  if (hint) wrap.append(hint);
-
-  function fillDemo() {
-    form.querySelector('[name=username]').value = state.setup.demo.username;
-    form.querySelector('[name=password]').value = state.setup.demo.password;
-    submit();
-  }
 
   function draw() {
     clear(card);
@@ -45,10 +36,9 @@ export function renderLogin(root) {
     );
 
     form = h('form', { class: 'auth-form' });
-    const demo = mode === 'login' && state.setup?.demo;
     form.append(
-      field(t('username'), 'text', 'username', demo ? state.setup.demo.username : '', true),
-      field(t('password'), 'password', 'password', demo ? state.setup.demo.password : ''),
+      field(t('username'), 'text', 'username', '', true),
+      field(t('password'), 'password', 'password', ''),
     );
     if (mode === 'register') form.append(field(t('displayName'), 'text', 'display_name', ''));
 
@@ -130,9 +120,9 @@ export async function renderSetup(root) {
   const wizard = h('div', { class: 'wizard' });
   view.append(wizard);
 
-  view.append(h('div', { class: 'row', style: { position: 'fixed', top: '18px', insetInlineEnd: '18px', zIndex: 50 } },
-    h('button', { class: 'icon-btn glass', style: { borderRadius: '14px' }, onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon('sun')),
-    h('button', { class: 'icon-btn glass', style: { borderRadius: '14px' }, onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); renderSetup(root); } }, icon('globe')),
+  view.append(h('div', { class: 'auth-ctrls' },
+    h('button', { class: 'glass-btn', title: t('theme'), onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon('sun')),
+    h('button', { class: 'glass-btn', title: t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); renderSetup(root); } }, icon('globe')),
   ));
 
   root.append(view);

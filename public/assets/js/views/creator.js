@@ -19,7 +19,7 @@ export function renderCreator(root) {
     ),
 
     h('div', { style: { margin: '26px 0 4px', display: 'grid', placeItems: 'center' } },
-      h('div', { class: 'avatar', style: { width: '72px', height: '72px', fontSize: '28px', borderRadius: '24px', boxShadow: '0 14px 40px -8px rgba(124,140,255,.6)' } }, 'E'),
+      h('div', { class: 'avatar', style: { width: '72px', height: '72px', fontSize: '28px', borderRadius: '24px', boxShadow: '0 14px 40px -8px color-mix(in srgb, var(--acc) 55%, transparent)' } }, 'E'),
       h('div', { class: 'creator-name', style: { fontSize: '21px' } }, t('byName')),
       h('div', { class: 'creator-role' }, t('madeBy')),
       h('p', { class: 'creator-role', style: { maxWidth: '380px', margin: '10px auto 0', lineHeight: 1.9 } }, t('creatorBio')),

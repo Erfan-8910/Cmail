@@ -1,7 +1,7 @@
 // Cmail — setup wizard routes
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
-import { usernameValid, passwordStrong, hashPassword, uid, now, getSettings, getSetting, setSetting } from '../util';
+import { usernameValid, passwordStrong, hashPassword, uid, now, getSettings, setSetting } from '../util';
 import { createSession, setSessionCookie, clientIp, rateLimit } from '../auth';
 
 const app = new Hono<AppEnv>();
@@ -22,7 +22,6 @@ app.get('/status', async (c) => {
     sending_provider: settings.sending_provider || 'none',
     registration: settings.registration || 'closed',
     app_name: appName,
-    demo: (await getSetting(env, 'demo_hint')) === '1' ? { username: 'demo', password: 'demo1234' } : undefined,
   });
 });
 

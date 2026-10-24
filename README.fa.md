@@ -20,9 +20,9 @@
 |---|---|
 | ![Inbox](docs/screenshot-inbox.png) | ![Vault](docs/screenshot-vault.png) |
 
-| پوسته روز | سازنده |
+| پوسته روز (RTL) | موبایل |
 |---|---|
-| ![Light](docs/screenshot-light.png) | ![Creator](docs/screenshot-creator.png) |
+| ![Light](docs/screenshot-light.png) | ![Mobile](docs/screenshot-mobile.png) |
 
 ## ✨ سی‌میل چیه؟
 

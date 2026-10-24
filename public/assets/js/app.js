@@ -1,4 +1,4 @@
-// Cmail — app shell: boot, router, dynamic island
+// Cmail — app shell: boot, router, sidebar + topbar + mobile tabbar
 import { api, state, errText } from './api.js';
 import { t, setLang, lang } from './i18n.js';
 import { h, clear, icon, toast, dropdown, timeAgo } from './ui.js';
@@ -12,9 +12,22 @@ import { renderCreator } from './views/creator.js';
 import { renderHelp } from './views/help.js';
 
 const app = document.getElementById('app');
-const island = document.getElementById('island');
-const islandCenter = document.getElementById('island-center');
-const islandActions = document.getElementById('island-actions');
+const sidebar = document.getElementById('sidebar');
+const sbScrim = document.getElementById('sb-scrim');
+const sbNav = document.getElementById('sb-nav');
+const sbLabel = document.getElementById('sb-label');
+const sbTag = document.getElementById('sb-tag');
+const sbQuote = document.getElementById('sb-quote');
+const sbQuoteT = document.getElementById('sb-quote-t');
+const sbQuoteS = document.getElementById('sb-quote-s');
+const sbQuoteI = document.querySelector('[data-quote-icon]');
+const sbUser = document.getElementById('sb-user');
+const topbar = document.getElementById('topbar');
+const tbMenu = document.getElementById('tb-menu');
+const tbTitle = document.getElementById('tb-title');
+const tbEnd = document.getElementById('tb-end');
+const tabbar = document.getElementById('tabbar');
+const tabbarIn = document.getElementById('tabbar-in');
 
 // ---------- routing ----------
 const routes = {
@@ -27,6 +40,16 @@ const routes = {
   help: renderHelp,
   login: renderLogin,
   setup: renderSetup,
+};
+
+const viewMeta = {
+  mail: { icon: 'inbox', title: () => t('navMail'), eyebrow: () => t('eyebrowMail') },
+  addresses: { icon: 'mail', title: () => t('navAddresses'), eyebrow: () => t('eyebrowAddresses') },
+  vault: { icon: 'key', title: () => t('navVault'), eyebrow: () => t('eyebrowVault') },
+  domains: { icon: 'globe', title: () => t('navDomains'), eyebrow: () => t('eyebrowDomains') },
+  settings: { icon: 'settings', title: () => t('navSettings'), eyebrow: () => t('eyebrowSettings') },
+  creator: { icon: 'heart', title: () => t('navCreator'), eyebrow: () => t('eyebrowCreator') },
+  help: { icon: 'help', title: () => t('navHelp'), eyebrow: () => t('eyebrowHelp') },
 };
 
 export function nav(hash) { location.hash = hash; }
@@ -52,13 +75,17 @@ async function route() {
   if (needsAuth && !state.user) { location.hash = '#/login'; return; }
   if (page === 'login' && state.user) { location.hash = '#/mail'; return; }
 
-  renderIsland(page);
+  const authView = page === 'login' || page === 'setup';
+  renderShell(page, authView);
   clear(app);
   window.scrollTo({ top: 0 });
 
-  if (page === 'login') return renderLogin(app);
-  if (page === 'setup') return renderSetup(app);
+  if (authView) {
+    app.className = 'view view--auth';
+    return page === 'login' ? renderLogin(app) : renderSetup(app);
+  }
 
+  app.className = 'view';
   const view = routes[page] ?? renderMail;
   try {
     await view(app, currentRoute().arg);
@@ -69,60 +96,119 @@ async function route() {
   }
 }
 
-// ---------- dynamic island ----------
-export function renderIsland(page) {
-  if (page === 'login' || page === 'setup') { island.hidden = true; return; }
-  island.hidden = false;
+// ---------- shell: sidebar + topbar + tabbar ----------
+function navItems() {
+  const items = [
+    { key: 'mail', icon: 'inbox', label: t('navMail'), href: '#/mail' },
+    { key: 'addresses', icon: 'mail', label: t('navAddresses'), href: '#/addresses' },
+    { key: 'vault', icon: 'key', label: t('navVault'), href: '#/vault' },
+    { key: 'help', icon: 'help', label: t('navHelp'), href: '#/help' },
+  ];
+  if (state.user?.role === 'admin') {
+    items.push({ key: 'domains', icon: 'globe', label: t('navDomains'), href: '#/domains', cls: 'nav-item--admin' });
+    items.push({ key: 'settings', icon: 'settings', label: t('navSettings'), href: '#/settings' });
+  } else {
+    items.push({ key: 'settings', icon: 'settings', label: t('navSettings'), href: '#/settings' });
+  }
+  return items;
+}
 
-  clear(islandCenter);
-  clear(islandActions);
-
-  // contextual center: quick nav pills
-  const navItems = [
+function tabItems() {
+  return [
     { key: 'mail', icon: 'inbox', label: t('navMail') },
     { key: 'addresses', icon: 'mail', label: t('navAddresses') },
     { key: 'vault', icon: 'key', label: t('navVault') },
     { key: 'help', icon: 'help', label: t('navHelp') },
+    { key: 'settings', icon: 'settings', label: t('navSettings') },
   ];
-  for (const it of navItems) {
-    islandCenter.append(h('a', {
-      class: `chip ${page === it.key ? 'is-on' : ''}`,
-      href: `#/${it.key}`,
+}
+
+function renderShell(page, authView) {
+  [sidebar, topbar, tabbar].forEach((el) => { el.hidden = authView; });
+  document.body.classList.toggle('is-auth', authView);
+  if (authView) { closeSidebar(); return; }
+
+  // ----- sidebar -----
+  sbTag.textContent = t('sbTagline');
+  sbLabel.textContent = t('sbSection');
+  clear(sbNav);
+  for (const it of navItems()) {
+    sbNav.append(h('a', {
+      class: `nav-item ${it.cls ?? ''} ${page === it.key ? 'is-on' : ''}`,
+      href: it.href,
       dataset: { nav: it.key },
-      style: { textDecoration: 'none' },
-    }, icon(it.icon), h('span', { class: 'hide-sm' }, it.label)));
+    }, icon(it.icon), h('span', {}, it.label), it.key === 'mail' ? h('span', { class: 'badge', id: 'nav-unread', style: { display: state.unread > 0 ? '' : 'none' } }, state.unread > 99 ? '99+' : String(state.unread)) : ''));
   }
+  sbQuote.hidden = false;
+  sbQuoteT.textContent = t('quoteTitle');
+  sbQuoteS.textContent = t('quoteSub');
+  sbQuoteI.innerHTML = icon('leaf').innerHTML;
 
-  // actions: theme, lang, user
-  const themeBtn = h('button', {
-    class: 'icon-btn', title: t('theme'), 'aria-label': t('theme'),
-    onclick: () => {
-      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-      setTheme(next);
-    },
-  }, icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon'));
-  islandActions.append(themeBtn);
+  clear(sbUser);
+  sbUser.hidden = false;
+  sbUser.append(
+    h('span', { class: 'avatar' }, (state.user?.username ?? '?').slice(0, 1).toUpperCase()),
+    h('span', { class: 'grow' },
+      h('span', { class: 'u-name' }, state.user?.display_name || state.user?.username || '—'),
+      h('span', { class: 'u-sub' }, state.user?.role === 'admin' ? t('roleAdmin') : t('roleMember'))),
+    h('span', { class: 'end icn' }, icon('settings')),
+  );
+  sbUser.onclick = (e) => {
+    if (e.target.closest('.end')) { dropdown(sbUser, userMenu()); return; }
+    location.hash = '#/settings';
+  };
 
-  const langBtn = h('button', {
-    class: 'icon-btn', title: t('language'), 'aria-label': t('language'),
-    onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); route(); },
-  }, icon('globe'));
-  islandActions.append(langBtn);
+  // ----- topbar -----
+  const meta = viewMeta[page] ?? viewMeta.mail;
+  clear(tbTitle);
+  tbTitle.append(icon(meta.icon), h('span', {}, meta.title()));
 
+  tbMenu.hidden = false;
+  tbMenu.innerHTML = icon('menu').innerHTML;
+  tbMenu.onclick = openSidebar;
+
+  clear(tbEnd);
+  tbEnd.append(
+    h('span', { class: 'topbar__date' }, dateLabel()),
+    h('button', { class: 'icon-btn', title: t('theme'), 'aria-label': t('theme'), onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')),
+    h('button', { class: 'icon-btn', title: t('language'), 'aria-label': t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); route(); } }, icon('globe')),
+  );
   const userWrap = h('div', { style: { position: 'relative', display: 'inline-flex' } });
-  const ava = h('button', { class: 'avatar', 'aria-label': t('account'), onclick: () => dropdown(userWrap, userMenu) }, (state.user?.username ?? '?').slice(0, 1).toUpperCase());
-  userWrap.append(ava);
-  islandActions.append(userWrap);
+  userWrap.append(h('button', { class: 'avatar', 'aria-label': t('account'), onclick: () => dropdown(userWrap, userMenu()) }, (state.user?.username ?? '?').slice(0, 1).toUpperCase()));
+  tbEnd.append(userWrap);
+
+  // ----- mobile tabbar -----
+  clear(tabbarIn);
+  for (const it of tabItems()) {
+    tabbarIn.append(h('a', {
+      class: `tab ${page === it.key ? 'is-on' : ''}`,
+      href: `#/${it.key}`,
+      dataset: { tab: it.key },
+    }, icon(it.icon), h('span', {}, it.label), it.key === 'mail' ? h('span', { class: 'badge', id: 'tab-unread', style: { display: state.unread > 0 ? '' : 'none' } }, state.unread > 99 ? '99+' : String(state.unread)) : ''));
+  }
+}
+
+function dateLabel() {
+  try {
+    return new Date().toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  } catch { return ''; }
+}
+
+function openSidebar() {
+  sidebar.classList.add('open');
+  sbScrim.hidden = false;
+  sbScrim.onclick = closeSidebar;
+}
+function closeSidebar() {
+  sidebar.classList.remove('open');
+  if (sbScrim) sbScrim.hidden = true;
 }
 
 function userMenu() {
   const items = [];
   if (state.user) {
     items.push({ label: `${t('account')} — ${state.user.username}`, icon: 'user', fn: () => nav('/settings') });
-    if (state.user.role === 'admin') {
-      items.push({ label: t('navAdmin'), icon: 'settings', fn: () => nav('/settings') });
-      items.push({ label: t('navDomains'), icon: 'globe', fn: () => nav('/domains') });
-    }
+    if (state.user.role === 'admin') items.push({ label: t('navDomains'), icon: 'globe', fn: () => nav('/domains') });
     items.push('-');
     items.push({ label: t('navCreator'), icon: 'heart', fn: () => nav('/creator') });
     items.push({ label: t('logout'), icon: 'logout', fn: async () => { await api.post('/api/auth/logout').catch(() => {}); state.user = null; nav('/login'); } });
@@ -130,17 +216,26 @@ function userMenu() {
   return items;
 }
 
-// ---------- theme ----------
+// ---------- theme & accent ----------
 export function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem('cmail_theme', theme);
-  const logo = document.getElementById('island-logo');
-  if (logo) logo.src = theme === 'dark' ? 'assets/img/icon-white.png' : 'assets/img/icon-black.png';
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'dark' ? '#171d18' : '#f5f7f2');
+  // refresh icons that depend on theme
+  if (!topbar.hidden) {
+    const btn = tbEnd?.querySelector('.icon-btn');
+    if (btn) btn.innerHTML = icon(theme === 'dark' ? 'sun' : 'moon').innerHTML;
+  }
 }
 
-// ---------- session keepalive loop (refresh unread badge) ----------
+export function setAccent(accent) {
+  document.documentElement.dataset.accent = accent;
+  localStorage.setItem('cmail_accent', accent);
+}
+
+// ---------- session keepalive (refresh unread badge) ----------
 setInterval(async () => {
-  if (!state.user || island.hidden) return;
+  if (!state.user || topbar.hidden) return;
   try {
     const r = await api.get('/api/auth/me');
     state.user = r.user;
@@ -152,19 +247,20 @@ setInterval(async () => {
 }, 20_000);
 
 export function updateUnreadBadge() {
-  const btn = document.querySelector('[data-nav="mail"]');
-  if (!btn) return;
-  let badge = btn.querySelector('.badge');
-  if (state.unread > 0) {
-    if (!badge) badge = h('span', { class: 'badge' });
-    badge.textContent = state.unread > 99 ? '99+' : String(state.unread);
-    btn.append(badge);
-  } else badge?.remove();
+  const show = state.unread > 0;
+  const txt = state.unread > 99 ? '99+' : String(state.unread);
+  for (const id of ['nav-unread', 'tab-unread']) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.textContent = txt;
+    el.style.display = show ? '' : 'none';
+  }
 }
 
 // ---------- boot ----------
 (async function boot() {
   setTheme(localStorage.getItem('cmail_theme') ?? 'dark');
+  setAccent(localStorage.getItem('cmail_accent') ?? 'sage');
 
   window.addEventListener('cmail:unauthorized', () => {
     state.user = null;
