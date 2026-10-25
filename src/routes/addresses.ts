@@ -57,7 +57,7 @@ app.delete('/domains/:id', requireAdmin, async (c) => {
 app.get('/', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
   const { results } = await c.env.DB.prepare(
-    `SELECT a.id, a.address, a.label, a.kind, a.expires_at, a.forward_to, a.created_at, a.last_mail_at, d.name AS domain,
+    `SELECT a.id, a.address, a.label, a.kind, a.expires_at, a.forward_to, a.notes, a.created_at, a.last_mail_at, d.name AS domain,
        (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id AND e.is_read = 0) AS unread,
        (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id) AS total
      FROM addresses a LEFT JOIN domains d ON d.id = a.domain_id
@@ -68,7 +68,7 @@ app.get('/', requireUser, async (c) => {
 
 app.post('/', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
-  const body = await c.req.json<{ local?: string; domain?: string; kind?: string; ttl_hours?: number; label?: string }>().catch(() => null);
+  const body = await c.req.json<{ local?: string; domain?: string; kind?: string; ttl_hours?: number; label?: string; notes?: string }>().catch(() => null);
 
   const kind = body?.kind === 'temp' ? 'temp' : 'permanent';
   const domainName = (body?.domain ?? '').toLowerCase().trim();
@@ -97,8 +97,8 @@ app.post('/', requireUser, async (c) => {
 
   const id = uid('adr_');
   await c.env.DB.prepare(
-    'INSERT INTO addresses (id, user_id, domain_id, address, label, kind, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(id, u.id, domain.id, address, clean(body?.label, 80) || null, kind, expiresAt, now()).run();
+    'INSERT INTO addresses (id, user_id, domain_id, address, label, notes, kind, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(id, u.id, domain.id, address, clean(body?.label, 80) || null, clean(body?.notes, 4000) || '', kind, expiresAt, now()).run();
 
   return c.json({ ok: true, address: { id, address, kind, expires_at: expiresAt, label: clean(body?.label, 80) || null } });
 });
@@ -110,8 +110,9 @@ app.patch('/:id', requireUser, async (c) => {
     .bind(id, u.id).first<{ id: string; user_id: string; kind: string; expires_at: number | null }>();
   if (!addr) return c.json({ ok: false, error: 'not_found' }, 404);
 
-  const body = await c.req.json<{ label?: string; forward_to?: string; extend_hours?: number }>().catch(() => null);
+  const body = await c.req.json<{ label?: string; forward_to?: string; extend_hours?: number; notes?: string }>().catch(() => null);
   if (body?.label !== undefined) await c.env.DB.prepare('UPDATE addresses SET label = ? WHERE id = ?').bind(clean(body.label, 80) || null, id).run();
+  if (body?.notes !== undefined) await c.env.DB.prepare('UPDATE addresses SET notes = ? WHERE id = ?').bind(clean(body.notes, 4000) ?? '', id).run();
 
   if (body?.forward_to !== undefined) {
     const fwd = clean(body.forward_to, 120);

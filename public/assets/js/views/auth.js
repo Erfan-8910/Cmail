@@ -5,6 +5,31 @@ import { t, lang, setLang } from '../i18n.js';
 import { h, clear, icon, toast, copyText, vibrate } from '../ui.js';
 import { setTheme } from '../app.js';
 
+// shared recovery copy-lines (used on the login page AND in the help view)
+export function recoveryCopyLine(text) {
+  const btn = h('button', { class: 'btn btn--sm btn--ghost', onclick: async () => { await copyText(text); toast(t('copied'), 'ok', 1500); } }, icon('copy'));
+  return h('div', { class: 'copy-line' }, h('span', {}, text), btn);
+}
+
+export function stepRow(n, title, desc) {
+  return h('div', { class: 'step-row' }, h('span', { class: 'step-row__num' }, String(n)),
+    h('div', { class: 'step-row__body' }, h('h4', {}, title), h('p', {}, desc)));
+}
+
+// the account-recovery panel: how to get the username / reset the password from D1 Console
+export function recoveryPanel({ open = false } = {}) {
+  const body = h('div', { class: 'rec-body' });
+  body.append(
+    h('p', { class: 'small muted rec-lead' }, t('loginHelpSub')),
+    stepRow(1, t('recStep1'), ''),
+    recoveryCopyLine('SELECT username FROM users;'),
+    stepRow(2, t('recStep3'), ''),
+    recoveryCopyLine("UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c=' WHERE role = 'admin';"),
+    h('div', { class: 'rec-warn' }, icon('shield'), h('span', {}, t('recWarn'))),
+  );
+  return h('details', { class: `auth-help ${open ? 'is-open' : ''}`, open }, h('summary', {}, icon('help'), t('loginHelp')), body);
+}
+
 export function renderLogin(root) {
   const view = h('div', { class: 'view view--auth' });
   const wrap = h('div', { class: 'auth-wrap' });
@@ -87,7 +112,7 @@ export function renderLogin(root) {
     form.append(submitBtn);
     form.addEventListener('submit', (e) => { e.preventDefault(); submitLogin(Object.fromEntries(new FormData(form).entries())); });
     card.append(form);
-    card.append(h('p', { class: 'auth-note' }, icon('help'), t('loginNote')));
+    card.append(recoveryPanel());
   }
 
   async function submitCreate(fd) {

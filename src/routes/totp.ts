@@ -11,14 +11,17 @@ const app = new Hono<AppEnv>();
 type Entry = {
   id: string; name: string; issuer: string | null; secret_enc: string;
   algo: string; digits: number; period: number; color: string | null; sort: number;
+  icon: string | null; address_id: string | null;
 };
 
-// list entries (no secrets) + fresh code for each
+// list entries (no secrets) + fresh code for each; ?address_id= scopes to one mailbox
 app.get('/', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const scope = (c.req.query('address_id') ?? '').trim();
   const { results } = await c.env.DB.prepare(
-    'SELECT id, name, issuer, algo, digits, period, color, sort, created_at FROM totp_entries WHERE user_id = ? ORDER BY sort, created_at'
-  ).bind(u.id).all<{ id: string; name: string; issuer: string | null; algo: string; digits: number; period: number; color: string | null; sort: number; created_at: number }>();
+    `SELECT id, name, issuer, algo, digits, period, color, sort, created_at, icon, address_id FROM totp_entries
+     WHERE user_id = ? ${scope ? 'AND address_id = ?' : ''} ORDER BY sort, created_at`
+  ).bind(...(scope ? [u.id, scope] : [u.id])).all<any>();
   const entries = results ?? [];
   const t = Date.now();
   const withCodes = await Promise.all(entries.map(async (e) => {
@@ -56,6 +59,7 @@ app.post('/', requireUser, async (c) => {
   const body = await c.req.json<{
     name?: string; issuer?: string; secret?: string; uri?: string;
     algo?: string; digits?: number; period?: number; color?: string;
+    icon?: string; address_id?: string;
   }>().catch(() => null);
 
   let name = clean(body?.name, 60);
@@ -84,12 +88,19 @@ app.post('/', requireUser, async (c) => {
 
   const id = uid('tfa_');
   const sealed = await sealText(c.env, secret);
+  // optional mailbox link (must belong to this user)
+  let addressId: string | null = null;
+  if (body?.address_id) {
+    const own = await c.env.DB.prepare('SELECT id FROM addresses WHERE id = ? AND user_id = ?').bind(body.address_id, u.id).first();
+    if (own) addressId = body.address_id;
+  }
+  const icon = clean(body?.icon, 40) || null;
   await c.env.DB.prepare(
-    'INSERT INTO totp_entries (id, user_id, name, issuer, secret_enc, algo, digits, period, color, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(id, u.id, name, issuer || null, sealed, algo, digits, period, clean(body?.color, 20) || null, (count?.n ?? 0), now()).run();
+    'INSERT INTO totp_entries (id, user_id, name, issuer, secret_enc, algo, digits, period, color, sort, created_at, icon, address_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(id, u.id, name, issuer || null, sealed, algo, digits, period, clean(body?.color, 20) || null, (count?.n ?? 0), now(), icon, addressId).run();
 
   const code = await totp(secret, algo, digits, period);
-  return c.json({ ok: true, entry: { id, name, issuer, algo, digits, period, color: body?.color ?? null, code, remaining: await totpRemaining(period) } });
+  return c.json({ ok: true, entry: { id, name, issuer, algo, digits, period, color: body?.color ?? null, icon, address_id: addressId, code, remaining: await totpRemaining(period) } });
 });
 
 // QR code (svg) for exporting an entry
@@ -122,13 +133,22 @@ app.get('/:id/secret', requireUser, async (c) => {
 app.patch('/:id', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
   const id = c.req.param('id');
-  const body = await c.req.json<{ name?: string; issuer?: string; color?: string; sort?: number }>().catch(() => null);
+  const body = await c.req.json<{ name?: string; issuer?: string; color?: string; sort?: number; icon?: string; address_id?: string | null }>().catch(() => null);
   const row = await c.env.DB.prepare('SELECT id FROM totp_entries WHERE id = ? AND user_id = ?').bind(id, u.id).first();
   if (!row) return c.json({ ok: false, error: 'not_found' }, 404);
   if (body?.name !== undefined) await c.env.DB.prepare('UPDATE totp_entries SET name = ? WHERE id = ?').bind(clean(body.name, 60) || 'unnamed', id).run();
   if (body?.issuer !== undefined) await c.env.DB.prepare('UPDATE totp_entries SET issuer = ? WHERE id = ?').bind(clean(body.issuer, 60) || null, id).run();
   if (body?.color !== undefined) await c.env.DB.prepare('UPDATE totp_entries SET color = ? WHERE id = ?').bind(clean(body.color, 20) || null, id).run();
   if (body?.sort !== undefined) await c.env.DB.prepare('UPDATE totp_entries SET sort = ? WHERE id = ?').bind(Math.max(0, Math.min(9999, body.sort)), id).run();
+  if (body?.icon !== undefined) await c.env.DB.prepare('UPDATE totp_entries SET icon = ? WHERE id = ?').bind(clean(body.icon, 40) || null, id).run();
+  if (body?.address_id !== undefined) {
+    let addressId: string | null = null;
+    if (body.address_id) {
+      const own = await c.env.DB.prepare('SELECT id FROM addresses WHERE id = ? AND user_id = ?').bind(body.address_id, u.id).first();
+      if (own) addressId = body.address_id;
+    }
+    await c.env.DB.prepare('UPDATE totp_entries SET address_id = ? WHERE id = ?').bind(addressId, id).run();
+  }
   return c.json({ ok: true });
 });
 

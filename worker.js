@@ -1,7 +1,6 @@
 // Cmail — complete compiled Worker (single file, ready to paste into the Cloudflare dashboard editor).
 // Source of truth: src/ — rebuild with: npx wrangler deploy --dry-run --outdir dist-worker
 // Static UI files live in ./public (attached to the Worker as assets with binding name ASSETS).
-var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 var __esm = (fn, res) => function __init() {
@@ -7546,7 +7545,7 @@ app3.delete("/domains/:id", requireAdmin, async (c) => {
 app3.get("/", requireUser, async (c) => {
   const u = c.get("user");
   const { results } = await c.env.DB.prepare(
-    `SELECT a.id, a.address, a.label, a.kind, a.expires_at, a.forward_to, a.created_at, a.last_mail_at, d.name AS domain,
+    `SELECT a.id, a.address, a.label, a.kind, a.expires_at, a.forward_to, a.notes, a.created_at, a.last_mail_at, d.name AS domain,
        (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id AND e.is_read = 0) AS unread,
        (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id) AS total
      FROM addresses a LEFT JOIN domains d ON d.id = a.domain_id
@@ -7582,8 +7581,8 @@ app3.post("/", requireUser, async (c) => {
   }
   const id = uid("adr_");
   await c.env.DB.prepare(
-    "INSERT INTO addresses (id, user_id, domain_id, address, label, kind, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-  ).bind(id, u.id, domain.id, address, clean(body?.label, 80) || null, kind, expiresAt, now()).run();
+    "INSERT INTO addresses (id, user_id, domain_id, address, label, notes, kind, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(id, u.id, domain.id, address, clean(body?.label, 80) || null, clean(body?.notes, 4e3) || "", kind, expiresAt, now()).run();
   return c.json({ ok: true, address: { id, address, kind, expires_at: expiresAt, label: clean(body?.label, 80) || null } });
 });
 app3.patch("/:id", requireUser, async (c) => {
@@ -7595,6 +7594,8 @@ app3.patch("/:id", requireUser, async (c) => {
   const body = await c.req.json().catch(() => null);
   if (body?.label !== void 0)
     await c.env.DB.prepare("UPDATE addresses SET label = ? WHERE id = ?").bind(clean(body.label, 80) || null, id).run();
+  if (body?.notes !== void 0)
+    await c.env.DB.prepare("UPDATE addresses SET notes = ? WHERE id = ?").bind(clean(body.notes, 4e3) ?? "", id).run();
   if (body?.forward_to !== void 0) {
     const fwd = clean(body.forward_to, 120);
     if (fwd && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fwd))
@@ -7890,9 +7891,11 @@ init_util();
 var app5 = new Hono3();
 app5.get("/", requireUser, async (c) => {
   const u = c.get("user");
+  const scope = (c.req.query("address_id") ?? "").trim();
   const { results } = await c.env.DB.prepare(
-    "SELECT id, name, issuer, algo, digits, period, color, sort, created_at FROM totp_entries WHERE user_id = ? ORDER BY sort, created_at"
-  ).bind(u.id).all();
+    `SELECT id, name, issuer, algo, digits, period, color, sort, created_at, icon, address_id FROM totp_entries
+     WHERE user_id = ? ${scope ? "AND address_id = ?" : ""} ORDER BY sort, created_at`
+  ).bind(...scope ? [u.id, scope] : [u.id]).all();
   const entries = results ?? [];
   const t = Date.now();
   const withCodes = await Promise.all(entries.map(async (e) => {
@@ -7953,11 +7956,18 @@ app5.post("/", requireUser, async (c) => {
     return c.json({ ok: false, error: "vault_limit" }, 409);
   const id = uid("tfa_");
   const sealed = await sealText(c.env, secret);
+  let addressId = null;
+  if (body?.address_id) {
+    const own = await c.env.DB.prepare("SELECT id FROM addresses WHERE id = ? AND user_id = ?").bind(body.address_id, u.id).first();
+    if (own)
+      addressId = body.address_id;
+  }
+  const icon = clean(body?.icon, 40) || null;
   await c.env.DB.prepare(
-    "INSERT INTO totp_entries (id, user_id, name, issuer, secret_enc, algo, digits, period, color, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-  ).bind(id, u.id, name, issuer || null, sealed, algo, digits, period, clean(body?.color, 20) || null, count?.n ?? 0, now()).run();
+    "INSERT INTO totp_entries (id, user_id, name, issuer, secret_enc, algo, digits, period, color, sort, created_at, icon, address_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(id, u.id, name, issuer || null, sealed, algo, digits, period, clean(body?.color, 20) || null, count?.n ?? 0, now(), icon, addressId).run();
   const code = await totp(secret, algo, digits, period);
-  return c.json({ ok: true, entry: { id, name, issuer, algo, digits, period, color: body?.color ?? null, code, remaining: await totpRemaining(period) } });
+  return c.json({ ok: true, entry: { id, name, issuer, algo, digits, period, color: body?.color ?? null, icon, address_id: addressId, code, remaining: await totpRemaining(period) } });
 });
 app5.get("/:id/qr", requireUser, async (c) => {
   const u = c.get("user");
@@ -7996,6 +8006,17 @@ app5.patch("/:id", requireUser, async (c) => {
     await c.env.DB.prepare("UPDATE totp_entries SET color = ? WHERE id = ?").bind(clean(body.color, 20) || null, id).run();
   if (body?.sort !== void 0)
     await c.env.DB.prepare("UPDATE totp_entries SET sort = ? WHERE id = ?").bind(Math.max(0, Math.min(9999, body.sort)), id).run();
+  if (body?.icon !== void 0)
+    await c.env.DB.prepare("UPDATE totp_entries SET icon = ? WHERE id = ?").bind(clean(body.icon, 40) || null, id).run();
+  if (body?.address_id !== void 0) {
+    let addressId = null;
+    if (body.address_id) {
+      const own = await c.env.DB.prepare("SELECT id FROM addresses WHERE id = ? AND user_id = ?").bind(body.address_id, u.id).first();
+      if (own)
+        addressId = body.address_id;
+    }
+    await c.env.DB.prepare("UPDATE totp_entries SET address_id = ? WHERE id = ?").bind(addressId, id).run();
+  }
   return c.json({ ok: true });
 });
 app5.delete("/:id", requireUser, async (c) => {

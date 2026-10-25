@@ -11,7 +11,7 @@
 
 Temporary & permanent inboxes · notes on every email · built-in 2FA vault · unlimited domains · outgoing mail · zero servers, zero monthly bills
 
-[![Version](https://img.shields.io/badge/version-1.5.0-56725c)](https://github.com/Erfan-8910/CMail/releases)
+[![Version](https://img.shields.io/badge/version-1.6.0-4f8f60)](https://github.com/Erfan-8910/CMail/releases)
 [![License](https://img.shields.io/badge/license-MIT-56725c)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-F38020)](https://workers.cloudflare.com)
 [![PRs](https://img.shields.io/badge/PRs-welcome-b4cda3)](https://github.com/Erfan-8910/CMail/pulls)
@@ -55,14 +55,16 @@ Cmail از یک سؤال ساده شروع شد: **چرا برای یک صندو
 | 📬 **صندوق موقت + دائمی** | آدرس موقت با TTL (یک‌ساعته، یک‌روزه، هر چیزی) و شمارش معکوس زنده؛ آدرس دائمی که برای همیشه مال توست. |
 | 🌐 **دامنه‌های نامحدود** | هر دامنه‌ای که روی Cloudflare داری را وصل کن؛ یک Worker همه را دریافت می‌کند. |
 | 🗒️ **یادداشت روی هر ایمیل** | یادداشت رنگی شخصی زیر هر پیام — شماره سفارش، لینک جلسه، هر چیزی. جستجو همان‌جا پیدایش می‌کند. |
-| 🔐 **گاوصندوق 2FA** | احراز‌کننده‌ی داخلی: کدهای ۶ رقمی زنده با حلقه‌ی شمارش معکوس، رمزنگاری‌شده با AES-256-GCM. |
+| 👤 **هر حساب، یک دنیا** | هر صندوق مثل یک حساب مستقل رفتار می‌کند: نامه‌ها، یادداشت‌های اختصاصی و کدهای 2FA همان سرویس فقط روی همان حساب می‌مانند؛ از کنار لیست حساب‌ها اضافه‌اش می‌کنی، مثل اضافه‌کردن یک حساب تازه. |
+| 🔐 **گاوصندوق 2FA با لوگو** | احراز‌کننده‌ی داخلی: کدهای ۶ رقمی زنده با حلقه‌ی شمارش معکوس، رمزنگاری‌شده با AES-256-GCM؛ برای هر کد یک لوگو از کتابخانه‌ی ۴۸ نماد آماده انتخاب کن یا حسابش را به یک صندوق وصل کن. |
+| 🗒️ **یادداشت روی هر حساب** | برای هر صندوق یک یادداشت امن بنویس: اطلاعات ورود سرویس، یادداشت‌های استفاده — ذخیره‌ی خودکار، همان‌جا که صندوق است. |
 | 🛡️ **ورود دومرحله‌ای حساب** | خودِ ورود به پنل هم می‌تواند 2FA داشته باشد. |
 | 📤 **ارسال ایمیل** | با یک کلید API به Brevo یا Resend وصل شو و از دامنه‌ی خودت ایمیل بفرست. |
 | ➡️ **ارجاع (Forwarding)** | هر صندوق می‌تواند کپی ایمیل‌هایش را به یک آدرس واقعی هم بفرستد. |
 | ⌘ **پالت فرمان** | با <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> هر جا که هستی بپر هر جا می‌خواهی؛ همزمان نتیجه‌ی جستجوی ایمیل‌ها هم زنده می‌آید. |
 | ⌨️ **کیبورد‌محور** | `j`/`k` حرکت، `Enter` بازکردن، `x` انتخاب، `s` ستاره — نقشه‌ی کامل میان‌برها داخل خود اپ هست. |
 | 🧹 **پاک‌سازی خودکار** | یک کرون ساعتی صندوق‌های منقضی و ایمیل‌های قدیمی را خودش جمع می‌کند. |
-| 🌙 **رابط شیشه‌ای** | تم شب و روز، شفافیت شیشه‌ی قابل تنظیم، ۴ پالت رنگ، فارسی (راست‌به‌چپ) و انگلیسی. |
+| 🌙 **رابط شیشه‌ای** | تم شب و روز، شفافیت شیشه‌ی قابل تنظیم، ۵ پالت رنگ زنده، فارسی (راست‌به‌چپ) و انگلیسی. |
 | 📱 **کاملاً واکنش‌گرا** | از ۳۲۰ پیکسل موبایل تا دسکتاپ ۱۹۲۰ — ستون‌ها به دراور و شیت تبدیل می‌شوند. |
 | 🔒 **داده‌ات، قانون تو** | D1 مال توست، کلیدها مال توست. هیچ‌کس دیگری داده‌ات را ندارد. |
 
@@ -177,6 +179,8 @@ Cmail از طریق **Brevo** (۳۰۰ ایمیل در روز، رایگان) ی�
 امنیتش هم جدی است: رمزها به‌صورت PBKDF2-SHA256 هش می‌شوند، نشست‌ها با کوکی httpOnly امن می‌مانند، ورود دومرحله‌ای (TOTP) هم برای خود حساب داری، و حدس‌زدن رمز هم با محدودیت نرخ روی هر IP عملاً بی‌فایده است.
 
 ### 🔑 اگر رمز یا نام کاربری را گم کردی
+
+خبر خوب: لازم نیست دنبال راهنما بگردی — **راهنمای بازیابی همان صفحه‌ی ورود است**؛ زیر فرم ورود، بخش «راهنما و بازیابی دسترسی» را باز کن. دستورهای SQL آماده‌ی کپی هم همان‌جاست. توضیح کامل در بخش راهنمای داخل اپ هم هست:
 
 هیچ‌کس — حتی خود Cmail — نمی‌تواند رمز هش‌شده را بخواند؛ اما دسترسی‌ات را با دو دستور ساده در **Console دیتابیس** برمی‌گردانی:
 
@@ -388,6 +392,8 @@ The panel is **single-user**; there is no registration and no second account. On
 Security is taken seriously: passwords are hashed with PBKDF2-SHA256, sessions ride on httpOnly cookies, the account itself supports TOTP two-factor, and brute-force attempts are rate-limited per IP.
 
 ### 🔑 If you lose your password or username
+
+No hunting for docs — **the recovery guide lives right on the sign-in page**: open "Help & account recovery" under the login form and copy the ready SQL statements. The in-app Guide repeats the same steps:
 
 Nobody — not even Cmail — can read a hashed password back, but you can restore access with two simple statements in the **database Console**:
 

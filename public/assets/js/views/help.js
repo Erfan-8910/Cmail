@@ -1,7 +1,7 @@
 // Cmail — help / setup guide view
 import { t, lang } from '../i18n.js';
 import { h, icon } from '../ui.js';
-import { copyLine } from './auth.js';
+import { recoveryCopyLine, stepRow } from './auth.js';
 
 export function renderHelp(root) {
   const fa = lang === 'fa';
@@ -89,9 +89,9 @@ npx wrangler deploy`);
       fa ? 'از تب Console استفاده کن.' : 'Use the Console tab.'),
     stepRow(2, fa ? 'برای پیدا کردن نام کاربری:' : 'To find your username:', ''),
   );
-  recBody.append(copyLine('SELECT username FROM users;'));
+  recBody.append(recoveryCopyLine('SELECT username FROM users;'));
   recBody.append(stepRow(3, fa ? 'برای ریست کردن رمز به مقدار موقت Recover-Cmail-2026:' : 'To reset the password to the temporary value Recover-Cmail-2026:', ''));
-  recBody.append(copyLine("UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c=' WHERE role = 'admin';"));
+  recBody.append(recoveryCopyLine("UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c=' WHERE role = 'admin';"));
   recBody.append(stepRow(4, fa ? 'حالا با همان نام کاربری و رمز Recover-Cmail-2026 وارد شو و بلافاصله از تنظیمات ← امنیت، رمز را عوض کن.' : 'Sign in with your username and Recover-Cmail-2026, then immediately change the password in Settings → Security.',
     fa ? 'هیچ ایمیلی حذف نمی‌شود؛ این دستور فقط رمز را عوض می‌کند.' : 'No mail is touched; the statement only replaces the password.'));
   recBody.append(h('p', { style: { margin: '8px 0 0' } },
@@ -111,9 +111,9 @@ npx wrangler deploy`);
   content.append(
     q(fa ? 'ایمیل‌ها نمی‌آیند!' : 'Emails are not arriving!',
       h('p', { class: 'small muted' }, fa
-        ? '۱) وضعیت Email Routing را در داشبورد چک کن (باید Active باشد) ۲) Catch-all حتماً روی Send to Worker باشد ۳) لاگ زنده: npx wrangler tail'
-        : '1) Check Email Routing status in the dashboard (must be Active) 2) Catch-all must be set to Send to Worker 3) Live logs: npx wrangler tail'),
-      copyLine('npx wrangler tail')),
+        ? '۱) وضعیت Email Routing را در داشبورد چک کن (باید Active باشد) ۲) Catch-all حتماً روی Send to Worker باشد ۳) لاگ زنده را با دستور زیر ببین'
+        : '1) Check Email Routing status in the dashboard (must be Active) 2) Catch-all must be set to Send to Worker 3) Live logs with the command below'),
+      recoveryCopyLine('npx wrangler tail')),
     q(fa ? 'ایمیل ارسال نمی‌شود' : 'Outgoing mail fails',
       h('p', { class: 'small muted' }, fa
         ? 'در تنظیمات → ارسال، سرویس (Brevo/Resend) و کلید API را چک کن؛ دامنه فرستنده باید در آن سرویس تأیید شده باشد. با دکمه «ارسال ایمیل تست» امتحان کن.'
@@ -123,7 +123,7 @@ npx wrangler deploy`);
       h('p', { class: 'small muted' }, fa
         ? 'npx wrangler login را دوباره اجرا کن؛ مطمئن شو database_id در wrangler.jsonc درست است و مایگریشن‌ها را روی remote زده‌ای: npm run db:migrate:remote'
         : 'Run npx wrangler login again; make sure database_id in wrangler.jsonc is correct and migrations are applied remotely: npm run db:migrate:remote'),
-      copyLine('npm run db:migrate:remote')),
+      recoveryCopyLine('npm run db:migrate:remote')),
     q(fa ? 'چطور چند دامنه داشته باشم؟' : 'How to use multiple domains?',
       h('p', { class: 'small muted' }, fa
         ? 'هر دامنه را در Cloudflare فعال کن، بعد در بخش «دامنه‌ها» اضافه‌اش کن و Catch-all همان دامنه را به همین Worker وصل کن. ساخت صندوق برای همه دامنه‌ها فعال می‌شود.'
@@ -134,9 +134,4 @@ npx wrangler deploy`);
   view.append(shortcuts);
   view.append(content);
   root.append(view);
-
-  function stepRow(n, title, desc) {
-    return h('div', { class: 'step-row' }, h('span', { class: 'step-row__num' }, String(n)),
-      h('div', { class: 'step-row__body' }, h('h4', {}, title), h('p', {}, desc)));
-  }
 }
