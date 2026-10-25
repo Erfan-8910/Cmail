@@ -262,7 +262,7 @@ export async function renderGate(root) {
     updateEyebrow();
   }
 
-  // Apple-style success moment: one-shot confetti burst in accent colors
+  // success moment: one-shot confetti burst in accent colors
   function celebrate() {
     vibrate([10, 40, 10, 40, 18]);
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;

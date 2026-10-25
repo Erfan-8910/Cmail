@@ -202,7 +202,7 @@ function emailRow(em) {
   if (em.has_note) flags.append(h('span', { class: 'flag-note' }, icon('note')));
   if (em.size > 200_000) flags.append(h('span', { class: 'flag-clip' }, icon('paperclip')));
 
-  // hover quick actions (Apple Mail style)
+  // hover quick actions
   const qa = h('div', { class: 'email-row__qa' },
     h('button', {
       title: t('star'), 'aria-label': t('star'),

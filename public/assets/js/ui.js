@@ -99,7 +99,7 @@ export function toast(msg, kind = 'info', ms = 2600) {
   setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 320); }, ms);
 }
 
-// ---------- modal (bottom-sheet on touch devices, like iOS) ----------
+// ---------- modal (bottom-sheet on touch devices) ----------
 export function modal({ title, iconName, body, footer, wide, onClose }) {
   const root = document.getElementById('modals');
   const back = h('div', { class: 'modal-back' });

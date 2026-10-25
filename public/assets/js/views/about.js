@@ -1,5 +1,5 @@
 // Cmail — About view: the story, the features, the stack, the maker.
-// Apple-style: animated counters, 3D tilt cards, glowing hero.
+// Liquid-glass polish: animated counters, 3D tilt cards, glowing hero.
 import { t, lang } from '../i18n.js';
 import { h, icon } from '../ui.js';
 
@@ -15,7 +15,7 @@ export function renderAbout(root) {
     h('img', { class: 'ab-logo', src: 'assets/img/logo-dark.png', alt: 'Cmail' }),
     h('p', { class: 'ab-lead' }, t('aboutLead')),
     h('div', { class: 'ab-hero__meta' },
-      h('span', { class: 'chip' }, icon('spark'), `${t('aboutVersion')} 1.3.0`),
+      h('span', { class: 'chip' }, icon('spark'), `${t('aboutVersion')} 1.4.0`),
       h('span', { class: 'chip' }, icon('lock'), t('aboutOpen')),
     ),
     h('div', { class: 'ab-hero__links' },
@@ -70,11 +70,11 @@ export function renderAbout(root) {
       h('p', {}, t('aboutCreatorD')),
       h('div', { class: 'ab-creator__links' },
         h('a', { class: 'chip chip--link', href: 'https://github.com/Erfan-8910', target: '_blank', rel: 'noopener' }, icon('code'), 'Erfan — ' + t('viewGithub')),
-        h('a', { class: 'chip chip--link', href: 'https://github.com/Erfan-8910/Climind-W', target: '_blank', rel: 'noopener' }, icon('heart'), t('viewClimind')),
+        h('a', { class: 'chip chip--link', href: 'https://github.com/Erfan-8910/CMail', target: '_blank', rel: 'noopener' }, icon('heart'), t('viewProject')),
       )),
   );
 
-  const made = h('p', { class: 'ab-made' }, t('madeBy'), h('span', { class: 'version-pill' }, `Cmail v1.3.0 · ${FA(2025)}`));
+  const made = h('p', { class: 'ab-made' }, t('madeBy'), h('span', { class: 'version-pill' }, `Cmail v1.4.0 · ${FA(2025)}`));
 
   app.append(
     h('div', { class: 'page-head' },
@@ -92,7 +92,7 @@ export function renderAbout(root) {
   }
 }
 
-// count-up when scrolled into view (Apple keynote numbers)
+// count-up when scrolled into view (keynote-style numbers)
 function animateCounters(scope) {
   const els = scope.querySelectorAll?.('.ab-stat__v[data-count]');
   if (!els?.length) return;
