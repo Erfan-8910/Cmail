@@ -1,82 +1,98 @@
 <div align="center">
 
-<img src="public/assets/img/icon-black.png" width="92" alt="Cmail logo" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/logo-white.png">
+  <img src="docs/logo-black.png" width="210" alt="Cmail — logo">
+</picture>
 
 # Cmail
 
-**Your own mail ecosystem — liquid-glass, private, and living entirely on your Cloudflare.**
+**A calm, complete mail ecosystem that lives entirely inside your own Cloudflare account.**
 
-Temporary & permanent inboxes · notes on every email · built-in 2FA vault · multi-domain · outgoing mail
+Temporary & permanent inboxes · notes on every email · built-in 2FA vault · unlimited domains · outgoing mail · zero servers, zero monthly bills
 
-`Cloudflare Workers` · `D1` · `Email Routing` — zero servers, zero monthly cost, 100% yours
+[![Version](https://img.shields.io/badge/version-1.5.0-56725c)](https://github.com/Erfan-8910/CMail/releases)
+[![License](https://img.shields.io/badge/license-MIT-56725c)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-F38020)](https://workers.cloudflare.com)
+[![PRs](https://img.shields.io/badge/PRs-welcome-b4cda3)](https://github.com/Erfan-8910/CMail/pulls)
 
-[Install](#-install) · [Setup](#-cloudflare-setup-step-by-step) · [Usage](#-using-cmail) · [Troubleshooting](#-troubleshooting) · [راهنمای فارسی](README.fa.md)
+**فارسی** — [English](#english)
 
 </div>
 
+<a id="farsi"></a>
+
 ---
 
-## 🖼️ Screenshots
+<div align="center">
 
-| The inbox (dark) | Reading mail — full HTML, RTL, notes |
-|---|---|
-| ![Inbox](docs/screenshot-inbox.png) | ![Inbox FA](docs/screenshot-inbox-fa.png) |
+## 🇮🇷 راهنمای فارسی
 
-| Command palette (⌘K) | 2FA vault with live codes |
-|---|---|
-| ![Palette](docs/screenshot-cmdk.png) | ![Vault](docs/screenshot-vault.png) |
+</div>
 
-| Setup gate — nothing opens until everything is connected | Daylight theme |
-|---|---|
-| ![Gate](docs/screenshot-gate.png) | ![Light](docs/screenshot-light.png) |
+### Cmail چیه؟
 
-| Onboarding | About |
-|---|---|
-| ![Login](docs/screenshot-login.png) | ![About](docs/screenshot-about.png) |
+Cmail از یک سؤال ساده شروع شد: **چرا برای یک صندوق ایمیل باید اجاره‌بها بدهیم؟**
 
-| Phone — inbox | Phone — reading mail |
-|---|---|
-| ![Mobile](docs/screenshot-mobile.png) | ![Mobile mail](docs/screenshot-mobile-mail.png) |
+ایمیل معمول یعنی یک سرور اجاره‌ای، یک دیتابیس که خودت باید نگه‌اش داری، و صورتحساب ماهانه‌ای که یادت می‌رود. Cmail همه‌ی این‌ها را دور انداخته. کل این اکوسیستم روی همان حساب Cloudflare‌ای که از قبل داری اجرا می‌شود: ایمیل‌های ورودی با **Email Routing** می‌رسند، داده‌ها در **D1** (همان SQLite لبه‌ی Cloudflare) می‌مانند و کل رابط کاربری توسط یک **Worker** سرو می‌شود. نه سروری داری، نه فاکتوری، نه پنل اجاره‌ای.
 
-## ✨ What is Cmail?
+نتیجه‌اش یک فضای شخصی است که مالکش خودت هستی؛ از دامنه‌اش تا آخرین بایت داده‌اش. هر وقت خواستی پاکش کنی، خواستی ببری‌اش جایی دیگر — اختیار کامل دست خودت است.
 
-Cmail is a complete mail platform that runs **entirely inside your own Cloudflare account**. There is no VPS to rent, no database server to babysit, no monthly invoice: incoming mail flows through **Cloudflare Email Routing**, everything is stored in **Cloudflare D1** (SQLite at the edge), and the whole interface ships as a static bundle served by a single **Worker**.
+و چون یک «صندوق» بیشتر نیست، Cmail خودش را فقط یک اینباکس نمی‌داند؛ یک اکوسیستم است: صندوق موقت برای ثبت‌نام‌ها، صندوق دائمی برای کارهای واقعی، یادداشت رنگی زیر هر ایمیل، گاوصندوق کدهای دومرحله‌ای، و ارسال ایمیل از دامنه‌ی خودت — همه در یک پنل شیشه‌ای و آرام.
 
-That means your mail lives in *your* account, behind *your* domain, with *your* keys. Delete it when you want, export it whenever you like — nobody else holds it.
+### این پروژه برای چه کسی است؟
 
-Cmail is an **ecosystem**, not just an inbox:
+- **برای کسی که از اسپم خسته شده** — به‌جای دادن آدرس اصلی‌ات به هر سایتی، برای هر ثبت‌نام یک آدرس یک‌ساعته بساز؛ آدرس واقعی‌ات همیشه تمیز می‌ماند.
+- **برای توسعه‌دهنده‌ها و تسترها** — ده‌ها صندوق تست بساز، ایمیل‌های سیستم را بگیر، درصدهای مختلف دامنه امتحان کن و هر کدام را که تمام شد بگذار منقضی شود.
+- **برای کسی که حریم خصوصی برایش مهم است** — هیچ آماری، هیچ اسکریپت ثالث، هیچ CDN؛ همه‌چیز روی حساب خودت، با کلیدهای خودت.
+- **برای مالکان دامنه** — دامنه‌هایت را که روی Cloudflare نشسته‌اند به یک اکوسیستم ایمیل کامل تبدیل کن؛ هر دامنه، هر تعداد آدرس.
+- **برای هر کسی که دوست دارد ابزارش «مال او» باشد** — یک بار راه می‌اندازی‌اش و برای همیشه مال خودت است.
 
-- a **burner machine** — spawn a 1-hour disposable address for every signup, keep your real address clean
-- a **permanent mailbox** — labels, filters, star, search for the mail you actually keep
-- a **notebook** — pin a colored note under any message (order numbers, tracking codes, meeting links) so context never gets lost
-- an **authenticator** — named TOTP codes with live countdown, QR export and `otpauth://` import, encrypted at rest
-- a **multi-user platform** — invite people, give each one their own inboxes, or keep registration closed
-
-### Everything it can do
+### چه چیزهایی دارد؟
 
 | | |
 |---|---|
-| 📬 **Temporary + permanent inboxes** | One address can live for an hour; the next one lives forever. Set a TTL when you create it, extend it any time. |
-| 🌐 **Unlimited domains** | Add as many domains / subdomains as your Cloudflare account holds — one Worker receives them all. |
-| 🗒️ **Notes on emails** | A colored personal note pinned to any message. Search finds it instantly. |
-| 🔐 **2FA vault** | Your built-in authenticator: 6-digit codes with a live countdown ring, encrypted with AES-256-GCM. |
-| 🛡️ **Account 2FA** | Protect sign-in itself with TOTP two-factor verification. |
-| 📤 **Outgoing mail** | Connect Brevo or Resend with one API key and send from your domain. |
-| ➡️ **Forwarding** | Mirror copies of any inbox to a real address you already check. |
-| 🧑‍🤝‍🧑 **Multi-user** | Optional open registration; everyone sees only their own inboxes. Admin panel included. |
-| 🧹 **Auto-cleanup** | An hourly cron expires temporary inboxes and purges old mail automatically. |
-| 🌙 **Liquid-glass UI** | Dark & Daylight themes, adjustable glass transparency, 4 accent palettes, Persian RTL + English. |
-| ⌘ **Command palette** | Press <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> anywhere: jump to anything, run actions, search mail as you type. |
-| ⌨️ **Keyboard-first** | `j`/`k` to move, `Enter` to open, `x` to select, `s` to star — full shortcut map built in. |
-| 🧭 **Setup gate** | Until every prerequisite is connected, the main menu stays closed and a live checklist walks you through each fix. |
-| 📱 **Truly responsive** | From a 320px phone to a 1920px desktop — three panes collapse into drawers and bottom sheets. |
-| 🔒 **Your data, yours** | Your D1, your keys, your rules. No telemetry, no third-party scripts, zero CDN calls. |
+| 📬 **صندوق موقت + دائمی** | آدرس موقت با TTL (یک‌ساعته، یک‌روزه، هر چیزی) و شمارش معکوس زنده؛ آدرس دائمی که برای همیشه مال توست. |
+| 🌐 **دامنه‌های نامحدود** | هر دامنه‌ای که روی Cloudflare داری را وصل کن؛ یک Worker همه را دریافت می‌کند. |
+| 🗒️ **یادداشت روی هر ایمیل** | یادداشت رنگی شخصی زیر هر پیام — شماره سفارش، لینک جلسه، هر چیزی. جستجو همان‌جا پیدایش می‌کند. |
+| 🔐 **گاوصندوق 2FA** | احراز‌کننده‌ی داخلی: کدهای ۶ رقمی زنده با حلقه‌ی شمارش معکوس، رمزنگاری‌شده با AES-256-GCM. |
+| 🛡️ **ورود دومرحله‌ای حساب** | خودِ ورود به پنل هم می‌تواند 2FA داشته باشد. |
+| 📤 **ارسال ایمیل** | با یک کلید API به Brevo یا Resend وصل شو و از دامنه‌ی خودت ایمیل بفرست. |
+| ➡️ **ارجاع (Forwarding)** | هر صندوق می‌تواند کپی ایمیل‌هایش را به یک آدرس واقعی هم بفرستد. |
+| ⌘ **پالت فرمان** | با <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> هر جا که هستی بپر هر جا می‌خواهی؛ همزمان نتیجه‌ی جستجوی ایمیل‌ها هم زنده می‌آید. |
+| ⌨️ **کیبورد‌محور** | `j`/`k` حرکت، `Enter` بازکردن، `x` انتخاب، `s` ستاره — نقشه‌ی کامل میان‌برها داخل خود اپ هست. |
+| 🧹 **پاک‌سازی خودکار** | یک کرون ساعتی صندوق‌های منقضی و ایمیل‌های قدیمی را خودش جمع می‌کند. |
+| 🌙 **رابط شیشه‌ای** | تم شب و روز، شفافیت شیشه‌ی قابل تنظیم، ۴ پالت رنگ، فارسی (راست‌به‌چپ) و انگلیسی. |
+| 📱 **کاملاً واکنش‌گرا** | از ۳۲۰ پیکسل موبایل تا دسکتاپ ۱۹۲۰ — ستون‌ها به دراور و شیت تبدیل می‌شوند. |
+| 🔒 **داده‌ات، قانون تو** | D1 مال توست، کلیدها مال توست. هیچ‌کس دیگری داده‌ات را ندارد. |
 
-## 🚀 Install
+### نگاهی به داخل
 
-> **Prerequisites:** [Node.js 18+](https://nodejs.org) and a **Cloudflare account** (the free plan is enough).
+<div align="center">
 
-### One command
+| صندوق ورودی | خواندن ایمیل فارسی، راست‌به‌چپ |
+|---|---|
+| <img src="docs/screenshot-inbox.png" width="440" alt="inbox"> | <img src="docs/screenshot-reader.png" width="440" alt="reader"> |
+
+| پالت فرمان ⌘K | گاوصندوق 2FA با کد زنده |
+|---|---|
+| <img src="docs/screenshot-cmdk.png" width="440" alt="cmdk"> | <img src="docs/screenshot-vault.png" width="440" alt="vault"> |
+
+| تم روشن (فارسی) | تنظیمات — دسترسی و ورود |
+|---|---|
+| <img src="docs/screenshot-light.png" width="440" alt="light"> | <img src="docs/screenshot-settings.png" width="440" alt="settings"> |
+
+| صفحه‌ی ورود | موبایل |
+|---|---|
+| <img src="docs/screenshot-login.png" width="440" alt="login"> | <img src="docs/screenshot-mobile-fa.png" width="220" alt="mobile"> <img src="docs/screenshot-mobile-mail.png" width="220" alt="mobile mail"> |
+
+</div>
+
+### نصب — سه راه، همه از روی همین ریپو
+
+> پیش‌نیازها: یک **حساب Cloudflare** (پلن رایگان کاملاً کافی است). برای راه خودکار: Node.js نسخه ۱۸ به بالا.
+
+#### راه ۱ — خودکار با یک دستور (ترمینال)
 
 ```bash
 git clone https://github.com/Erfan-8910/CMail.git
@@ -84,142 +100,356 @@ cd CMail
 bash deploy.sh
 ```
 
-The installer takes over everything:
+نصب‌کننده خودش همه‌چیز را انجام می‌دهد: دیتابیس D1 را می‌سازد، جدول‌ها را می‌سازد، یک `APP_SECRET` تصادفی محکم تولید می‌کند، Worker را منتشر می‌کند و آخرش آدرس پنل را برایت چاپ می‌کند.
 
-1. installs dependencies
-2. logs you into Cloudflare (`wrangler login` opens your browser)
-3. creates the **D1 database** and wires its id into `wrangler.jsonc`
-4. applies the schema migrations
-5. generates a strong random **APP_SECRET** and stores it as a Worker secret
-6. **deploys the Worker** and prints your URL
-7. *(optional)* configures **Email Routing** automatically (MX + SPF + catch-all → Worker) when you give it an API token
+#### راه ۲ — کاملاً گرافیکی، روی dash.cloudflare.com، بدون حتی یک دستور
 
-When it finishes, open the printed `https://cmail.<your-subdomain>.workers.dev` — the **setup wizard** takes over:
+تمام کاری که باید بکنی همین است — فقط مرورگر و داشبورد Cloudflare:
 
-1. create the first admin account
-2. add your domain (the exact DNS records are shown to you)
-3. optionally connect Brevo or Resend for outgoing mail
-4. done — the main menu unlocks and the inbox opens 🎉
+**۱) دیتابیس را بساز**
+- وارد [dash.cloudflare.com](https://dash.cloudflare.com) شو ← از منوی کنار: **Storage & Databases ← D1 SQL Database ← Create**
+- اسمش را بگذار `cmail-db` و Create را بزن.
+- حالا از تب‌های بالای دیتابیس، **Console** را باز کن. در همین ریپو فایل [`migrations/0001_init.sql`](migrations/0001_init.sql) را باز کن، همه‌ی محتوایش را کپی کن و داخل Console پیست کن ← **Execute**. جدول‌ها ساخته می‌شوند. تمام؛ دیگر با دیتابیس کاری نداری.
 
-### Manual install
+**۲) Worker را بساز**
+- از منو: **Workers & Pages ← Create ← Workers ← Create Worker**
+- اسمش را بگذار `cmail` و یک بار با همان کد پیش‌فرض **Deploy** بزن.
+- روی **Edit code** بزن؛ تمام کد پیش‌فرض را پاک کن، محتوای کامل فایل [`worker.js`](worker.js) (همین ریپو، ریشه‌ی پروژه) را جای آن پیست کن و **Deploy** بزن.
+
+**۳) فایل‌های ظاهر (UI) را به Worker وصل کن**
+- برگرد به Worker و **Settings ← Domains & Routes ← Attach assets** (یا در صفحه‌ی اول ساخت Worker گزینه‌ی **Upload assets** را انتخاب کن) و محتویات پوشه‌ی [`public/`](public/) را آپلود کن. نام binding باید همان `ASSETS` بماند.
+
+**۴) پیوندها (Bindings) را بزن**
+- **Settings ← Bindings ← Add:**
+  - نوع **D1 database** ← نام متغیر: `DB` ← دیتابیس: `cmail-db`
+  - نوع **Secret** (در بخش Variables and Secrets) ← نام: `APP_SECRET` ← مقدار: یک رشته‌ی طولانی و تصادفی (هر پسورد‌جنراتوری کافی است؛ این کلید رمزنگاری داخلی اپ است — فقط یک بار می‌سازی و دیگر نباید عوضش کنی).
+
+**۵) زمان‌بندی پاک‌سازی**
+- **Settings ← Trigger Events ← Cron Triggers ← Add** و این را وارد کن: `17 * * * *`
+
+**۶) تمام!** آدرس `https://cmail.<زیر-دامنه-تو>.workers.dev` را باز کن — صفحه‌ی ورود باز می‌شود و چون بار اول است، از خودت **نام کاربری و رمز** می‌سازد. بعد از ورود، صفحه‌ی «راه‌اندازی سامانه» نشان می‌دهد دقیقاً چه چیزهایی مانده (دامنه، سرویس ارسال) و برای هر کدام آموزش قدم‌به‌قدم دارد.
+
+> 💡 راه میان‌بر دوم برای گام ۲ و ۳: در همان صفحه‌ی **Workers & Pages ← Create** می‌توانی به‌جای ساخت دستی، ریپوی گیت‌هاب خودت را متصل کنی (Connect to Git ← انتخاب ریپوی CMail) تا خودِ Cloudflare هر بار از روی ریپو بسازد و منتشر کند. فقط قبلش در فایل `wrangler.jsonc` مقدار `REPLACE_WITH_D1_ID` را با شناسه‌ی واقعی دیتابیس قدم ۱ عوض کن.
+
+#### راه ۳ — ترمینال، قدم‌به‌قدم
 
 <details>
-<summary><b>Step by step</b> (click to expand)</summary>
+<summary><b>برای کسانی که ترمینال دوست دارند</b> (باز کن)</summary>
 
 ```bash
+git clone https://github.com/Erfan-8910/CMail.git
+cd CMail
 npm install
 npx wrangler login
 
-# 1. database
-npx wrangler d1 create cmail-db           # copy the database_id
-#   → paste it into wrangler.jsonc (REPLACE_WITH_D1_ID)
+npx wrangler d1 create cmail-db
+#   شناسه‌ی برگشتی (database_id) را در wrangler.jsonc جای REPLACE_WITH_D1_ID بگذار
 npx wrangler d1 migrations apply cmail-db --remote
-
-# 2. secrets
-npx wrangler secret put APP_SECRET        # paste a long random string
-#   generate one:  node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
-
-# 3. deploy
+npx wrangler secret put APP_SECRET     # یک رشته‌ی تصادفی طولانی
 npx wrangler deploy
 ```
 
-Then, in the Cloudflare dashboard:
-**your domain → Email → Email Routing → enable it → Catch-all address → Action: Send to Worker → `cmail`**
+بعد در داشبورد: دامنه‌ات ← **Email ← Email Routing** را فعال کن ← **Catch-all address ← Action: Send to Worker ← cmail**.
 
 </details>
 
-## ☁️ Cloudflare setup, step by step
+### دریافت ایمیل: دامنه و Email Routing
 
-### 1 · The domain
+دامنه‌ات باید روی DNS کلادفلر باشد (پلن رایگان کافی است). یک زیردامنه مثل `mail.yourdomain.com` هم عالی جواب می‌دهد. بعد در Cmail از بخش **دامنه‌ها** آن را اضافه کن. برای هر دامنه، وقتی Email Routing را فعال کنی Cloudflare خودش این رکوردها را می‌گذارد:
 
-Your domain must use **Cloudflare DNS** (free plan is fine). A dedicated subdomain like `mail.yourdomain.com` works great and keeps your root inbox untouched. Add it in **Dashboard → Websites → Add a domain**, then let Cmail know about it (wizard or **Domains** panel).
+| رکورد | مقدار | توضیح |
+|---|---|---|
+| MX | `route1.mx.cloudflare.net` (اولویت ۱۰) | خودکار |
+| MX | `route2.mx.cloudflare.net` (اولویت ۲۰) | خودکار |
+| MX | `route3.mx.cloudflare.net` (اولویت ۳۰) | خودکار |
+| TXT (SPF) | `v=spf1 include:_spf.mx.cloudflare.net ~all` | خودکار |
 
-### 2 · Receiving mail (Email Routing)
+آخرین قدم، مهم‌ترین قدم: **Email Routing ← Routing rules ← Catch-all address ← Action: Send to Worker ← cmail**. از این لحظه **هر** آدرسی روی دامنه‌ات (هر چیزی که جلوی @ بنویسی) به Cmail می‌رسد؛ با قابلیت ساخت خودکار صندوق موقت، همان آدرس‌های ناشناخته فوراً یک صندوق یک‌ساعته می‌شوند — یعنی ماشین ایمیل‌های یک‌بارمصرف تو روشن است.
 
-For each domain you add:
+### ارسال ایمیل (اختیاری، ولی به‌صرفه)
+
+Cmail از طریق **Brevo** (۳۰۰ ایمیل در روز، رایگان) یا **Resend** (۱۰۰ در روز، رایگان) ارسال می‌کند: در سرویس انتخابی حساب بساز، دامنه‌ی فرستنده را تأیید کن، بعد در Cmail برو به **تنظیمات ← ارسال ایمیل**، سرویس و کلید و آدرس فرستنده را بگذار و با دکمه‌ی تست امتحان کن. کلید API فقط در دیتابیس خودت ذخیره می‌شود و هیچ‌جای دیگری نمی‌رود.
+
+### ورود، دسترسی و رمز
+
+پنل **تک‌کاربره** است؛ ثبت‌نام و حساب دوم وجود ندارد. بار اول که آدرس پنل را باز کنی، از تو یک **نام کاربری و رمز** می‌سازد و از آن به بعد فقط با همان‌ها می‌توانی وارد شوی. اگر دوست نداری هر بار نام کاربری را تایپ کنی، از **تنظیمات ← امنیت ← «ورود با نام کاربری»** آن را خاموش کن — از آن به بعد فقط رمز کافی است.
+
+امنیتش هم جدی است: رمزها به‌صورت PBKDF2-SHA256 هش می‌شوند، نشست‌ها با کوکی httpOnly امن می‌مانند، ورود دومرحله‌ای (TOTP) هم برای خود حساب داری، و حدس‌زدن رمز هم با محدودیت نرخ روی هر IP عملاً بی‌فایده است.
+
+### 🔑 اگر رمز یا نام کاربری را گم کردی
+
+هیچ‌کس — حتی خود Cmail — نمی‌تواند رمز هش‌شده را بخواند؛ اما دسترسی‌ات را با دو دستور ساده در **Console دیتابیس** برمی‌گردانی:
+
+1. وارد [dash.cloudflare.com](https://dash.cloudflare.com) شو ← **Storage & Databases ← D1 ← cmail-db** ← تب **Console**.
+2. برای پیدا کردن **نام کاربری**:
+
+```sql
+SELECT username FROM users;
+```
+
+3. برای **ریست کردن رمز** به مقدار موقت `Recover-Cmail-2026`:
+
+```sql
+UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c=' WHERE role = 'admin';
+```
+
+4. حالا با نام کاربری و رمز `Recover-Cmail-2026` وارد شو و **بلافاصله** از «تنظیمات ← امنیت» رمز را عوض کن. به هیچ ایمیلی دست نخورده؛ این دستور فقط رمز را عوض می‌کند.
+
+> ⚠️ **هرگز `DELETE FROM users` نزن** — با حذف کاربر، همه‌ی صندوق‌ها و ایمیل‌هایش هم طبق زنجیره‌ی کلید خارجی پاک می‌شوند. همین UPDATE کافی و بی‌خطر است. رمز موقت را هم بلافاصله عوض کن.
+
+### استفاده‌ی روزمره
+
+- **صندوق بساز:** از بخش «صندوق‌ها» دامنه را انتخاب کن، هر اسمی که دوست داری جلوی @ بگذار (یا بزن تصادفی) و عمرش را انتخاب کن: یک ساعت، ۲۴ ساعت، یا همیشگی. موقت‌ها شمارش معکوس زنده دارند و می‌توانی عمرشان را تمدید کنی.
+- **یادداشت بگذار:** هر ایمیل را که باز کنی پایینش کادر «یادداشت شخصی» است؛ پنج رنگ دارد، خودش ذخیره می‌شود و در جستجو هم پیدا می‌شود.
+- **⌘K:** با <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> پالت باز می‌شود؛ بنویس تا بین صفحات و ایمیل‌ها زنده جستجو کند، با ↑↓ انتخاب و با ↵ برو.
+- **گاوصندوق:** در «2FA Vault» هر کد را با اسمش اضافه کن؛ راز `otpauth://` را پیست کن یا QR را ایمپورت کن. کدها هر ۳۰ ثانیه تازه می‌شوند و با یک کلیک کپی می‌شوند.
+- **میان‌برها:** `/` جستجو، `j`/`k` حرکت، `Enter` بازکردن، `x` انتخاب، `s` ستاره، `Esc` برگشت — نقشه‌ی کامل داخل «راهنما».
+- **شخصی‌سازی:** تم شب/روز، شفافیت شیشه، ۴ پالت رنگ (Sage، Blue، Violet، Amber) و زبان فارسی/انگلیسی از تنظیمات.
+
+### سوالات پرتکرار
+
+<details>
+<summary><b>ایمیل‌ها نمی‌آیند</b></summary>
+
+سه چیز را چک کن: دامنه واقعاً روی DNS کلادفلر است؟ Email Routing فعال و status آن Active است؟ و Catch-all روی «Send to Worker ← cmail» است؟ در ۹۹٪ موارد مشکل همان Catch-all است.
+</details>
+
+<details>
+<summary><b>ایمیل ارسال نمی‌شود</b></summary>
+
+در «تنظیمات ← ارسال ایمیل» سرویس و کلید را دوباره چک کن؛ دامنه‌ی فرستنده باید در همان سرویس (Brevo/Resend) تأیید شده باشد. با دکمه‌ی «ارسال ایمیل تست» امتحان کن.
+</details>
+
+<details>
+<summary><b>چطور چند دامنه داشته باشم؟</b></summary>
+
+هر دامنه را در Cloudflare فعال کن، در بخش «دامنه‌ها»ی Cmail اضافه‌اش کن و Catch-all همان دامنه را به همین Worker وصل کن. ساخت صندوق روی همه‌ی دامنه‌ها همان لحظه فعال می‌شود.
+</details>
+
+<details>
+<summary><b>چطور Cmail را به‌روز کنم؟</b></summary>
+
+ریپو را pull کن و `npx wrangler deploy` را دوباره بزن (یا اگر ریپو را به Workers وصل کرده‌ای، خودش می‌سازد). مایگریشن‌ها فقط چیزهای کم‌شده را اضافه می‌کنند و به داده‌هایت دست نمی‌زنند.
+</details>
+
+<details>
+<summary><b>داده‌هایم کجا ذخیره می‌شوند و چطور بکاپ بگیرم؟</b></summary>
+
+همه‌چیز در همان یک دیتابیس D1 خودت است. از داشبورد کلادفلر می‌توانی در هر لحظه برای D1 خروجی SQL بگیری — بکاپ یعنی همان.
+</details>
+
+---
+<a id="english"></a>
+
+---
+
+<div align="center">
+
+## 🇬🇧 English Guide
+
+</div>
+
+### What is Cmail?
+
+Cmail started from a simple question: **why should anyone pay rent for a mailbox?**
+
+The usual answer involves a rented server, a database you have to babysit, and a monthly invoice you keep forgetting. Cmail throws all of that away. The whole ecosystem runs inside the Cloudflare account you already own: incoming mail arrives through **Email Routing**, everything is stored in **D1** (SQLite at the edge), and the entire interface is served by a single **Worker**. No server, no invoice, no rented panel.
+
+What you get instead is a personal space you genuinely own — the domain, the data, the keys. Delete it whenever you like, move it whenever you like. That is the whole point.
+
+And because a mailbox alone is never enough, Cmail behaves like an **ecosystem** rather than an inbox: burner addresses for signups, permanent boxes for real work, a colored note under any message, a built-in 2FA vault, and outgoing mail from your own domain — all inside one calm, glassy panel.
+
+### Who is it for?
+
+- **Anyone tired of spam** — instead of handing your real address to every website, mint a one-hour address for each signup and keep your real inbox spotless.
+- **Developers and testers** — spin up dozens of test inboxes, catch system emails, try address variants, and let them expire when you are done.
+- **Privacy-minded people** — no analytics, no third-party scripts, no CDN calls; everything lives in your account, under your keys.
+- **Domain owners** — turn the domains already sitting on your Cloudflare into a complete mail ecosystem. Every domain, unlimited addresses.
+- **Anyone who wants their tools to actually belong to them** — set it up once, own it forever.
+
+### Everything it can do
+
+| | |
+|---|---|
+| 📬 **Temporary + permanent inboxes** | Disposable addresses with a live countdown and adjustable TTL, and permanent ones that are simply yours forever. |
+| 🌐 **Unlimited domains** | Attach every domain on your Cloudflare account — one Worker receives them all. |
+| 🗒️ **Notes on emails** | A colored personal note under any message — order numbers, tracking links, anything. Search finds it instantly. |
+| 🔐 **2FA vault** | A built-in authenticator: live 6-digit codes with a countdown ring, encrypted at rest with AES-256-GCM. |
+| 🛡️ **Account 2FA** | Signing in itself can be protected with TOTP. |
+| 📤 **Outgoing mail** | Connect Brevo or Resend with one API key and send from your own domain. |
+| ➡️ **Forwarding** | Mirror copies of any inbox to an address you already check. |
+| ⌘ **Command palette** | Press <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> anywhere: jump to anything, run actions, search mail live as you type. |
+| ⌨️ **Keyboard-first** | `j`/`k` to move, `Enter` to open, `x` to select, `s` to star — the full map lives inside the app. |
+| 🧹 **Auto-cleanup** | An hourly cron expires temporary inboxes and purges old mail on its own. |
+| 🌙 **Liquid-glass UI** | Dark & Daylight themes, adjustable glass transparency, 4 accent palettes, Persian (RTL) + English. |
+| 📱 **Truly responsive** | From a 320px phone to a 1920px desktop — panes fold into drawers and bottom sheets. |
+| 🔒 **Your data, your rules** | Your D1, your keys. Nobody else holds your mail. |
+
+### A look inside
+
+<div align="center">
+
+| Inbox | Reading RTL mail |
+|---|---|
+| <img src="docs/screenshot-inbox.png" width="440" alt="inbox"> | <img src="docs/screenshot-reader.png" width="440" alt="reader"> |
+
+| ⌘K palette | Live 2FA vault |
+|---|---|
+| <img src="docs/screenshot-cmdk.png" width="440" alt="cmdk"> | <img src="docs/screenshot-vault.png" width="440" alt="vault"> |
+
+</div>
+
+### Installation — three ways
+
+> Prerequisites: a **Cloudflare account** (the free plan is plenty). For the terminal routes: Node.js 18+.
+
+#### Route 1 — one command (terminal)
+
+```bash
+git clone https://github.com/Erfan-8910/CMail.git
+cd CMail
+bash deploy.sh
+```
+
+The installer handles everything: creates the D1 database, applies the schema, generates a strong random `APP_SECRET`, deploys the Worker, and prints your panel URL.
+
+#### Route 2 — fully graphical, on dash.cloudflare.com, with zero commands
+
+Everything happens in your browser, inside the Cloudflare dashboard:
+
+**1) Create the database**
+- Sign in to [dash.cloudflare.com](https://dash.cloudflare.com) ← **Storage & Databases ← D1 SQL Database ← Create**
+- Name it `cmail-db` and create it.
+- Open the **Console** tab of the database. In this repo, open [`migrations/0001_init.sql`](migrations/0001_init.sql), copy its entire content, paste it into the Console ← **Execute**. The tables are ready and you never touch SQL again.
+
+**2) Create the Worker**
+- **Workers & Pages ← Create ← Workers ← Create Worker**
+- Name it `cmail` and **Deploy** once with the default code.
+- Click **Edit code**, delete the default code, paste the full content of [`worker.js`](worker.js) (the repo root) and **Deploy**.
+
+**3) Attach the UI files**
+- Back on the Worker: **Settings ← Domains & Routes ← Attach assets** (or pick **Upload assets** when creating the Worker) and upload the contents of the [`public/`](public/) folder. The binding name must stay `ASSETS`.
+
+**4) Add the bindings**
+- **Settings ← Bindings ← Add:**
+  - **D1 database** ← variable name: `DB` ← database: `cmail-db`
+  - **Secret** (under Variables and Secrets) ← name: `APP_SECRET` ← value: a long random string (any password generator works; this is the app's internal encryption key — create it once and never change it).
+
+**5) Schedule the cleanup**
+- **Settings ← Trigger Events ← Cron Triggers ← Add** and enter: `17 * * * *`
+
+**6) Done!** Open `https://cmail.<your-subdomain>.workers.dev` — the sign-in screen appears, and since this is the very first visit it asks you to **choose a username and password**. After signing in, the system status page shows exactly what is still missing (domain, sending service) with a step-by-step fix guide for each item.
+
+> 💡 A shortcut for steps 2–3: on the **Workers & Pages ← Create** screen you can instead connect your own GitHub fork of this repo (Connect to Git) and let Cloudflare build and deploy it automatically. Just replace `REPLACE_WITH_D1_ID` in `wrangler.jsonc` with the real database id from step 1 first.
+
+#### Route 3 — terminal, step by step
+
+<details>
+<summary><b>For terminal people</b> (open)</summary>
+
+```bash
+git clone https://github.com/Erfan-8910/CMail.git
+cd CMail
+npm install
+npx wrangler login
+
+npx wrangler d1 create cmail-db
+#   paste the returned database_id into wrangler.jsonc (REPLACE_WITH_D1_ID)
+npx wrangler d1 migrations apply cmail-db --remote
+npx wrangler secret put APP_SECRET     # a long random string
+npx wrangler deploy
+```
+
+Then in the dashboard: your domain ← **Email ← Email Routing** ← enable it ← **Catch-all address ← Action: Send to Worker ← cmail**.
+
+</details>
+
+### Receiving mail: domains & Email Routing
+
+Your domain must use Cloudflare DNS (free plan is fine); a dedicated subdomain like `mail.yourdomain.com` works great. Add the domain in Cmail's **Domains** panel. For each domain, enabling Email Routing makes Cloudflare add these records for you:
 
 | Record | Value | Notes |
 |---|---|---|
-| MX | `route1.mx.cloudflare.net` (prio 10) | added by Cloudflare when you enable Email Routing |
-| MX | `route2.mx.cloudflare.net` (prio 20) | 〃 |
-| MX | `route3.mx.cloudflare.net` (prio 30) | 〃 |
-| TXT | `v=spf1 include:_spf.mx.cloudflare.net ~all` | SPF — also added for you |
+| MX | `route1.mx.cloudflare.net` (priority 10) | automatic |
+| MX | `route2.mx.cloudflare.net` (priority 20) | automatic |
+| MX | `route3.mx.cloudflare.net` (priority 30) | automatic |
+| TXT (SPF) | `v=spf1 include:_spf.mx.cloudflare.net ~all` | automatic |
 
-Then: **Email Routing → Routing rules → Catch-all address → Action: Send to Worker → `cmail`**.
+The final and most important step: **Email Routing ← Routing rules ← Catch-all address ← Action: Send to Worker ← cmail**. From that moment **every** address on your domain lands in Cmail — and with catch-all auto-create, unknown recipients instantly become one-hour inboxes. That is your disposable-mail machine, always on.
 
-From that moment, **any** address on the domain (`whatever@your.domain`) lands in Cmail. With **catch-all auto-create** (on by default), unknown recipients instantly become temporary inboxes — that is your disposable-mail machine. Turn catch-all off per domain if you prefer explicit inboxes only.
+### Sending mail (optional, but worth it)
 
-> Automation shortcut: `bash scripts/configure-email-routing.sh mail.yourdomain.com` with `CLOUDFLARE_API_TOKEN` set does all of the above via the API.
+Cmail sends through **Brevo** (300 mails/day free) or **Resend** (100/day free): create an account on the provider, verify your sending domain, then in Cmail go to **Settings ← Outgoing mail**, pick the provider, paste the key, set the sender address, and press Test. The API key is stored only in your own D1 — it never leaves your Cloudflare.
 
-### 3 · Sending mail (optional but recommended)
+### Sign-in, access & your credentials
 
-Cmail sends through **Brevo** (300 mails/day free) or **Resend** (100 mails/day free):
+The panel is **single-user**; there is no registration and no second account. On the very first visit you choose a **username and password**, and from then on they are the only key. If you prefer not to type the username every time, switch **Username at sign-in** off in **Settings ← Security** — from then on the password alone is enough.
 
-1. create an account on the provider and verify your sending domain
-2. copy the API key
-3. in Cmail: **Settings → Outgoing mail** — pick the provider, paste the key, set the verified sender address
-4. hit **Test** — a test mail confirms the wiring
+Security is taken seriously: passwords are hashed with PBKDF2-SHA256, sessions ride on httpOnly cookies, the account itself supports TOTP two-factor, and brute-force attempts are rate-limited per IP.
 
-The key is stored **only in your own D1 database** — it never leaves your Cloudflare.
+### 🔑 If you lose your password or username
 
-### 4 · The setup gate
+Nobody — not even Cmail — can read a hashed password back, but you can restore access with two simple statements in the **database Console**:
 
-Cmail refuses to open the main menu until **all four prerequisites** are green:
+1. Open [dash.cloudflare.com](https://dash.cloudflare.com) ← **Storage & Databases ← D1 ← cmail-db** ← the **Console** tab.
+2. Find your **username**:
 
-- ✅ **Database connection** — D1 reachable & migrated
-- ✅ **Admin account** — the first account becomes the admin
-- ✅ **Email domain** — at least one active domain
-- ✅ **Outgoing mail service** — Brevo or Resend configured
+```sql
+SELECT username FROM users;
+```
 
-Anything orange shows a complete inline tutorial (copyable terminal commands, DNS tables, provider forms) — fix it right there, the system opens automatically the moment the last check turns green. You can always revisit it from the user menu → **System status** (or `#/status?stay`).
+3. **Reset the password** to the temporary value `Recover-Cmail-2026`:
 
-## 📬 Using Cmail
+```sql
+UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c=' WHERE role = 'admin';
+```
 
-### The inbox
+4. Sign in with your username and `Recover-Cmail-2026`, then **immediately** change the password in Settings ← Security. No mail is touched — the statement only replaces the password.
 
-Three panes: **inboxes** (left), **mail list** (middle), **reader** (right). On a phone they fold into a single pane with a drawer and a bottom tab bar. Filters — *All / Unread / Starred / Noted* — live above the list, and the search box matches sender, subject, body **and** your notes.
+> ⚠️ **Never run `DELETE FROM users`** — deleting the user cascades and wipes all of their inboxes and mail. The UPDATE above is all you need, and change the temporary password right away.
 
-### Temporary vs permanent
+### Everyday use
 
-Create an inbox (**Inboxes → New inbox**), pick the domain, type any local part (or hit **Random**), and choose its lifetime: **1 hour**, **24 hours**, or **permanent**. Temporary inboxes show a live countdown; extend them any time. Permanent ones are simply yours forever.
+- **Create an inbox:** pick a domain, type any local part (or hit Random), choose its lifetime — 1 hour, 24 hours, or permanent. Temporary ones show a live countdown and can be extended.
+- **Take notes:** open any mail and write into the personal note — five colors, auto-saved, searchable.
+- **⌘K:** the palette jumps between pages, runs actions and searches your mail live while you type.
+- **The vault:** add codes by name in the 2FA Vault — paste an `otpauth://` secret or import a QR. Codes refresh every 30 seconds and copy with one tap.
+- **Shortcuts:** `/` search, `j`/`k` move, `Enter` open, `x` select, `s` star, `Esc` back — the full map lives in the Guide.
+- **Make it yours:** Dark/Daylight theme, glass transparency, four accent palettes, and Persian/English — all in Settings.
 
-### Notes
+### FAQ
 
-Open any mail and write into **Personal note on this email** — pick one of five colors. Notes show right under the message and are searchable, so a tracking number is always one query away.
+<details>
+<summary><b>Mail never arrives</b></summary>
 
-### The 2FA vault
+Check three things: is the domain actually on Cloudflare DNS, is Email Routing Active, and is Catch-all set to Send to Worker ← cmail? 99% of the time it is the catch-all.
+</details>
 
-**2FA Vault → Add code** — give it a name (e.g. *GitHub*), paste the `otpauth://` secret or scan-import it, and it becomes a card with a **live 6-digit code and countdown ring**. Codes regenerate every 30 seconds; copy with one tap. All secrets are encrypted at rest (AES-256-GCM).
+<details>
+<summary><b>Outgoing mail fails</b></summary>
 
-### Command palette
+Re-check the provider and key in Settings ← Outgoing mail; the sender domain must be verified on the provider itself. Use the Test button.
+</details>
 
-Press <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> anywhere — a glass panel appears: jump to any view, run actions (*Compose new email*, *Refresh*, *Toggle theme*…) and search mail live as you type. Arrow keys to move, <kbd>Enter</kbd> to run, <kbd>Esc</kbd> to close.
+<details>
+<summary><b>Can I use several domains?</b></summary>
 
-### Keyboard shortcuts
+Yes — enable each domain on Cloudflare, add it under Domains, point its catch-all to the worker. Inboxes across all domains work instantly.
+</details>
 
-| Keys | Action |
-|---|---|
-| <kbd>Ctrl/⌘</kbd> + <kbd>K</kbd> | command palette |
-| <kbd>/</kbd> | focus inbox search |
-| <kbd>j</kbd> / <kbd>k</kbd> | next / previous email |
-| <kbd>Enter</kbd> or <kbd>o</kbd> | open selected email |
-| <kbd>x</kbd> | select / deselect row |
-| <kbd>s</kbd> | star / unstar |
-| <kbd>Esc</kbd> | back to the list |
+<details>
+<summary><b>How do I update Cmail?</b></summary>
 
-### Make it yours
+Pull the repo and run `npx wrangler deploy` again (or push and let your connected Git build handle it). Migrations only add what is missing and never touch your data.
+</details>
 
-**Settings** is where the ecosystem bends to your taste: **Dark / Daylight** theme, glass transparency, four accent palettes (*Sage, Blue, Violet, Amber*), interface language (**فارسی / English**), session lifetime, and — for admins — registration policy, catch-all defaults, outgoing mail and user management.
+<details>
+<summary><b>Where does my data live? Can I back it up?</b></summary>
 
-### Multi-user
+Everything is in your single D1 database. You can export a full SQL snapshot from the dashboard at any time — that is your backup.
+</details>
 
-Registration is closed by default. Open it in **Settings → Registration** and new visitors can create their own accounts — each sees only their own inboxes and mail. Admins additionally get the **Domains** panel, **user management** and **System status**.
-
-### Auto-cleanup
-
-A Worker cron (hourly) expires temporary inboxes past their TTL and purges old mail per your retention settings. Nothing to remember, nothing to configure.
-
-## 🧱 Architecture
+## Architecture
 
 ```
                      ┌─────────────────────────────────────────┐
@@ -232,69 +462,14 @@ A Worker cron (hourly) expires temporary inboxes past their TTL and purges old m
                      │   │  │                                   │
                      │   │  └── Brevo / Resend ──► outgoing mail│
                      │   ▼                                      │
-                     │  D1 (SQLite) — mail · inboxes · users    │
+                     │  D1 (SQLite) — mail · inboxes · account  │
                      │               · notes · TOTP · settings  │
                      └─────────────────────────────────────────┘
 ```
 
 One Worker serves the UI and the API, receives incoming mail, sends outgoing mail, and runs the cleanup cron. One D1 database holds everything. That is the whole system.
 
-## 🔐 Security
-
-- **Passwords** — PBKDF2-SHA256, 100 000 iterations, per-user salt
-- **Sessions** — random tokens in httpOnly SameSite cookies, configurable lifetime, instant logout everywhere
-- **TOTP secrets** — encrypted at rest (AES-256-GCM with an HKDF-derived key)
-- **Brute force** — login rate-limiting per IP
-- **Headers** — strict CSP and security headers on every response
-- **Mail HTML** — rendered inside a fully sandboxed iframe; scripts never run
-
-## 🛠️ Local development
-
-```bash
-npm install
-npm run db:migrate:local
-npm run dev          # http://localhost:8787
-```
-
-The full app runs locally: wizard, gate, inbox, vault, sending (needs a real provider key to actually deliver).
-
-## 🔄 Updating
-
-```bash
-git pull
-npm install
-npx wrangler d1 migrations apply cmail-db --remote   # if migrations changed
-npm run deploy
-```
-
-Your data is untouched — migrations only add what is missing.
-
-## 🧯 Troubleshooting
-
-| Symptom | Cause → Fix |
-|---|---|
-| Main menu never opens | Open **System status** (`#/status?stay`) — the orange item's inline tutorial shows exactly what to do. |
-| Mail never arrives | Domain not on Cloudflare DNS, Email Routing disabled, or catch-all not set to *Send to Worker → cmail*. Recheck the three steps above. |
-| Sending test fails | Provider key invalid, sender not verified on the provider, or wrong provider selected. The key must match the verified domain. |
-| `wrangler deploy` rejects config | `wrangler.jsonc` still contains `REPLACE_WITH_D1_ID` → run the D1 step of the manual install. |
-| Forgot admin password | Redeploy with a fresh database, or reset the row for your user in D1 (`users` table) — passwords are hashed, there is no recovery shortcut by design. |
-| 2FA code rejected | Phone clock drift — TOTP is time-based; enable automatic time sync on the device. |
-
-## 🗺️ API routes
-
-| Method | Endpoint | |
-|---|---|---|
-| GET | `/api/setup/status` | public bootstrap & gate state |
-| POST | `/api/setup/admin` | create the first admin |
-| POST | `/api/auth/login` · `/login/totp` · `/register` · `/logout` | auth |
-| GET/POST/PATCH/DELETE | `/api/addresses` · `/api/addresses/domains` | inboxes & domains |
-| GET | `/api/emails` · `/api/emails/:id` · `/stats` | mail |
-| PUT | `/api/emails/:id/note` | notes |
-| POST | `/api/emails/bulk` · `/api/emails/send` | bulk & outgoing |
-| GET/POST/PATCH/DELETE | `/api/totp` | 2FA vault |
-| GET/PUT | `/api/admin/settings` · `/overview` · `/users` | admin |
-
-## 📄 License
+## License
 
 MIT © [Erfan-8910](https://github.com/Erfan-8910)
 
@@ -302,8 +477,8 @@ MIT © [Erfan-8910](https://github.com/Erfan-8910)
 
 <div align="center">
 
-**Cmail** — craft, own, and use your mail.
+**Cmail** — صندوق ایمیلت، قوانینش را هم خودت می‌نویسی. 🌿
 
-فارسی؟ [README فارسی](README.fa.md)
+*Build it. Own it. Never pay rent for an inbox again.* ✨
 
 </div>

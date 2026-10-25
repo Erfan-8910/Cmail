@@ -63,14 +63,11 @@ export async function renderGate(root) {
   }
 
   function tutAdmin() {
-    const cta = h('button', { class: 'btn btn--primary', onclick: () => { location.hash = '#/setup'; } },
-      icon('user'), state.setup?.admin_created ? t('login') : t('goMakeAdmin'));
     return tutPanel(t('tutAdminTitle'), 'user',
       h('p', { class: 'tut__d' }, t('tutAdminD')),
       h('div', { class: 'tut__cta' },
-        state.setup?.admin_created && !state.user
-          ? h('button', { class: 'btn btn--primary', onclick: () => { location.hash = '#/login'; } }, icon('arrow'), t('login'))
-          : cta));
+        h('button', { class: 'btn btn--primary', onclick: () => { location.hash = '#/login'; } },
+          icon('arrow'), state.setup?.admin_created && !state.user ? t('login') : t('goMakeAccess'))));
   }
 
   function tutDomain() {

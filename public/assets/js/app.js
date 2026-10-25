@@ -3,7 +3,7 @@ import { api, state, errText } from './api.js';
 import { t, setLang, lang } from './i18n.js';
 import { h, clear, icon, toast, dropdown, timeAgo, vibrate } from './ui.js';
 import { openCmdk, closeCmdk, cmdkIsOpen, cmdkKey } from './cmdk.js';
-import { renderLogin, renderSetup } from './views/auth.js';
+import { renderLogin } from './views/auth.js';
 import { renderGate } from './views/gate.js';
 import { renderMail } from './views/mail.js';
 import { renderAddresses } from './views/addresses.js';
@@ -41,7 +41,6 @@ const routes = {
   about: renderAbout,
   help: renderHelp,
   login: renderLogin,
-  setup: renderSetup,
   status: renderGate,
 };
 
@@ -67,7 +66,7 @@ async function route() {
   const { page } = currentRoute();
 
   // fetch system status (may be offline); always fresh on gate entry
-  if (!state.setup || page === 'status' || page === 'setup') {
+  if (!state.setup || page === 'status' || page === 'login') {
     try { state.setup = await api.get('/api/setup/status'); }
     catch { if (!state.setup) state.setup = null; }
   }
@@ -75,17 +74,17 @@ async function route() {
 
   // GATE — the main app stays closed until every prerequisite is connected
   if (!ready) {
-    const allowed = page === 'status' || page === 'login' || (page === 'setup' && !state.setup?.admin_created);
-    if (!allowed) { location.hash = state.setup?.admin_created ? '#/status' : '#/setup'; return; }
+    const allowed = page === 'status' || page === 'login';
+    if (!allowed) { location.hash = '#/status'; return; }
   } else if (page === 'status' && !location.hash.includes('stay')) {
     location.hash = state.user ? '#/mail' : '#/login'; return;
   }
 
-  const needsAuth = page !== 'login' && page !== 'setup' && page !== 'status';
+  const needsAuth = page !== 'login' && page !== 'status';
   if (needsAuth && !state.user) { location.hash = '#/login'; return; }
   if (page === 'login' && state.user) { location.hash = ready ? '#/mail' : '#/status'; return; }
 
-  const authView = page === 'login' || page === 'setup' || page === 'status';
+  const authView = page === 'login' || page === 'status';
   renderShell(page, authView);
   clear(app);
   window.scrollTo({ top: 0 });
@@ -93,7 +92,6 @@ async function route() {
   if (authView) {
     app.className = 'view view--auth';
     if (page === 'login') return renderLogin(app);
-    if (page === 'setup') return renderSetup(app);
     return renderGate(app);
   }
 
