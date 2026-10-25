@@ -501,30 +501,23 @@ html[data-theme='light'] .sidebar__logo { content: url('../img/icon-black.png');
 .modal__foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 
 /* ---------- auth ---------- */
-.view--auth { display: grid; place-items: center; padding: 20px 16px; min-height: 100dvh; }
-.auth-wrap { width: min(420px, 100%); text-align: center; }
-.auth-logo { width: 96px; height: auto; margin-bottom: 4px; animation: floaty 6s ease-in-out infinite; }
+.view--auth { display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top)) 16px 28px; min-height: 100dvh; overflow-x: hidden; }
+.auth-wrap { width: min(440px, 100%); text-align: center; }
+.auth-logo { width: clamp(88px, 11vw, 112px); height: auto; margin-bottom: 4px; animation: floaty 6s ease-in-out infinite; }
 html[data-theme='dark'] .auth-logo { content: url('../img/logo-light.png'); }
 html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
 @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
-.auth-card { padding: 22px 20px 20px; margin-top: 10px; text-align: start; }
-.auth-title { font-size: 21px; font-weight: 700; margin: 0 0 4px; letter-spacing: -.3px; }
-.auth-sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+.auth-card { padding: clamp(20px, 2.2vw, 26px) clamp(18px, 2vw, 24px) 20px; margin-top: 10px; text-align: start; }
+.auth-title { font-size: clamp(19px, 1.1vw + 13px, 22px); font-weight: 700; margin: 0 0 4px; letter-spacing: -.3px; }
+.auth-sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; line-height: 1.8; }
 .auth-form { display: flex; flex-direction: column; gap: 10px; }
+.auth-note { display: flex; gap: 8px; align-items: flex-start; margin-top: 14px; padding: 10px 12px; border-radius: 12px; background: var(--field); border: 1px solid var(--stroke); color: var(--muted); font-size: 11.5px; line-height: 1.75; text-align: start; }
+.auth-note svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--acc); margin-top: 2px; }
 .auth-alt { margin-top: 14px; font-size: 13px; color: var(--muted); text-align: center; }
 .auth-foot { margin-top: 18px; font-size: 11.5px; color: var(--faint); text-align: center; }
 .auth-ctrls { position: fixed; top: 18px; inset-inline-end: 18px; z-index: 50; display: flex; gap: 6px; }
 
-/* ---------- setup wizard ---------- */
-.wizard { width: min(620px, 100%); text-align: center; }
-.wizard__steps { display: flex; justify-content: center; gap: 8px; margin: 12px 0 18px; }
-.wizard__step { width: 34px; height: 5px; border-radius: 99px; background: var(--field); border: 1px solid var(--stroke); transition: all .4s var(--spring); }
-.wizard__step.is-done { background: var(--acc); border-color: transparent; }
-.wizard__step.is-now { background: var(--acc-soft); border-color: var(--acc-line); transform: scaleX(1.35); }
-.wizard__icon { width: 70px; height: 70px; margin: 0 auto 14px; border-radius: 20px; display: grid; place-items: center; background: var(--acc-soft); border: 1px solid var(--acc-line); box-shadow: var(--inset); }
-.wizard__icon svg { width: 30px; height: 30px; color: var(--acc); }
-.wizard h2 { margin: 0 0 6px; font-size: 20px; letter-spacing: -.3px; }
-.wizard p.lead { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; }
+/* ---------- setup gate width ---------- */
 .dns-table { width: 100%; font-size: 12.5px; border-collapse: collapse; text-align: start; }
 .dns-table th, .dns-table td { padding: 8px 10px; border-bottom: 1px solid var(--stroke); }
 .dns-table th { color: var(--muted); font-weight: 600; }
@@ -1324,7 +1317,6 @@ html[dir='rtl'] .cmdk__enter svg { transform: scaleX(-1); }
   .tbl { min-width: 540px; }
   .cmdk { width: min(620px, 94vw); }
   .cmdk__sub { display: none; }
-  .wizard { width: 100%; }
   .modal--wide { width: 100%; }
 }
 

@@ -68,14 +68,14 @@ app.delete('/users/:id', requireAdmin, async (c) => {
 
 app.get('/settings', requireAdmin, async (c) => {
   const s = await getSettings(c.env, [
-    'app_name', 'registration', 'temp_ttl_default', 'max_addresses', 'session_days',
+    'app_name', 'login_username', 'temp_ttl_default', 'max_addresses', 'session_days',
     'sending_provider', 'sending_api_key', 'sending_from_email', 'sending_from_name', 'retention_days',
   ]);
   return c.json({
     ok: true,
     settings: {
       app_name: s.app_name || 'Cmail',
-      registration: s.registration || 'closed',
+      login_username: (s.login_username ?? '1') !== '0',
       temp_ttl_default: parseInt(s.temp_ttl_default ?? '24', 10) || 24,
       max_addresses: parseInt(s.max_addresses ?? '50', 10) || 50,
       session_days: parseInt(s.session_days ?? '30', 10) || 30,
@@ -93,16 +93,16 @@ app.put('/settings', requireAdmin, async (c) => {
   if (!body) return c.json({ ok: false, error: 'bad_request' }, 400);
 
   if (body.app_name !== undefined) await setSetting(c.env, 'app_name', clean(String(body.app_name), 40) || 'Cmail');
-  if (body.registration !== undefined && ['open', 'closed'].includes(String(body.registration))) {
-    await setSetting(c.env, 'registration', String(body.registration));
-  }
+  if (body.login_username !== undefined) await setSetting(c.env, 'login_username', body.login_username ? '1' : '0');
   if (body.temp_ttl_default !== undefined) await setSetting(c.env, 'temp_ttl_default', String(Math.min(8760, Math.max(1, parseInt(String(body.temp_ttl_default), 10) || 24))));
   if (body.max_addresses !== undefined) await setSetting(c.env, 'max_addresses', String(Math.min(1000, Math.max(1, parseInt(String(body.max_addresses), 10) || 50))));
   if (body.session_days !== undefined) await setSetting(c.env, 'session_days', String(Math.min(365, Math.max(1, parseInt(String(body.session_days), 10) || 30))));
   if (body.retention_days !== undefined) await setSetting(c.env, 'retention_days', String(Math.min(3650, Math.max(0, parseInt(String(body.retention_days), 10) || 0))));
 
-  const provider = String(body.sending_provider ?? 'none');
-  if (['none', 'brevo', 'resend'].includes(provider)) await setSetting(c.env, 'sending_provider', provider);
+  if (body.sending_provider !== undefined) {
+    const provider = String(body.sending_provider);
+    if (['none', 'brevo', 'resend'].includes(provider)) await setSetting(c.env, 'sending_provider', provider);
+  }
   if (body.sending_api_key) await setSetting(c.env, 'sending_api_key', clean(String(body.sending_api_key), 200));
   if (body.sending_from_email !== undefined) await setSetting(c.env, 'sending_from_email', clean(String(body.sending_from_email), 120));
   if (body.sending_from_name !== undefined) await setSetting(c.env, 'sending_from_name', clean(String(body.sending_from_name), 60) || 'Cmail');

@@ -46,8 +46,6 @@ export const api = {
 export function errText(e) {
   const map = {
     invalid_credentials: 'invalidCredentials',
-    registration_closed: 'registrationClosed',
-    username_taken: 'usernameTaken',
     weak_password: 'weakPassword',
     invalid_username: 'invalidUsername',
     address_taken: 'addressTaken',

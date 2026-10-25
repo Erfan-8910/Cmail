@@ -26,7 +26,7 @@ app.get('/status', async (c) => {
       const [adminCount, domainCount, s] = await Promise.all([
         env.DB.prepare("SELECT COUNT(*) AS n FROM users").first<{ n: number }>(),
         env.DB.prepare('SELECT COUNT(*) AS n FROM domains WHERE active = 1').first<{ n: number }>(),
-        getSettings(env, ['sending_provider', 'sending_api_key', 'sending_from_email', 'registration', 'app_name']),
+        getSettings(env, ['sending_provider', 'sending_api_key', 'sending_from_email', 'login_username', 'app_name']),
       ]);
       admin_created = (adminCount?.n ?? 0) > 0;
       domain = (domainCount?.n ?? 0) > 0;
@@ -52,17 +52,17 @@ app.get('/status', async (c) => {
     ready,
     checks,
     admin_created,
+    login_username: (settings.login_username ?? '1') !== '0',
     domains_configured: domain,
     sending_provider: sendingProvider,
     sending_from: settings.sending_from_email || '',
     sending_ready: sending,
-    registration: settings.registration || 'closed',
     app_name: settings.app_name || 'Cmail',
     version: c.env.APP_VERSION || '',
   });
 });
 
-// create the very first admin (only when no user exists)
+// create the one and only account (first visit — choose a username & password)
 app.post('/admin', async (c) => {
   const ip = clientIp(c);
   if (!(await rateLimit(c.env, ip, 'setup', 5))) return c.json({ ok: false, error: 'rate_limited' }, 429);

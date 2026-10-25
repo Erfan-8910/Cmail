@@ -72,12 +72,36 @@ npx wrangler deploy`);
     stepRow(3, fa ? 'برای ارجاع (Forwarding)، آدرس مقصد را در بخش Destination addresses تأیید کن.' : 'For forwarding, verify the destination in Destination addresses.'),
   ));
 
-  // 3 — in-app wizard
-  content.append(h('h3', { style: { fontSize: '16px', margin: '18px 0 10px' } }, '۳ · ' + (fa ? 'تکمیل راه‌اندازی داخل برنامه' : 'Finish setup inside the app')));
+  // 3 — access & recovery
+  content.append(h('h3', { style: { fontSize: '16px', margin: '18px 0 10px' } }, '۳ · ' + (fa ? 'ورود و بازیابی دسترسی' : 'Sign-in & recovery')));
   content.append(h('p', { class: 'small muted' },
     fa
-      ? 'بعد از باز کردن آدرس Worker، ویزارد راه‌اندازی خودش نشان داده می‌شود: ساخت حساب مدیر، اتصال دامنه، تنظیم سرویس ارسال. اگر وسط راه چیزی ناقص ماند، از همین صفحه دوباره شروع کن.'
-      : 'After opening the Worker URL, the setup wizard appears: create the admin account, connect a domain, configure outgoing mail. If anything is missing, restart from this page.'));
+      ? 'پنل تک‌کاربره است: در اولین باز شدن، نام کاربری و رمز خودت را می‌سازی و از آن به بعد همان‌ها کلید ورودند. اگر نام کاربری را از تنظیمات ← امنیت غیرفعال کنی، ورود فقط با رمز انجام می‌شود.'
+      : 'The panel is single-user: on the very first open you choose a username and password, and from then on they are the only key. Disable the username in Settings → Security and the password alone is enough to sign in.'));
+
+  const recBody = h('div', { class: 'small muted' });
+  recBody.append(
+    h('p', { style: { margin: '0 0 8px' } },
+      fa
+        ? 'رمزها هش‌شده ذخیره می‌شوند و قابل خواندن نیستند، اما با دو دستور ساده در Console دیتابیس، دسترسی‌ات را برمی‌گردانی:'
+        : 'Passwords are stored hashed and can never be read back — but two simple statements in the database Console restore your access:'),
+    stepRow(1, fa ? 'در داشبورد Cloudflare به مسیر Storage & Databases → D1 برو و دیتابیس cmail-db را باز کن.' : 'In the Cloudflare dashboard go to Storage & Databases → D1 and open the cmail-db database.',
+      fa ? 'از تب Console استفاده کن.' : 'Use the Console tab.'),
+    stepRow(2, fa ? 'برای پیدا کردن نام کاربری:' : 'To find your username:', ''),
+  );
+  recBody.append(copyLine('SELECT username FROM users;'));
+  recBody.append(stepRow(3, fa ? 'برای ریست کردن رمز به مقدار موقت Recover-Cmail-2026:' : 'To reset the password to the temporary value Recover-Cmail-2026:', ''));
+  recBody.append(copyLine("UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c=' WHERE role = 'admin';"));
+  recBody.append(stepRow(4, fa ? 'حالا با همان نام کاربری و رمز Recover-Cmail-2026 وارد شو و بلافاصله از تنظیمات ← امنیت، رمز را عوض کن.' : 'Sign in with your username and Recover-Cmail-2026, then immediately change the password in Settings → Security.',
+    fa ? 'هیچ ایمیلی حذف نمی‌شود؛ این دستور فقط رمز را عوض می‌کند.' : 'No mail is touched; the statement only replaces the password.'));
+  recBody.append(h('p', { style: { margin: '8px 0 0' } },
+    fa
+      ? 'هشدار: هیچ‌وقت DELETE FROM users نزن — با حذف کاربر، همه صندوق‌ها و ایمیل‌های آن هم پاک می‌شوند. رمز موقت را حتماً بلافاصله عوض کن.'
+      : 'Warning: never run DELETE FROM users — deleting the user wipes all of their inboxes and mail. Change the temporary password right away.'));
+  content.append(h('details', { class: 'guide' },
+    h('summary', {}, fa ? 'رمز یا نام کاربری‌ام را فراموش کرده‌ام' : 'I forgot my password or username'),
+    recBody,
+  ));
 
   // 4 — troubleshooting
   content.append(h('h3', { style: { fontSize: '16px', margin: '18px 0 10px' } }, '۴ · ' + (fa ? 'رفع اشکال' : 'Troubleshooting')));

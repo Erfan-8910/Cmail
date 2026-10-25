@@ -1,4 +1,5 @@
-// Cmail — auth routes: register / login / 2FA login / me / password / account TOTP
+// Cmail — auth routes: login / 2FA login / me / password / account TOTP
+// Single-user ecosystem: one account exists, created on first visit.
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
 import {
@@ -23,34 +24,8 @@ app.get('/me', requireUser, async (c) => {
   return c.json({ ok: true, user: u, unread: unread?.n ?? 0 });
 });
 
-// register (only if enabled by admin)
-app.post('/register', async (c) => {
-  const ip = clientIp(c);
-  if (!(await rateLimit(c.env, ip, 'register', 8))) return c.json({ ok: false, error: 'rate_limited' }, 429);
-
-  const mode = (await getSetting(c.env, 'registration')) ?? 'closed';
-  if (mode !== 'open') return c.json({ ok: false, error: 'registration_closed' }, 403);
-
-  const body = await c.req.json<{ username?: string; password?: string; display_name?: string }>().catch(() => null);
-  const username = (body?.username ?? '').trim();
-  const password = body?.password ?? '';
-  if (!usernameValid(username)) return c.json({ ok: false, error: 'invalid_username' }, 400);
-  if (!passwordStrong(password)) return c.json({ ok: false, error: 'weak_password' }, 400);
-
-  const exists = await c.env.DB.prepare('SELECT id FROM users WHERE username = ?').bind(username).first();
-  if (exists) return c.json({ ok: false, error: 'username_taken' }, 409);
-
-  const id = uid('usr_');
-  await c.env.DB.prepare(
-    'INSERT INTO users (id, username, password_hash, role, display_name, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(id, username, await hashPassword(password), 'user', (body?.display_name ?? '').slice(0, 60) || null, now()).run();
-
-  const token = await createSession(c.env, id, c.req.header('User-Agent'), ip);
-  setSessionCookie(c, token);
-  return c.json({ ok: true, user: { id, username, role: 'user' } });
-});
-
 // step 1: password login → may ask for 2FA
+// username may be omitted when the owner disabled username login in settings
 app.post('/login', async (c) => {
   const ip = clientIp(c);
   if (!(await rateLimit(c.env, ip, 'login', 10))) return c.json({ ok: false, error: 'rate_limited' }, 429);
@@ -59,8 +34,12 @@ app.post('/login', async (c) => {
   const username = (body?.username ?? '').trim();
   const password = body?.password ?? '';
 
-  const user = await c.env.DB.prepare('SELECT id, username, role, password_hash, totp_enabled FROM users WHERE username = ?')
-    .bind(username).first<{ id: string; username: string; role: string; password_hash: string; totp_enabled: number }>();
+  const withUsername = (await getSetting(c.env, 'login_username')) !== '0';
+  const user = withUsername && username
+    ? await c.env.DB.prepare('SELECT id, username, role, password_hash, totp_enabled FROM users WHERE username = ?')
+        .bind(username).first<{ id: string; username: string; role: string; password_hash: string; totp_enabled: number }>()
+    : await c.env.DB.prepare('SELECT id, username, role, password_hash, totp_enabled FROM users ORDER BY created_at LIMIT 1')
+        .first<{ id: string; username: string; role: string; password_hash: string; totp_enabled: number }>();
 
   if (!user || !(await verifyPassword(password, user.password_hash))) {
     return c.json({ ok: false, error: 'invalid_credentials' }, 401);

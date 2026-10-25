@@ -16,7 +16,7 @@ export async function renderSettings(root) {
 
   const isAdmin = state.user?.role === 'admin';
   const tabs = isAdmin
-    ? [['appearance', t('appearance'), 'sun'], ['security', t('security'), 'shield'], ['general', t('general'), 'settings'], ['sending', t('sending'), 'send'], ['users', t('users'), 'user']]
+    ? [['appearance', t('appearance'), 'sun'], ['security', t('security'), 'shield'], ['general', t('general'), 'settings'], ['sending', t('sending'), 'send']]
     : [['appearance', t('appearance'), 'sun'], ['security', t('security'), 'shield']];
 
   const tabBar = h('div', { class: 'filters', style: { padding: 0, marginBottom: '14px' } });
@@ -36,7 +36,6 @@ export async function renderSettings(root) {
     if (current === 'security') body.append(await securityPane());
     if (isAdmin && current === 'general') body.append(await generalPane());
     if (isAdmin && current === 'sending') body.append(await sendingPane());
-    if (isAdmin && current === 'users') body.append(await usersPane());
   }
 
   view.append(tabBar, body);
@@ -103,6 +102,33 @@ function paletteCard() {
 async function securityPane() {
   const pane = h('div', { class: 'settings-grid' });
 
+  // access — how signing in works (single user)
+  let s = null;
+  try { s = (await api.get('/api/admin/settings')).settings; } catch { /* non-admin or offline */ }
+  if (s) {
+    const userChip = h('span', { class: `chip ${s.login_username ? 'is-on' : ''}` }, s.login_username ? t('loginUsernameOn') : t('loginUsernameOff'));
+    const toggle = h('button', { class: `btn ${s.login_username ? '' : 'btn--primary'}` }, icon('user'), t('loginUsernameEdit'));
+    toggle.addEventListener('click', () => {
+      const next = !s.login_username;
+      confirmBox(t('loginUsernameConfirm'), async () => {
+        try {
+          await api.put('/api/admin/settings', { login_username: next });
+          toast(t('saved'), 'ok');
+          renderSettings(document.getElementById('app'));
+        } catch (e) { toast(errText(e), 'err'); }
+      }, false);
+      const box = document.querySelector('.modal')?.querySelector('.btn--danger, .btn--primary');
+      if (box) box.textContent = next ? t('disable') : t('enable');
+    });
+    pane.append(h('div', { class: 'glass card' },
+      h('h3', { style: { margin: '0 0 6px', fontSize: '15px' } }, t('accessTitle')),
+      h('p', { class: 'small muted', style: { margin: '0 0 10px' } }, t('accessSub')),
+      h('div', { class: 'set-row' },
+        h('div', {}, h('div', { class: 'set-row__t' }, t('loginUsernameToggle')), h('div', { class: 'set-row__d' }, t('loginUsernameD'))),
+        h('div', { class: 'row' }, userChip, toggle)),
+    ));
+  }
+
   // 2FA status
   const on = !!state.user?.totp_enabled;
   const statusChip = h('span', { class: `chip ${on ? 'is-on' : ''}` }, on ? t('twoFaOn') : t('twoFaOff'));
@@ -111,7 +137,7 @@ async function securityPane() {
 
   pane.append(h('div', { class: 'glass card' },
     h('h3', { style: { margin: '0 0 6px', fontSize: '15px' } }, t('twoFa')),
-    h('div', { class: 'set-row' }, h('div', {}, h('div', { class: 'set-row__t' }, t('twoFa')), h('div', { class: 'set-row__d' }, t('vaultSub'))), h('div', { class: 'row' }, statusChip, btn)),
+    h('div', { class: 'set-row' }, h('div', {}, h('div', { class: 'set-row__t' }, t('twoFaRow')), h('div', { class: 'set-row__d' }, t('vaultSub'))), h('div', { class: 'row' }, statusChip, btn)),
   ));
 
   // password
@@ -197,26 +223,21 @@ async function generalPane() {
 
   const pane = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
 
-  if (ov) {
-    pane.append(h('div', { class: 'stat-tiles' },
-      tile(ov.users, t('users')), tile(ov.addresses, t('navAddresses')), tile(ov.temp_addresses, t('temporary')),
-      tile(ov.emails, t('navMail')), tile(ov.notes, t('noted')), tile(ov.totp_entries, t('navVault')),
-      tile(fmtBytes(ov.storage_bytes), t('storageUsed'))));
-  }
-
   const appName = h('input', { class: 'input', value: s.app_name });
-  const regSel = h('select', { class: 'input' },
-    h('option', { value: 'closed', selected: s.registration === 'closed' || undefined }, t('closed')),
-    h('option', { value: 'open', selected: s.registration === 'open' || undefined }, t('open')));
   const ttl = h('input', { class: 'input', type: 'number', min: 1, max: 8760, value: s.temp_ttl_default });
   const maxAddr = h('input', { class: 'input', type: 'number', min: 1, max: 1000, value: s.max_addresses });
   const sess = h('input', { class: 'input', type: 'number', min: 1, max: 365, value: s.session_days });
   const ret = h('input', { class: 'input', type: 'number', min: 0, max: 3650, value: s.retention_days });
 
+  if (ov) {
+    pane.append(h('div', { class: 'stat-tiles' },
+      tile(ov.addresses, t('navAddresses')), tile(ov.temp_addresses, t('temporary')),
+      tile(ov.emails, t('navMail')), tile(ov.notes, t('noted')), tile(ov.totp_entries, t('navVault')),
+      tile(fmtBytes(ov.storage_bytes), t('storageUsed'))));
+  }
   pane.append(h('div', { class: 'glass card' },
     h('h3', { style: { margin: '0 0 12px', fontSize: '15px' } }, t('general')),
     row(t('appNameSet'), appName),
-    row(t('registrationMode'), regSel),
     row(t('defaultTtl'), ttl),
     row(t('maxAddresses'), maxAddr),
     row(t('sessionDays'), sess),
@@ -225,7 +246,7 @@ async function generalPane() {
       h('button', { class: 'btn btn--primary', onclick: async () => {
         try {
           await api.put('/api/admin/settings', {
-            app_name: appName.value, registration: regSel.value,
+            app_name: appName.value,
             temp_ttl_default: +ttl.value, max_addresses: +maxAddr.value,
             session_days: +sess.value, retention_days: +ret.value,
           });
@@ -287,57 +308,4 @@ async function sendingPane() {
     ),
     h('div', { class: 'field mt-2' }, h('label', {}, t('testTo')), testTo),
   );
-}
-
-// ---------- admin: users ----------
-async function usersPane() {
-  let users;
-  try { users = (await api.get('/api/admin/users')).users ?? []; } catch (e) { toast(errText(e), 'err'); return h('div'); }
-
-  const wrap = h('div', { class: 'glass', style: { padding: '6px', overflowX: 'auto' } });
-  const table = h('table', { class: 'tbl' });
-  table.append(h('thead', {}, h('tr', {},
-    h('th', {}, t('username')), h('th', {}, t('role')), h('th', {}, t('navAddresses')), h('th', {}, t('navMail')), h('th', {}, t('lastLogin')), h('th', {}, ''))));
-  const tb = h('tbody', {});
-  for (const u of users) {
-    tb.append(h('tr', {},
-      h('td', {}, h('div', { class: 'row' }, h('span', { class: 'avatar' }, u.username.slice(0, 1).toUpperCase()), h('b', {}, u.username), u.totp_enabled ? icon('shield') : '')),
-      h('td', {}, h('span', { class: `chip ${u.role === 'admin' ? 'is-on' : ''}`, onclick: () => changeRole(u) }, u.role === 'admin' ? t('admin') : t('user'))),
-      h('td', {}, String(u.addresses ?? 0)),
-      h('td', {}, String(u.emails ?? 0)),
-      h('td', {}, u.last_login_at ? fmtDate(u.last_login_at) : '—'),
-      h('td', {}, h('div', { class: 'row', style: { gap: '2px', justifyContent: 'flex-end' } },
-        h('button', { class: 'icon-btn', title: t('resetPass'), onclick: () => resetPass(u) }, icon('key')),
-        h('button', { class: 'icon-btn', title: t('deleteUser'), onclick: () => confirmBox(t('deleteUserConfirm'), async () => {
-          try { await api.del(`/api/admin/users/${u.id}`); toast(t('deletedN'), 'ok', 1500); renderSettings(document.getElementById('app')); }
-          catch (e) { toast(errText(e), 'err'); }
-        }) }, icon('trash')),
-      ))));
-  }
-  table.append(tb);
-  wrap.append(table);
-  return h('div', {}, wrap);
-}
-
-function changeRole(u) {
-  const nextRole = u.role === 'admin' ? 'user' : 'admin';
-  confirmBox(t('role') + ' → ' + (nextRole === 'admin' ? t('admin') : t('user')), async () => {
-    try { await api.patch(`/api/admin/users/${u.id}`, { role: nextRole }); renderSettings(document.getElementById('app')); }
-    catch (e) { toast(errText(e), 'err'); }
-  }, false);
-}
-
-function resetPass(u) {
-  const p = h('input', { class: 'input', type: 'text', placeholder: t('newUserPass') });
-  const m = modal({
-    title: `${t('resetPass')} — ${u.username}`, iconName: 'key',
-    body: [h('div', { class: 'field' }, h('label', {}, t('newPassword')), p)],
-    footer: [
-      h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('cancel')),
-      h('button', { class: 'btn btn--primary', onclick: async () => {
-        try { await api.patch(`/api/admin/users/${u.id}`, { password: p.value }); toast(t('saved'), 'ok'); m.close(); }
-        catch (e) { toast(errText(e), 'err'); }
-      } }, t('save')),
-    ],
-  });
 }

@@ -15,7 +15,7 @@ export function renderAbout(root) {
     h('img', { class: 'ab-logo', src: 'assets/img/logo-dark.png', alt: 'Cmail' }),
     h('p', { class: 'ab-lead' }, t('aboutLead')),
     h('div', { class: 'ab-hero__meta' },
-      h('span', { class: 'chip' }, icon('spark'), `${t('aboutVersion')} 1.4.0`),
+      h('span', { class: 'chip' }, icon('spark'), `${t('aboutVersion')} 1.5.0`),
       h('span', { class: 'chip' }, icon('lock'), t('aboutOpen')),
     ),
     h('div', { class: 'ab-hero__links' },
@@ -74,7 +74,7 @@ export function renderAbout(root) {
       )),
   );
 
-  const made = h('p', { class: 'ab-made' }, t('madeBy'), h('span', { class: 'version-pill' }, `Cmail v1.4.0 · ${FA(2025)}`));
+  const made = h('p', { class: 'ab-made' }, t('madeBy'), h('span', { class: 'version-pill' }, `Cmail v1.5.0 · ${FA(2025)}`));
 
   app.append(
     h('div', { class: 'page-head' },
