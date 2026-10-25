@@ -1,6 +1,5 @@
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
@@ -120,13 +119,13 @@ var uid, now, randomToken, b64, str, RE_LOCAL_PART, RE_DOMAIN;
 var init_util = __esm({
   "src/util.ts"() {
     "use strict";
-    uid = /* @__PURE__ */ __name((prefix = "") => prefix + crypto.randomUUID().replace(/-/g, "").slice(0, 20), "uid");
-    now = /* @__PURE__ */ __name(() => Date.now(), "now");
-    randomToken = /* @__PURE__ */ __name((bytes = 32) => {
+    uid = (prefix = "") => prefix + crypto.randomUUID().replace(/-/g, "").slice(0, 20);
+    now = () => Date.now();
+    randomToken = (bytes = 32) => {
       const buf = new Uint8Array(bytes);
       crypto.getRandomValues(buf);
       return btoa(String.fromCharCode(...buf)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    }, "randomToken");
+    };
     b64 = {
       encode(buf) {
         const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
@@ -153,21 +152,6 @@ var init_util = __esm({
     };
     RE_LOCAL_PART = /^[a-z0-9]([a-z0-9._-]{0,30})[a-z0-9]$/i;
     RE_DOMAIN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
-    __name(clean, "clean");
-    __name(usernameValid, "usernameValid");
-    __name(passwordStrong, "passwordStrong");
-    __name(getSetting, "getSetting");
-    __name(setSetting, "setSetting");
-    __name(getSettings, "getSettings");
-    __name(appSecret, "appSecret");
-    __name(aesKey, "aesKey");
-    __name(sealText, "sealText");
-    __name(openText, "openText");
-    __name(hashPassword, "hashPassword");
-    __name(verifyPassword, "verifyPassword");
-    __name(pbkdf2, "pbkdf2");
-    __name(previewOf, "previewOf");
-    __name(randomLocalPart, "randomLocalPart");
   }
 });
 
@@ -373,18 +357,10 @@ var init_decode_strings = __esm({
     for (let i = 0; i < base64Chars.length; i++) {
       base64Lookup[base64Chars.charCodeAt(i)] = i;
     }
-    __name(decodeBase64, "decodeBase64");
     charsetAliases = /* @__PURE__ */ new Map([
       ["iso-8859-8-i", "iso-8859-8"],
       ["iso-8859-8-e", "iso-8859-8"]
     ]);
-    __name(getDecoder, "getDecoder");
-    __name(blobToArrayBuffer, "blobToArrayBuffer");
-    __name(getHex, "getHex");
-    __name(decodeWord, "decodeWord");
-    __name(decodeWords, "decodeWords");
-    __name(decodeURIComponentWithCharset, "decodeURIComponentWithCharset");
-    __name(decodeParameterValueContinuations, "decodeParameterValueContinuations");
   }
 });
 
@@ -405,7 +381,6 @@ var init_pass_through_decoder = __esm({
         return blobToArrayBuffer(new Blob(this.chunks, { type: "application/octet-stream" }));
       }
     };
-    __name(PassThroughDecoder, "PassThroughDecoder");
   }
 });
 
@@ -448,7 +423,6 @@ var init_base64_decoder = __esm({
         return blobToArrayBuffer(new Blob(this.chunks, { type: "application/octet-stream" }));
       }
     };
-    __name(Base64Decoder, "Base64Decoder");
   }
 });
 
@@ -550,7 +524,6 @@ var init_qp_decoder = __esm({
         return blobToArrayBuffer(new Blob(this.chunks, { type: "application/octet-stream" }));
       }
     };
-    __name(QPDecoder, "QPDecoder");
   }
 });
 
@@ -836,7 +809,6 @@ var init_mime_node = __esm({
         }
       }
     };
-    __name(MimeNode, "MimeNode");
   }
 });
 
@@ -3132,7 +3104,7 @@ function formatTextAddress(address) {
 }
 function formatTextAddresses(addresses) {
   let parts = [];
-  let processAddress = /* @__PURE__ */ __name((address, partCounter) => {
+  let processAddress = (address, partCounter) => {
     if (partCounter) {
       parts.push(", ");
     }
@@ -3145,7 +3117,7 @@ function formatTextAddresses(addresses) {
     } else {
       parts.push(formatTextAddress(address));
     }
-  }, "processAddress");
+  };
   addresses.forEach(processAddress);
   return parts.join("");
 }
@@ -3154,7 +3126,7 @@ function formatHtmlAddress(address) {
 }
 function formatHtmlAddresses(addresses) {
   let parts = [];
-  let processAddress = /* @__PURE__ */ __name((address, partCounter) => {
+  let processAddress = (address, partCounter) => {
     if (partCounter) {
       parts.push('<span class="postal-email-address-separator">, </span>');
     }
@@ -3167,7 +3139,7 @@ function formatHtmlAddresses(addresses) {
     } else {
       parts.push(formatHtmlAddress(address));
     }
-  }, "processAddress");
+  };
   addresses.forEach(processAddress);
   return parts.join(" ");
 }
@@ -3304,17 +3276,6 @@ function formatHtmlHeader(message) {
 var init_text_format = __esm({
   "node_modules/postal-mime/src/text-format.js"() {
     init_html_entities();
-    __name(decodeHTMLEntities, "decodeHTMLEntities");
-    __name(escapeHtml, "escapeHtml");
-    __name(textToHtml, "textToHtml");
-    __name(htmlToText, "htmlToText");
-    __name(formatTextAddress, "formatTextAddress");
-    __name(formatTextAddresses, "formatTextAddresses");
-    __name(formatHtmlAddress, "formatHtmlAddress");
-    __name(formatHtmlAddresses, "formatHtmlAddresses");
-    __name(foldLines, "foldLines");
-    __name(formatTextHeader, "formatTextHeader");
-    __name(formatHtmlHeader, "formatHtmlHeader");
   }
 });
 
@@ -3409,14 +3370,14 @@ function _handleAddress(tokens, depth) {
           break;
         }
       }
-      let _regexHandler = /* @__PURE__ */ __name(function(address2) {
+      let _regexHandler = function(address2) {
         if (!data.address.length) {
           data.address = [address2.trim()];
           return " ";
         } else {
           return address2;
         }
-      }, "_regexHandler");
+      };
       if (!data.address.length) {
         for (i = data.text.length - 1; i >= 0; i--) {
           if (!data.textWasQuoted[i]) {
@@ -3494,7 +3455,7 @@ function addressParser(str2, options) {
   });
   if (options.flatten) {
     let addresses2 = [];
-    let walkAddressList = /* @__PURE__ */ __name((list) => {
+    let walkAddressList = (list) => {
       list.forEach((address2) => {
         if (address2.group) {
           return walkAddressList(address2.group);
@@ -3502,7 +3463,7 @@ function addressParser(str2, options) {
           addresses2.push(address2);
         }
       });
-    }, "walkAddressList");
+    };
     walkAddressList(parsedAddresses);
     return addresses2;
   }
@@ -3512,7 +3473,6 @@ var Tokenizer, MAX_NESTED_GROUP_DEPTH, address_parser_default;
 var init_address_parser = __esm({
   "node_modules/postal-mime/src/address-parser.js"() {
     init_decode_strings();
-    __name(_handleAddress, "_handleAddress");
     Tokenizer = class {
       constructor(str2) {
         this.str = (str2 || "").toString();
@@ -3606,9 +3566,7 @@ var init_address_parser = __esm({
         this.escaped = false;
       }
     };
-    __name(Tokenizer, "Tokenizer");
     MAX_NESTED_GROUP_DEPTH = 50;
-    __name(addressParser, "addressParser");
     address_parser_default = addressParser;
   }
 });
@@ -3647,7 +3605,6 @@ function base64ArrayBuffer(arrayBuffer) {
 }
 var init_base64_encoder = __esm({
   "node_modules/postal-mime/src/base64-encoder.js"() {
-    __name(base64ArrayBuffer, "base64ArrayBuffer");
   }
 });
 
@@ -3675,8 +3632,6 @@ var init_postal_mime = __esm({
     MAX_NESTING_DEPTH = 256;
     MAX_HEADERS_SIZE = 2 * 1024 * 1024;
     MAX_RFC822_NESTING_DEPTH = 10;
-    __name(toCamelCase, "toCamelCase");
-    __name(parseLimitOption, "parseLimitOption");
     PostalMime = class {
       // async so that an invalid option rejects the returned promise instead of throwing
       // synchronously, which would escape a `.catch()` chain
@@ -3794,7 +3749,7 @@ var init_postal_mime = __esm({
         let textTypes = /* @__PURE__ */ new Set();
         let textMap = this.textMap = /* @__PURE__ */ new Map();
         let forceRfc822Attachments = this.forceRfc822Attachments();
-        let walk = /* @__PURE__ */ __name(async (node, alternative, related) => {
+        let walk = async (node, alternative, related) => {
           alternative = alternative || false;
           related = related || false;
           if (!node.contentType.multipart) {
@@ -3887,7 +3842,7 @@ var init_postal_mime = __esm({
           for (let childNode of node.childNodes) {
             await walk(childNode, alternative, related);
           }
-        }, "walk");
+        };
         await walk(this.root, false, false);
         textMap.forEach((mapEntry) => {
           textTypes.forEach((textType) => {
@@ -3985,7 +3940,7 @@ var init_postal_mime = __esm({
           return true;
         }
         let forceRfc822Attachments = false;
-        let walk = /* @__PURE__ */ __name((node) => {
+        let walk = (node) => {
           if (!node.contentType.multipart) {
             if (node.contentType.parsed && ["message/delivery-status", "message/feedback-report"].includes(node.contentType.parsed.value)) {
               forceRfc822Attachments = true;
@@ -3994,7 +3949,7 @@ var init_postal_mime = __esm({
           for (let childNode of node.childNodes) {
             walk(childNode);
           }
-        }, "walk");
+        };
         walk(this.root);
         return forceRfc822Attachments;
       }
@@ -4126,7 +4081,6 @@ var init_postal_mime = __esm({
         return message;
       }
     };
-    __name(PostalMime, "PostalMime");
   }
 });
 
@@ -4265,11 +4219,6 @@ var init_emailin = __esm({
     MAX_HTML = 9e5;
     MAX_TEXT = 4e5;
     MAX_ATTACHMENT_B64 = 9e5;
-    __name(handleEmail, "handleEmail");
-    __name(arrToB64, "arrToB64");
-    __name(stripHtml, "stripHtml");
-    __name(firstAdminId, "firstAdminId");
-    __name(scheduledCleanup, "scheduledCleanup");
   }
 });
 
@@ -4277,14 +4226,14 @@ var init_emailin = __esm({
 var GET_MATCH_RESULT = Symbol();
 
 // node_modules/hono/dist/utils/buffer.js
-var bufferToFormData = /* @__PURE__ */ __name((arrayBuffer, contentType) => {
+var bufferToFormData = (arrayBuffer, contentType) => {
   return new Response(arrayBuffer, { headers: { "Content-Type": contentType.replace(/^[^;]+/, (mediaType) => mediaType.toLowerCase()) } }).formData();
-}, "bufferToFormData");
+};
 
 // node_modules/hono/dist/utils/body.js
 var MAX_NESTED_OBJECTS = 1e4;
-var isRawRequest = /* @__PURE__ */ __name((request) => "headers" in request, "isRawRequest");
-var parseBody = /* @__PURE__ */ __name(async (request, options = /* @__PURE__ */ Object.create(null)) => {
+var isRawRequest = (request) => "headers" in request;
+var parseBody = async (request, options = /* @__PURE__ */ Object.create(null)) => {
   const { all = false, dot = false } = options;
   const mediaType = (isRawRequest(request) ? request.headers : request.raw.headers).get("Content-Type")?.split(";")[0].trim().toLowerCase();
   if (mediaType === "multipart/form-data" || mediaType === "application/x-www-form-urlencoded")
@@ -4293,7 +4242,7 @@ var parseBody = /* @__PURE__ */ __name(async (request, options = /* @__PURE__ */
       dot
     });
   return {};
-}, "parseBody");
+};
 async function parseFormData(request, options) {
   if (!isRawRequest(request) && request.bodyCache.formData)
     return convertFormDataToBodyData(await request.bodyCache.formData, options);
@@ -4307,7 +4256,6 @@ async function parseFormData(request, options) {
     return convertFormDataToBodyData(formData, options);
   return {};
 }
-__name(parseFormData, "parseFormData");
 function convertFormDataToBodyData(formData, options) {
   const form = /* @__PURE__ */ Object.create(null);
   const nestingState = { count: 0 };
@@ -4326,8 +4274,7 @@ function convertFormDataToBodyData(formData, options) {
     });
   return form;
 }
-__name(convertFormDataToBodyData, "convertFormDataToBodyData");
-var handleParsingAllValues = /* @__PURE__ */ __name((form, key, value) => {
+var handleParsingAllValues = (form, key, value) => {
   if (form[key] !== void 0) {
     if (Array.isArray(form[key]))
       form[key].push(value);
@@ -4337,8 +4284,8 @@ var handleParsingAllValues = /* @__PURE__ */ __name((form, key, value) => {
     form[key] = value;
   else
     form[key] = [value];
-}, "handleParsingAllValues");
-var handleParsingNestedValues = /* @__PURE__ */ __name((form, key, value, state) => {
+};
+var handleParsingNestedValues = (form, key, value, state) => {
   if (/(?:^|\.)__proto__\./.test(key))
     return;
   let nestedForm = form;
@@ -4357,24 +4304,24 @@ var handleParsingNestedValues = /* @__PURE__ */ __name((form, key, value, state)
       nestedForm = nestedForm[key2];
     }
   });
-}, "handleParsingNestedValues");
-var throwNestingLimitExceeded = /* @__PURE__ */ __name(() => {
+};
+var throwNestingLimitExceeded = () => {
   throw new Error("Nesting limit exceeded");
-}, "throwNestingLimitExceeded");
+};
 
 // node_modules/hono/dist/utils/url.js
-var splitPath = /* @__PURE__ */ __name((path) => {
+var splitPath = (path) => {
   const paths = path.split("/");
   if (paths[0] === "")
     paths.shift();
   return paths;
-}, "splitPath");
-var splitRoutingPath = /* @__PURE__ */ __name((routePath) => {
+};
+var splitRoutingPath = (routePath) => {
   const { groups, path } = extractGroupsFromPath(routePath);
   const paths = splitPath(path);
   return replaceGroupMarks(paths, groups);
-}, "splitRoutingPath");
-var extractGroupsFromPath = /* @__PURE__ */ __name((path) => {
+};
+var extractGroupsFromPath = (path) => {
   const groups = [];
   path = path.replace(/\{[^}]+\}/g, (match2, index) => {
     const mark = `@${index}`;
@@ -4385,8 +4332,8 @@ var extractGroupsFromPath = /* @__PURE__ */ __name((path) => {
     groups,
     path
   };
-}, "extractGroupsFromPath");
-var replaceGroupMarks = /* @__PURE__ */ __name((paths, groups) => {
+};
+var replaceGroupMarks = (paths, groups) => {
   for (let i = groups.length - 1; i >= 0; i--) {
     const [mark] = groups[i];
     for (let j = paths.length - 1; j >= 0; j--)
@@ -4396,9 +4343,9 @@ var replaceGroupMarks = /* @__PURE__ */ __name((paths, groups) => {
       }
   }
   return paths;
-}, "replaceGroupMarks");
+};
 var patternCache = {};
-var getPattern = /* @__PURE__ */ __name((label, next) => {
+var getPattern = (label, next) => {
   if (label === "*")
     return "*";
   const match2 = label.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);
@@ -4425,8 +4372,8 @@ var getPattern = /* @__PURE__ */ __name((label, next) => {
     return patternCache[cacheKey];
   }
   return null;
-}, "getPattern");
-var tryDecode = /* @__PURE__ */ __name((str2, decoder) => {
+};
+var tryDecode = (str2, decoder) => {
   try {
     return decoder(str2);
   } catch {
@@ -4438,9 +4385,9 @@ var tryDecode = /* @__PURE__ */ __name((str2, decoder) => {
       }
     });
   }
-}, "tryDecode");
-var tryDecodeURI = /* @__PURE__ */ __name((str2) => tryDecode(str2, decodeURI), "tryDecodeURI");
-var getPath = /* @__PURE__ */ __name((request) => {
+};
+var tryDecodeURI = (str2) => tryDecode(str2, decodeURI);
+var getPath = (request) => {
   const url = request.url;
   const start = url.indexOf("/", url.indexOf(":") + 4);
   let i = start;
@@ -4456,17 +4403,17 @@ var getPath = /* @__PURE__ */ __name((request) => {
       break;
   }
   return url.slice(start, i);
-}, "getPath");
-var getPathNoStrict = /* @__PURE__ */ __name((request) => {
+};
+var getPathNoStrict = (request) => {
   const result = getPath(request);
   return result.length > 1 && result.at(-1) === "/" ? result.slice(0, -1) : result;
-}, "getPathNoStrict");
-var mergePath = /* @__PURE__ */ __name((base, sub, ...rest) => {
+};
+var mergePath = (base, sub, ...rest) => {
   if (rest.length)
     sub = mergePath(sub, ...rest);
   return `${base?.[0] === "/" ? "" : "/"}${base}${sub === "/" ? "" : `${base?.at(-1) === "/" ? "" : "/"}${sub?.[0] === "/" ? sub.slice(1) : sub}`}`;
-}, "mergePath");
-var checkOptionalParameter = /* @__PURE__ */ __name((path) => {
+};
+var checkOptionalParameter = (path) => {
   if (path.charCodeAt(path.length - 1) !== 63 || !path.includes(":"))
     return null;
   const segments = path.split("/");
@@ -4489,14 +4436,14 @@ var checkOptionalParameter = /* @__PURE__ */ __name((path) => {
     }
   });
   return results.filter((v, i, a) => a.indexOf(v) === i);
-}, "checkOptionalParameter");
-var tryDecodeURIComponent = /* @__PURE__ */ __name((str2) => str2.indexOf("%") !== -1 ? tryDecode(str2, decodeURIComponent_) : str2, "tryDecodeURIComponent");
-var _decodeURI = /* @__PURE__ */ __name((value) => {
+};
+var tryDecodeURIComponent = (str2) => str2.indexOf("%") !== -1 ? tryDecode(str2, decodeURIComponent_) : str2;
+var _decodeURI = (value) => {
   if (value.indexOf("+") !== -1)
     value = value.replace(/\+/g, " ");
   return tryDecodeURIComponent(value);
-}, "_decodeURI");
-var _getQueryParam = /* @__PURE__ */ __name((url, key, multiple) => {
+};
+var _getQueryParam = (url, key, multiple) => {
   const hashIndex = url.indexOf("#", 8);
   if (hashIndex !== -1)
     url = url.slice(0, hashIndex);
@@ -4551,15 +4498,15 @@ var _getQueryParam = /* @__PURE__ */ __name((url, key, multiple) => {
       results[name] ??= value;
   }
   return key ? results[key] : results;
-}, "_getQueryParam");
+};
 var getQueryParam = _getQueryParam;
-var getQueryParams = /* @__PURE__ */ __name((url, key) => {
+var getQueryParams = (url, key) => {
   return _getQueryParam(url, key, true);
-}, "getQueryParams");
+};
 var decodeURIComponent_ = decodeURIComponent;
 
 // node_modules/hono/dist/request.js
-var HonoRequest = /* @__PURE__ */ __name(class {
+var HonoRequest = class {
   /**
   * `.raw` can get the raw Request object.
   *
@@ -4831,7 +4778,7 @@ var HonoRequest = /* @__PURE__ */ __name(class {
   get routePath() {
     return this.#matchResult[0].map(([[, route]]) => route)[this.routeIndex].path;
   }
-}, "HonoRequest");
+};
 
 // node_modules/hono/dist/utils/html.js
 var HtmlEscapedCallbackPhase = {
@@ -4839,13 +4786,13 @@ var HtmlEscapedCallbackPhase = {
   BeforeStream: 2,
   Stream: 3
 };
-var raw = /* @__PURE__ */ __name((value, callbacks) => {
+var raw = (value, callbacks) => {
   const escapedString = new String(value);
   escapedString.isEscaped = true;
   escapedString.callbacks = callbacks;
   return escapedString;
-}, "raw");
-var resolveCallback = /* @__PURE__ */ __name(async (str2, phase, preserveCallbacks, context, buffer) => {
+};
+var resolveCallback = async (str2, phase, preserveCallbacks, context, buffer) => {
   if (typeof str2 === "object" && !(str2 instanceof String)) {
     if (!(str2 instanceof Promise))
       str2 = str2.toString();
@@ -4868,18 +4815,18 @@ var resolveCallback = /* @__PURE__ */ __name(async (str2, phase, preserveCallbac
     return raw(await resStr, callbacks);
   else
     return resStr;
-}, "resolveCallback");
+};
 
 // node_modules/hono/dist/context.js
 var TEXT_PLAIN = "text/plain; charset=UTF-8";
-var setDefaultContentType = /* @__PURE__ */ __name((contentType, headers) => {
+var setDefaultContentType = (contentType, headers) => {
   return {
     "Content-Type": contentType,
     ...headers
   };
-}, "setDefaultContentType");
-var createResponseInstance = /* @__PURE__ */ __name((body, init) => new Response(body, init), "createResponseInstance");
-var Context = /* @__PURE__ */ __name(class {
+};
+var createResponseInstance = (body, init) => new Response(body, init);
+var Context = class {
   #rawRequest;
   #req;
   /**
@@ -5226,7 +5173,7 @@ var Context = /* @__PURE__ */ __name(class {
     return this.#newResponse(JSON.stringify(object), arg, setDefaultContentType("application/json", headers));
   };
   html = (html, arg, headers) => {
-    const res = /* @__PURE__ */ __name((html2) => this.#newResponse(html2, arg, setDefaultContentType("text/html; charset=UTF-8", headers)), "res");
+    const res = (html2) => this.#newResponse(html2, arg, setDefaultContentType("text/html; charset=UTF-8", headers));
     return typeof html === "object" ? resolveCallback(html, HtmlEscapedCallbackPhase.Stringify, false, {}).then(res) : res(html);
   };
   /**
@@ -5265,10 +5212,10 @@ var Context = /* @__PURE__ */ __name(class {
     this.#notFoundHandler ??= () => createResponseInstance();
     return this.#notFoundHandler(this);
   };
-}, "Context");
+};
 
 // node_modules/hono/dist/compose.js
-var compose = /* @__PURE__ */ __name((middleware, onError, onNotFound) => {
+var compose = (middleware, onError, onNotFound) => {
   return (context, next) => {
     let index = -1;
     return dispatch(0);
@@ -5301,9 +5248,8 @@ var compose = /* @__PURE__ */ __name((middleware, onError, onNotFound) => {
         context.res = res;
       return context;
     }
-    __name(dispatch, "dispatch");
   };
-}, "compose");
+};
 
 // node_modules/hono/dist/router.js
 var METHODS = [
@@ -5316,25 +5262,25 @@ var METHODS = [
   "query"
 ];
 var MESSAGE_MATCHER_IS_ALREADY_BUILT = "Can not add a route since the matcher is already built.";
-var UnsupportedPathError = /* @__PURE__ */ __name(class extends Error {
-}, "UnsupportedPathError");
+var UnsupportedPathError = class extends Error {
+};
 
 // node_modules/hono/dist/utils/constants.js
 var COMPOSED_HANDLER = "__COMPOSED_HANDLER";
 
 // node_modules/hono/dist/hono-base.js
-var notFoundHandler = /* @__PURE__ */ __name((c) => {
+var notFoundHandler = (c) => {
   return c.text("404 Not Found", 404);
-}, "notFoundHandler");
-var errorHandler = /* @__PURE__ */ __name((err, c) => {
+};
+var errorHandler = (err, c) => {
   if ("getResponse" in err) {
     const res = err.getResponse();
     return c.newResponse(res.body, res);
   }
   console.error(err);
   return c.text("Internal Server Error", 500);
-}, "errorHandler");
-var Hono = /* @__PURE__ */ __name(class Hono2 {
+};
+var Hono = class Hono2 {
   get;
   post;
   put;
@@ -5428,7 +5374,7 @@ var Hono = /* @__PURE__ */ __name(class Hono2 {
       if (app8.errorHandler === errorHandler)
         handler = r.handler;
       else {
-        handler = /* @__PURE__ */ __name(async (c, next) => (await compose([], app8.errorHandler)(c, () => r.handler(c, next))).res, "handler");
+        handler = async (c, next) => (await compose([], app8.errorHandler)(c, () => r.handler(c, next))).res;
         handler[COMPOSED_HANDLER] = r.handler;
       }
       subApp.#addRoute(r.method, r.path, handler, r.basePath);
@@ -5535,7 +5481,7 @@ var Hono = /* @__PURE__ */ __name(class Hono2 {
       else {
         optionHandler = options.optionHandler;
         if (options.replaceRequest === false)
-          replaceRequest = /* @__PURE__ */ __name((request) => request, "replaceRequest");
+          replaceRequest = (request) => request;
         else
           replaceRequest = options.replaceRequest;
       }
@@ -5560,12 +5506,12 @@ var Hono = /* @__PURE__ */ __name(class Hono2 {
         return new Request(url, request);
       };
     })();
-    const handler = /* @__PURE__ */ __name(async (c, next) => {
+    const handler = async (c, next) => {
       const res = await applicationHandler(replaceRequest(c.req.raw), ...getOptions(c));
       if (res)
         return res;
       await next();
-    }, "handler");
+    };
     this.#addRoute("ALL", mergePath(path, "*"), handler);
     return this;
   }
@@ -5674,16 +5620,16 @@ var Hono = /* @__PURE__ */ __name(class Hono2 {
       event.respondWith(this.#dispatch(event.request, event, void 0, event.request.method));
     });
   };
-}, "Hono");
+};
 
 // node_modules/hono/dist/router/utils.js
-var createNullObject = /* @__PURE__ */ __name(() => /* @__PURE__ */ Object.create(null), "createNullObject");
+var createNullObject = () => /* @__PURE__ */ Object.create(null);
 
 // node_modules/hono/dist/router/reg-exp-router/matcher.js
 var emptyParam = [];
 function match(method, path) {
   const matchers = this.buildAllMatchers();
-  const match2 = /* @__PURE__ */ __name((method2, path2) => {
+  const match2 = (method2, path2) => {
     const matcher = matchers[method2] || matchers["ALL"];
     const staticMatch = matcher[2][path2];
     if (staticMatch)
@@ -5693,11 +5639,10 @@ function match(method, path) {
       return [[], emptyParam];
     const index = match3.indexOf("", 1);
     return [matcher[1][index], match3];
-  }, "match");
+  };
   this.match = match2;
   return match2(method, path);
 }
-__name(match, "match");
 
 // node_modules/hono/dist/router/reg-exp-router/node.js
 var LABEL_REG_EXP_STR = "[^/]+";
@@ -5719,8 +5664,7 @@ function compareKey(a, b) {
     return -1;
   return a.length === b.length ? a < b ? -1 : 1 : b.length - a.length;
 }
-__name(compareKey, "compareKey");
-var Node = /* @__PURE__ */ __name(class Node2 {
+var Node = class Node2 {
   #index;
   #varIndex;
   #children = createNullObject();
@@ -5796,10 +5740,10 @@ var Node = /* @__PURE__ */ __name(class Node2 {
       return strList[0];
     return "(?:" + strList.join("|") + ")";
   }
-}, "Node");
+};
 
 // node_modules/hono/dist/router/reg-exp-router/trie.js
-var Trie = /* @__PURE__ */ __name(class {
+var Trie = class {
   #context = { varIndex: 0 };
   #root = new Node();
   #index = 0;
@@ -5864,21 +5808,19 @@ var Trie = /* @__PURE__ */ __name(class {
       paramReplacementMap
     ];
   }
-}, "Trie");
+};
 
 // node_modules/hono/dist/router/reg-exp-router/router.js
 var wildcardRegExpCache = createNullObject();
 function buildWildcardRegExp(path) {
   return wildcardRegExpCache[path] ??= new RegExp(`^${path.replace(/\/:[^/{}]+(?:\{\[\^\/]\+})?(?=[/{]|$)|\/?\*$|([.\\+*[^\]$()?{}|])/g, (match2, metaChar) => metaChar ? `\\${metaChar}` : match2 === "/*" ? TAIL_WILDCARD_REG_EXP_STR : match2 === "*" ? ".*" : `/:${LABEL_REG_EXP_STR}`)}$`);
 }
-__name(buildWildcardRegExp, "buildWildcardRegExp");
 function findMiddleware(middleware, path) {
   for (const k of Object.keys(middleware).sort((a, b) => b.length - a.length))
     if (buildWildcardRegExp(k).test(path))
       return [...middleware[k]];
 }
-__name(findMiddleware, "findMiddleware");
-var RegExpRouter = /* @__PURE__ */ __name(class {
+var RegExpRouter = class {
   name = "RegExpRouter";
   #middleware;
   #routes;
@@ -5971,10 +5913,10 @@ var RegExpRouter = /* @__PURE__ */ __name(class {
       staticMap
     ];
   }
-}, "RegExpRouter");
+};
 
 // node_modules/hono/dist/router/smart-router/router.js
-var SmartRouter = /* @__PURE__ */ __name(class {
+var SmartRouter = class {
   name = "SmartRouter";
   #routers = [];
   #routes = [];
@@ -6024,12 +5966,12 @@ var SmartRouter = /* @__PURE__ */ __name(class {
       throw new Error("No active router has been determined yet.");
     return this.#routers[0];
   }
-}, "SmartRouter");
+};
 
 // node_modules/hono/dist/router/trie-router/node.js
 var emptyParams = createNullObject();
 var order = 0;
-var Node3 = /* @__PURE__ */ __name(class Node4 {
+var Node3 = class Node4 {
   #methods = [];
   #children = createNullObject();
   #patterns = [];
@@ -6161,10 +6103,10 @@ var Node3 = /* @__PURE__ */ __name(class Node4 {
       });
     return [handlerSets.map(({ handler, params }) => [handler, params])];
   }
-}, "Node");
+};
 
 // node_modules/hono/dist/router/trie-router/router.js
-var TrieRouter = /* @__PURE__ */ __name(class {
+var TrieRouter = class {
   name = "TrieRouter";
   #node = new Node3();
   add(method, path, handler) {
@@ -6174,10 +6116,10 @@ var TrieRouter = /* @__PURE__ */ __name(class {
   match(method, path) {
     return this.#node.search(method, path);
   }
-}, "TrieRouter");
+};
 
 // node_modules/hono/dist/hono.js
-var Hono3 = /* @__PURE__ */ __name(class extends Hono {
+var Hono3 = class extends Hono {
   /**
   * Creates an instance of the Hono class.
   *
@@ -6187,13 +6129,13 @@ var Hono3 = /* @__PURE__ */ __name(class extends Hono {
     super(options);
     this.router = options.router ?? new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] });
   }
-}, "Hono");
+};
 
 // node_modules/hono/dist/utils/cookie.js
 var validCookieNameRegEx = /^[\w!#$%&'*.^`|~+-]+$/;
 var relaxedCookieNameRegEx = /^[!#-:<>-[\]-~]+$/;
 var validCookieValueRegEx = /^[ !#-:<-[\]-~]*$/;
-var trimCookieWhitespace = /* @__PURE__ */ __name((value) => {
+var trimCookieWhitespace = (value) => {
   let start = 0;
   let end = value.length;
   while (start < end) {
@@ -6209,8 +6151,8 @@ var trimCookieWhitespace = /* @__PURE__ */ __name((value) => {
     end--;
   }
   return start === 0 && end === value.length ? value : value.slice(start, end);
-}, "trimCookieWhitespace");
-var parse = /* @__PURE__ */ __name((cookie, name) => {
+};
+var parse = (cookie, name) => {
   if (name && cookie.indexOf(name) === -1)
     return {};
   const pairs = cookie.split(";");
@@ -6232,8 +6174,8 @@ var parse = /* @__PURE__ */ __name((cookie, name) => {
     }
   }
   return parsedCookie;
-}, "parse");
-var _serialize = /* @__PURE__ */ __name((name, value, opt = {}) => {
+};
+var _serialize = (name, value, opt = {}) => {
   if (!validCookieNameRegEx.test(name))
     throw new Error("Invalid cookie name");
   let cookie = `${name}=${value}`;
@@ -6283,14 +6225,14 @@ var _serialize = /* @__PURE__ */ __name((name, value, opt = {}) => {
     cookie += "; Partitioned";
   }
   return cookie;
-}, "_serialize");
-var serialize = /* @__PURE__ */ __name((name, value, opt) => {
+};
+var serialize = (name, value, opt) => {
   value = encodeURIComponent(value);
   return _serialize(name, value, opt);
-}, "serialize");
+};
 
 // node_modules/hono/dist/helper/cookie/index.js
-var getCookie = /* @__PURE__ */ __name((c, key, prefix) => {
+var getCookie = (c, key, prefix) => {
   const cookie = c.req.raw.headers.get("Cookie");
   if (typeof key === "string") {
     if (!cookie)
@@ -6305,8 +6247,8 @@ var getCookie = /* @__PURE__ */ __name((c, key, prefix) => {
   if (!cookie)
     return {};
   return parse(cookie);
-}, "getCookie");
-var generateCookie = /* @__PURE__ */ __name((name, value, opt) => {
+};
+var generateCookie = (name, value, opt) => {
   let cookie;
   if (opt?.prefix === "secure")
     cookie = serialize("__Secure-" + name, value, {
@@ -6327,19 +6269,19 @@ var generateCookie = /* @__PURE__ */ __name((name, value, opt) => {
       ...opt
     });
   return cookie;
-}, "generateCookie");
-var setCookie = /* @__PURE__ */ __name((c, name, value, opt) => {
+};
+var setCookie = (c, name, value, opt) => {
   const cookie = generateCookie(name, value, opt);
   c.header("Set-Cookie", cookie, { append: true });
-}, "setCookie");
-var deleteCookie = /* @__PURE__ */ __name((c, name, opt) => {
+};
+var deleteCookie = (c, name, opt) => {
   const deletedCookie = getCookie(c, name, opt?.prefix);
   setCookie(c, name, "", {
     ...opt,
     maxAge: 0
   });
   return deletedCookie;
-}, "deleteCookie");
+};
 
 // src/auth.ts
 init_util();
@@ -6352,7 +6294,6 @@ async function createSession(env, userId, ua, ip) {
   ).bind(token, userId, now(), now() + days * 864e5, (ua ?? "").slice(0, 200), (ip ?? "").slice(0, 64)).run();
   return token;
 }
-__name(createSession, "createSession");
 function setSessionCookie(c, token) {
   setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
@@ -6362,11 +6303,9 @@ function setSessionCookie(c, token) {
     maxAge: 60 * 60 * 24 * 30
   });
 }
-__name(setSessionCookie, "setSessionCookie");
 function clearSessionCookie(c) {
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
 }
-__name(clearSessionCookie, "clearSessionCookie");
 async function getUserFromToken(env, token) {
   if (!token)
     return null;
@@ -6383,7 +6322,6 @@ async function getUserFromToken(env, token) {
   }
   return { id: row.id, username: row.username, role: row.role, display_name: row.display_name, totp_enabled: row.totp_enabled };
 }
-__name(getUserFromToken, "getUserFromToken");
 function tokenFrom(c) {
   const cookie = getCookie(c, SESSION_COOKIE);
   if (cookie)
@@ -6393,20 +6331,17 @@ function tokenFrom(c) {
     return auth.slice(7);
   return void 0;
 }
-__name(tokenFrom, "tokenFrom");
 async function attachUser(c, next) {
   const user = await getUserFromToken(c.env, tokenFrom(c));
   c.set("user", user);
   await next();
 }
-__name(attachUser, "attachUser");
 async function requireUser(c, next) {
   const user = c.get("user");
   if (!user)
     return c.json({ ok: false, error: "unauthorized" }, 401);
   await next();
 }
-__name(requireUser, "requireUser");
 async function requireAdmin(c, next) {
   const user = c.get("user");
   if (!user)
@@ -6415,13 +6350,11 @@ async function requireAdmin(c, next) {
     return c.json({ ok: false, error: "forbidden" }, 403);
   await next();
 }
-__name(requireAdmin, "requireAdmin");
 async function destroySession(env, token) {
   if (!token)
     return;
   await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
 }
-__name(destroySession, "destroySession");
 async function rateLimit(env, ip, route, max = 10, windowMs = 10 * 6e4) {
   const key = `${route}:${ip}`;
   const t = now();
@@ -6437,15 +6370,12 @@ async function rateLimit(env, ip, route, max = 10, windowMs = 10 * 6e4) {
   await env.DB.prepare("UPDATE auth_attempts SET count = count + 1 WHERE key = ?").bind(key).run();
   return true;
 }
-__name(rateLimit, "rateLimit");
 async function rateLimitClear(env, ip, route) {
   await env.DB.prepare("DELETE FROM auth_attempts WHERE key = ?").bind(`${route}:${ip}`).run();
 }
-__name(rateLimitClear, "rateLimitClear");
 function clientIp(c) {
   return c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For")?.split(",")[0].trim() || "0.0.0.0";
 }
-__name(clientIp, "clientIp");
 
 // src/worker.ts
 init_emailin();
@@ -6567,7 +6497,6 @@ function base32Decode(s) {
   }
   return new Uint8Array(out);
 }
-__name(base32Decode, "base32Decode");
 function base32Encode(bytes) {
   let bits = 0;
   let value = 0;
@@ -6584,19 +6513,16 @@ function base32Encode(bytes) {
     out += B32[value << 5 - bits & 31];
   return out;
 }
-__name(base32Encode, "base32Encode");
 function randomSecret(bytes = 20) {
   const buf = new Uint8Array(bytes);
   crypto.getRandomValues(buf);
   return base32Encode(buf);
 }
-__name(randomSecret, "randomSecret");
 async function hmac(algo, keyBytes, msg) {
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: algo }, false, ["sign"]);
   const sig = await crypto.subtle.sign("HMAC", key, msg);
   return new Uint8Array(sig);
 }
-__name(hmac, "hmac");
 async function hotp(secretB32, counter, algo = "SHA1", digits = 6) {
   const key = base32Decode(secretB32);
   const msg = new Uint8Array(8);
@@ -6612,15 +6538,12 @@ async function hotp(secretB32, counter, algo = "SHA1", digits = 6) {
   const code = (bin % 10 ** digits).toString().padStart(digits, "0");
   return code;
 }
-__name(hotp, "hotp");
 async function totp(secretB32, algo = "SHA1", digits = 6, period = 30, at = Date.now()) {
   return hotp(secretB32, Math.floor(at / 1e3 / period), algo, digits);
 }
-__name(totp, "totp");
 async function totpRemaining(period = 30, at = Date.now()) {
   return period - Math.floor(at / 1e3) % period;
 }
-__name(totpRemaining, "totpRemaining");
 async function verifyTotp(secretB32, code, algo = "SHA1", digits = 6, period = 30, window = 1) {
   const counter = Math.floor(Date.now() / 1e3 / period);
   for (let i = -window; i <= window; i++) {
@@ -6630,7 +6553,6 @@ async function verifyTotp(secretB32, code, algo = "SHA1", digits = 6, period = 3
   }
   return false;
 }
-__name(verifyTotp, "verifyTotp");
 function parseOtpauthUri(uri) {
   try {
     if (!uri.startsWith("otpauth://totp/"))
@@ -6654,17 +6576,14 @@ function parseOtpauthUri(uri) {
     return null;
   }
 }
-__name(parseOtpauthUri, "parseOtpauthUri");
 function buildOtpauthUri(cfg) {
   const label = `${cfg.issuer ?? "Cmail"}:${cfg.name ?? "code"}`;
   const p = new URLSearchParams({ secret: cfg.secret, issuer: cfg.issuer ?? "Cmail", algorithm: cfg.algo, digits: String(cfg.digits), period: String(cfg.period) });
   return `otpauth://totp/${encodeURIComponent(label)}?${p.toString()}`;
 }
-__name(buildOtpauthUri, "buildOtpauthUri");
 function normalizeSecret(raw2) {
   return raw2.toUpperCase().replace(/[\s-]/g, "").replace(/0/g, "O").replace(/1/g, "L").split("").map((ch) => B32.includes(ch) ? ch : "").join("");
 }
-__name(normalizeSecret, "normalizeSecret");
 
 // node_modules/uqr/dist/index.mjs
 var QrCodeDataType = /* @__PURE__ */ ((QrCodeDataType2) => {
@@ -7070,18 +6989,15 @@ var QrCode = class {
     runHistory.unshift(currentRunLength);
   }
 };
-__name(QrCode, "QrCode");
 function appendBits(val, len, bb) {
   if (len < 0 || len > 31 || val >>> len !== 0)
     throw new RangeError("Value out of range");
   for (let i = len - 1; i >= 0; i--)
     bb.push(val >>> i & 1);
 }
-__name(appendBits, "appendBits");
 function getBit(x, i) {
   return (x >>> i & 1) !== 0;
 }
-__name(getBit, "getBit");
 var QrSegment = class {
   // Creates a new QR Code segment with the given attributes and data.
   // The character count (numChars) must agree with the mode and the bit buffer length,
@@ -7100,21 +7016,18 @@ var QrSegment = class {
     return this.bitData.slice();
   }
 };
-__name(QrSegment, "QrSegment");
 var MODE_NUMERIC = [1, 10, 12, 14];
 var MODE_ALPHANUMERIC = [2, 9, 11, 13];
 var MODE_BYTE = [4, 8, 16, 16];
 function numCharCountBits(mode, ver) {
   return mode[Math.floor((ver + 7) / 17) + 1];
 }
-__name(numCharCountBits, "numCharCountBits");
 function makeBytes(data) {
   const bb = [];
   for (const b of data)
     appendBits(b, 8, bb);
   return new QrSegment(MODE_BYTE, data.length, bb);
 }
-__name(makeBytes, "makeBytes");
 function makeNumeric(digits) {
   if (!isNumeric(digits))
     throw new RangeError("String contains non-numeric characters");
@@ -7126,7 +7039,6 @@ function makeNumeric(digits) {
   }
   return new QrSegment(MODE_NUMERIC, digits.length, bb);
 }
-__name(makeNumeric, "makeNumeric");
 function makeAlphanumeric(text) {
   if (!isAlphanumeric(text))
     throw new RangeError("String contains unencodable characters in alphanumeric mode");
@@ -7141,7 +7053,6 @@ function makeAlphanumeric(text) {
     appendBits(ALPHANUMERIC_CHARSET.indexOf(text.charAt(i)), 6, bb);
   return new QrSegment(MODE_ALPHANUMERIC, text.length, bb);
 }
-__name(makeAlphanumeric, "makeAlphanumeric");
 function makeSegments(text) {
   if (text === "")
     return [];
@@ -7152,15 +7063,12 @@ function makeSegments(text) {
   else
     return [makeBytes(toUtf8ByteArray(text))];
 }
-__name(makeSegments, "makeSegments");
 function isNumeric(text) {
   return NUMERIC_REGEX.test(text);
 }
-__name(isNumeric, "isNumeric");
 function isAlphanumeric(text) {
   return ALPHANUMERIC_REGEX.test(text);
 }
-__name(isAlphanumeric, "isAlphanumeric");
 function getTotalBits(segs, version) {
   let result = 0;
   for (const seg of segs) {
@@ -7171,7 +7079,6 @@ function getTotalBits(segs, version) {
   }
   return result;
 }
-__name(getTotalBits, "getTotalBits");
 function toUtf8ByteArray(str2) {
   str2 = encodeURI(str2);
   const result = [];
@@ -7185,7 +7092,6 @@ function toUtf8ByteArray(str2) {
   }
   return result;
 }
-__name(toUtf8ByteArray, "toUtf8ByteArray");
 function getNumRawDataModules(ver) {
   if (ver < MIN_VERSION || ver > MAX_VERSION)
     throw new RangeError("Version number out of range");
@@ -7198,11 +7104,9 @@ function getNumRawDataModules(ver) {
   }
   return result;
 }
-__name(getNumRawDataModules, "getNumRawDataModules");
 function getNumDataCodewords(ver, ecl) {
   return Math.floor(getNumRawDataModules(ver) / 8) - ECC_CODEWORDS_PER_BLOCK[ecl[0]][ver] * NUM_ERROR_CORRECTION_BLOCKS[ecl[0]][ver];
 }
-__name(getNumDataCodewords, "getNumDataCodewords");
 function reedSolomonComputeDivisor(degree) {
   if (degree < 1 || degree > 255)
     throw new RangeError("Degree out of range");
@@ -7221,7 +7125,6 @@ function reedSolomonComputeDivisor(degree) {
   }
   return result;
 }
-__name(reedSolomonComputeDivisor, "reedSolomonComputeDivisor");
 function reedSolomonComputeRemainder(data, divisor) {
   const result = divisor.map((_) => 0);
   for (const b of data) {
@@ -7231,7 +7134,6 @@ function reedSolomonComputeRemainder(data, divisor) {
   }
   return result;
 }
-__name(reedSolomonComputeRemainder, "reedSolomonComputeRemainder");
 function reedSolomonMultiply(x, y) {
   if (x >>> 8 !== 0 || y >>> 8 !== 0)
     throw new RangeError("Byte out of range");
@@ -7242,7 +7144,6 @@ function reedSolomonMultiply(x, y) {
   }
   return z;
 }
-__name(reedSolomonMultiply, "reedSolomonMultiply");
 function encodeSegments(segs, ecl, minVersion = 1, maxVersion = 40, mask = -1, boostEcl = true) {
   if (!(MIN_VERSION <= minVersion && minVersion <= maxVersion && maxVersion <= MAX_VERSION) || mask < -1 || mask > 7) {
     throw new RangeError("Invalid value");
@@ -7279,7 +7180,6 @@ function encodeSegments(segs, ecl, minVersion = 1, maxVersion = 40, mask = -1, b
   bb.forEach((b, i) => dataCodewords[i >>> 3] |= b << 7 - (i & 7));
   return new QrCode(version, ecl, dataCodewords, mask);
 }
-__name(encodeSegments, "encodeSegments");
 function encode(data, options) {
   const {
     ecc = "L",
@@ -7312,7 +7212,6 @@ function encode(data, options) {
   options?.onEncoded?.(result);
   return result;
 }
-__name(encode, "encode");
 function addBorder(input, border = 1) {
   if (!border)
     return input;
@@ -7342,11 +7241,9 @@ function addBorder(input, border = 1) {
   }
   return input;
 }
-__name(addBorder, "addBorder");
 function escapeAttr(value) {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-__name(escapeAttr, "escapeAttr");
 function renderSVG(data, options = {}) {
   const result = encode(data, options);
   const {
@@ -7371,7 +7268,6 @@ function renderSVG(data, options = {}) {
   svg += "</svg>";
   return svg;
 }
-__name(renderSVG, "renderSVG");
 
 // src/routes/auth.ts
 var app2 = new Hono3();
@@ -7685,7 +7581,6 @@ async function sendViaProvider(env, opts) {
     return { ok: false, error: `network: ${e.message.slice(0, 200)}` };
   }
 }
-__name(sendViaProvider, "sendViaProvider");
 async function testProvider(env, to) {
   return sendViaProvider(env, {
     to,
@@ -7694,11 +7589,9 @@ async function testProvider(env, to) {
     html: '<div style="font:15px/1.7 sans-serif">This is a <b>test message</b> from your Cmail instance.<br>If you received it, outgoing mail works! \u2709\uFE0F</div>'
   });
 }
-__name(testProvider, "testProvider");
 function escapeHtml2(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-__name(escapeHtml2, "escapeHtml");
 
 // src/routes/emails.ts
 var app4 = new Hono3();
@@ -7887,11 +7780,55 @@ var emails_default = app4;
 // src/routes/totp.ts
 init_util();
 var app5 = new Hono3();
+app5.get("/folders", requireUser, async (c) => {
+  const u = c.get("user");
+  const { results } = await c.env.DB.prepare(
+    `SELECT f.id, f.name, f.icon, f.color, f.created_at,
+       (SELECT COUNT(*) FROM totp_entries e WHERE e.folder_id = f.id) AS count
+     FROM totp_folders f WHERE f.user_id = ? ORDER BY f.created_at`
+  ).bind(u.id).all();
+  return c.json({ ok: true, folders: results ?? [] });
+});
+app5.post("/folders", requireUser, async (c) => {
+  const u = c.get("user");
+  const body = await c.req.json().catch(() => null);
+  const name = clean(body?.name, 40);
+  if (!name)
+    return c.json({ ok: false, error: "name_required" }, 400);
+  const count = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM totp_folders WHERE user_id = ?").bind(u.id).first();
+  if ((count?.n ?? 0) >= 30)
+    return c.json({ ok: false, error: "folder_limit" }, 409);
+  const id = uid("fld_");
+  await c.env.DB.prepare("INSERT INTO totp_folders (id, user_id, name, icon, color, created_at) VALUES (?, ?, ?, ?, ?, ?)").bind(id, u.id, name, clean(body?.icon, 40) || null, clean(body?.color, 20) || null, now()).run();
+  return c.json({ ok: true, folder: { id, name, icon: clean(body?.icon, 40) || null, color: clean(body?.color, 20) || null, count: 0 } });
+});
+app5.patch("/folders/:id", requireUser, async (c) => {
+  const u = c.get("user");
+  const id = c.req.param("id");
+  const own = await c.env.DB.prepare("SELECT id FROM totp_folders WHERE id = ? AND user_id = ?").bind(id, u.id).first();
+  if (!own)
+    return c.json({ ok: false, error: "not_found" }, 404);
+  const body = await c.req.json().catch(() => null);
+  if (body?.name !== void 0)
+    await c.env.DB.prepare("UPDATE totp_folders SET name = ? WHERE id = ?").bind(clean(body.name, 40) || "unnamed", id).run();
+  if (body?.icon !== void 0)
+    await c.env.DB.prepare("UPDATE totp_folders SET icon = ? WHERE id = ?").bind(clean(body.icon, 40) || null, id).run();
+  if (body?.color !== void 0)
+    await c.env.DB.prepare("UPDATE totp_folders SET color = ? WHERE id = ?").bind(clean(body.color, 20) || null, id).run();
+  return c.json({ ok: true });
+});
+app5.delete("/folders/:id", requireUser, async (c) => {
+  const u = c.get("user");
+  const id = c.req.param("id");
+  await c.env.DB.prepare("UPDATE totp_entries SET folder_id = NULL WHERE folder_id = ? AND user_id = ?").bind(id, u.id).run();
+  await c.env.DB.prepare("DELETE FROM totp_folders WHERE id = ? AND user_id = ?").bind(id, u.id).run();
+  return c.json({ ok: true });
+});
 app5.get("/", requireUser, async (c) => {
   const u = c.get("user");
   const scope = (c.req.query("address_id") ?? "").trim();
   const { results } = await c.env.DB.prepare(
-    `SELECT id, name, issuer, algo, digits, period, color, sort, created_at, icon, address_id FROM totp_entries
+    `SELECT id, name, issuer, algo, digits, period, color, sort, created_at, icon, address_id, folder_id FROM totp_entries
      WHERE user_id = ? ${scope ? "AND address_id = ?" : ""} ORDER BY sort, created_at`
   ).bind(...scope ? [u.id, scope] : [u.id]).all();
   const entries = results ?? [];
@@ -7961,9 +7898,15 @@ app5.post("/", requireUser, async (c) => {
       addressId = body.address_id;
   }
   const icon = clean(body?.icon, 40) || null;
+  let folderId = null;
+  if (body?.folder_id) {
+    const fown = await c.env.DB.prepare("SELECT id FROM totp_folders WHERE id = ? AND user_id = ?").bind(body.folder_id, u.id).first();
+    if (fown)
+      folderId = body.folder_id;
+  }
   await c.env.DB.prepare(
-    "INSERT INTO totp_entries (id, user_id, name, issuer, secret_enc, algo, digits, period, color, sort, created_at, icon, address_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-  ).bind(id, u.id, name, issuer || null, sealed, algo, digits, period, clean(body?.color, 20) || null, count?.n ?? 0, now(), icon, addressId).run();
+    "INSERT INTO totp_entries (id, user_id, name, issuer, secret_enc, algo, digits, period, color, sort, created_at, icon, address_id, folder_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(id, u.id, name, issuer || null, sealed, algo, digits, period, clean(body?.color, 20) || null, count?.n ?? 0, now(), icon, addressId, folderId).run();
   const code = await totp(secret, algo, digits, period);
   return c.json({ ok: true, entry: { id, name, issuer, algo, digits, period, color: body?.color ?? null, icon, address_id: addressId, code, remaining: await totpRemaining(period) } });
 });
@@ -8014,6 +7957,15 @@ app5.patch("/:id", requireUser, async (c) => {
         addressId = body.address_id;
     }
     await c.env.DB.prepare("UPDATE totp_entries SET address_id = ? WHERE id = ?").bind(addressId, id).run();
+  }
+  if (body?.folder_id !== void 0) {
+    let folderId = null;
+    if (body.folder_id) {
+      const fown = await c.env.DB.prepare("SELECT id FROM totp_folders WHERE id = ? AND user_id = ?").bind(body.folder_id, u.id).first();
+      if (fown)
+        folderId = body.folder_id;
+    }
+    await c.env.DB.prepare("UPDATE totp_entries SET folder_id = ? WHERE id = ?").bind(folderId, id).run();
   }
   return c.json({ ok: true });
 });

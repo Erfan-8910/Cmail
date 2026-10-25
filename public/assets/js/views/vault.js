@@ -5,8 +5,10 @@ import { h, clear, icon, toast, modal, confirmBox, copyText, esc, glyphs, glyphC
 
 const COLORS = { violet: '#a78bfa', sky: '#38bdf8', mint: '#34d399', amber: '#fbbf24', rose: '#fb7185' };
 let entries = [];
+let folders = [];
 let tick = null;
-let scope = 'all'; // 'all' | 'none' | address id
+let scope = 'all';    // 'all' | 'none' | address id
+let fscope = 'all';   // 'all' | 'none' | folder id
 
 export async function renderVault(root) {
   const view = h('div', { class: 'view' });
@@ -16,11 +18,12 @@ export async function renderVault(root) {
   ));
 
   const chips = h('div', { class: 'vault-filters' });
+  const fchips = h('div', { class: 'vault-filters vault-filters--folders' });
   const searchIn = h('input', { class: 'input', type: 'search', placeholder: t('searchVault'), style: { marginBottom: '14px' } });
   searchIn.addEventListener('input', () => draw(searchIn.value.trim().toLowerCase()));
 
   const grid = h('div', { class: 'vault-grid', id: 'vault-grid' });
-  view.append(chips, searchIn, grid);
+  view.append(chips, fchips, searchIn, grid);
   root.append(view);
 
   if (!state.addresses.length) {
@@ -37,24 +40,147 @@ export async function renderVault(root) {
 
   function drawChips() {
     clear(chips);
-    const mk = (key, label, dot) => h('button', {
-      class: `chip ${scope === key ? 'is-on' : ''}`,
-      onclick: (e) => { scope = key; chips.querySelectorAll('.chip').forEach((c) => c.classList.remove('is-on')); e.currentTarget.classList.add('is-on'); vibrate(5); draw(); },
+    const mk = (key, label, dot, row) => h('button', {
+      class: `chip ${(row === 'f' ? fscope : scope) === key ? 'is-on' : ''}`,
+      onclick: (e) => {
+        if (row === 'f') fscope = key; else scope = key;
+        (row === 'f' ? fchips : chips).querySelectorAll('.chip').forEach((c) => c.classList.remove('is-on'));
+        e.currentTarget.classList.add('is-on'); vibrate(5); draw();
+      },
     }, dot ? h('span', { class: 'chip-dot', style: { background: dot } }, '') : '', label);
     chips.append(mk('all', t('acctAll'), 'var(--acc)'));
     for (const a of state.addresses) {
       chips.append(mk(a.id, a.label || a.address, a.kind === 'temp' ? 'var(--warn)' : 'var(--acc)'));
     }
     chips.append(mk('none', t('acctUnlinked'), 'var(--faint)'));
+    drawFchips();
+  }
+
+  function drawFchips() {
+    clear(fchips);
+    const mk2 = (key, label, icn) => h('button', {
+      class: `chip ${fscope === key ? 'is-on' : ''}`,
+      onclick: (e) => { fscope = key; fchips.querySelectorAll('.chip').forEach((c) => c.classList.remove('is-on')); e.currentTarget.classList.add('is-on'); vibrate(5); draw(); },
+    }, icn ? icon(icn) : '', label);
+    fchips.append(mk2('all', t('folderAll'), 'folder'));
+    for (const f of folders) {
+      const c = h('button', {
+        class: `chip ${fscope === f.id ? 'is-on' : ''}`,
+        onclick: (e) => { fscope = f.id; fchips.querySelectorAll('.chip').forEach((x) => x.classList.remove('is-on')); e.currentTarget.classList.add('is-on'); vibrate(5); draw(); },
+      }, icon(f.icon || 'folder'), f.name, h('span', { class: 'faint' }, String(f.count ?? 0)));
+      fchips.append(c);
+    }
+    fchips.append(mk2('none', t('folderNone'), 'inbox'));
+    fchips.append(h('button', { class: 'chip chip--manage', onclick: () => foldersModal() }, icon('edit'), t('folderManage')));
   }
 
   async function load() {
     try {
-      const r = await api.get('/api/totp');
+      const [r, fr] = await Promise.all([api.get('/api/totp'), api.get('/api/totp/folders').catch(() => ({ folders: [] }))]);
       entries = r.entries ?? [];
+      folders = fr.folders ?? [];
       drawChips();
       draw();
     } catch (e) { toast(errText(e), 'err'); }
+  }
+
+  // folder manager: create, rename, delete — the user owns the grouping
+  function foldersModal() {
+    const listWrap = h('div', { class: 'fld-list' });
+    const nameIn = h('input', { class: 'input', maxlength: '40', placeholder: t('folderNamePh') });
+    let newIcon = null;
+    const newPreview = glyphTile(newIcon, 'var(--acc)', '?');
+    const pickWrap = h('div', { class: 'glyph-picker-wrap' });
+    pickWrap.append(glyphPicker(newIcon, (id) => {
+      newIcon = id;
+      const fresh = glyphTile(id, 'var(--acc)', '?');
+      newPreview.className = fresh.className;
+      newPreview.setAttribute('style', fresh.getAttribute('style') ?? '');
+      newPreview.append(...fresh.childNodes);
+      pickWrap.classList.remove('is-open');
+    }));
+    const pickBtn = h('button', { class: 'btn btn--sm', type: 'button', onclick: () => pickWrap.classList.toggle('is-open') }, icon('spark'), t('glyphPick'));
+
+    function drawList() {
+      clear(listWrap);
+      if (!folders.length) {
+        listWrap.append(h('div', { class: 'small muted', style: { padding: '6px 2px 10px' } }, t('folderEmptyHint')));
+      }
+      for (const f of folders) {
+        const ren = h('input', { class: 'input', value: f.name, maxlength: '40' });
+        let fIcon = f.icon ?? null;
+        const icoTile = glyphTile(fIcon, 'var(--acc)', (f.name || '?').slice(0, 1));
+        const ipick = h('div', { class: 'glyph-picker-wrap' });
+        ipick.append(glyphPicker(fIcon, (id) => {
+          fIcon = (fIcon === id) ? null : id;
+          const fresh = glyphTile(fIcon, 'var(--acc)', (ren.value || '?').slice(0, 1));
+          icoTile.className = fresh.className;
+          icoTile.setAttribute('style', fresh.getAttribute('style') ?? '');
+          icoTile.append(...fresh.childNodes);
+          ipick.classList.remove('is-open');
+          save(f.id, ren, fIcon);
+        }));
+        const save = async (id, input, ic) => {
+          try {
+            await api.patch(`/api/totp/folders/${id}`, { name: input.value.trim() || f.name, icon: ic });
+            const me = folders.find((x) => x.id === id);
+            if (me) { me.name = input.value.trim() || me.name; me.icon = ic; }
+            drawFchips(); draw();
+          } catch (e) { toast(errText(e), 'err'); }
+        };
+        ren.addEventListener('change', () => save(f.id, ren, fIcon));
+        listWrap.append(h('div', { class: 'fld-row' },
+          h('div', { style: { position: 'relative', display: 'flex', gap: '8px', alignItems: 'center' } },
+            h('button', { class: 'fld-ico', type: 'button', title: t('glyphPick'), onclick: () => ipick.classList.toggle('is-open') }, icoTile),
+            ipick,
+            h('div', { class: 'grow' }, ren,
+              h('div', { class: 'small faint', style: { marginTop: '2px' } }, `${f.count ?? 0} ${t('folderKeyCount')}`))),
+          h('button', {
+            class: 'icon-btn', title: t('folderDelete'),
+            onclick: () => confirmBox(t('folderDeleteConfirm'), async () => {
+              try {
+                await api.del(`/api/totp/folders/${f.id}`);
+                folders = folders.filter((x) => x.id !== f.id);
+                if (fscope === f.id) fscope = 'all';
+                drawList(); drawFchips(); draw();
+                toast(t('deletedN'), 'ok', 1400);
+              } catch (e) { toast(errText(e), 'err'); }
+            }),
+          }, icon('trash'))));
+      }
+    }
+    drawList();
+
+    const createBtn = h('button', { class: 'btn btn--primary', type: 'button', onclick: async () => {
+      if (!nameIn.value.trim()) { toast(t('folderNamePh'), 'err'); return; }
+      createBtn.disabled = true;
+      try {
+        const r = await api.post('/api/totp/folders', { name: nameIn.value.trim(), icon: newIcon });
+        folders.push(r.folder);
+        nameIn.value = ''; newIcon = null;
+        const fresh = glyphTile(null, 'var(--acc)', '?');
+        newPreview.className = fresh.className;
+        newPreview.setAttribute('style', fresh.getAttribute('style') ?? '');
+        newPreview.append(...fresh.childNodes);
+        drawList(); drawFchips(); draw();
+        toast(t('saved'), 'ok', 1200);
+      } catch (e) { toast(errText(e), 'err'); }
+      createBtn.disabled = false;
+    } }, icon('plus'), t('folderAdd'));
+
+    modal({
+      title: t('folderManage'), iconName: 'folder', wide: true,
+      body: [
+        listWrap,
+        h('div', { class: 'fld-new' },
+          h('div', { class: 'row', style: { alignItems: 'center', gap: '10px' } }, newPreview,
+            h('div', { class: 'grow' }, h('div', { class: 'field' }, h('label', {}, t('folderNew')), nameIn)),
+            h('div', { style: { alignSelf: 'flex-end', paddingBottom: '2px' } }, pickBtn)),
+          pickWrap,
+          h('div', { class: 'modal__foot', style: { marginTop: '8px' } }, createBtn)),
+      ],
+      footer: [h('button', { class: 'btn btn--ghost', onclick: () => { m.close(); load(); } }, t('done'))],
+    });
   }
 
   function draw(q = '') {
@@ -63,6 +189,8 @@ export async function renderVault(root) {
     let list = entries.filter((e) => !q || (e.name + ' ' + (e.issuer ?? '')).toLowerCase().includes(q));
     if (scope === 'none') list = list.filter((e) => !e.address_id);
     else if (scope !== 'all') list = list.filter((e) => e.address_id === scope);
+    if (fscope === 'none') list = list.filter((e) => !e.folder_id);
+    else if (fscope !== 'all') list = list.filter((e) => e.folder_id === fscope);
     if (!list.length) {
       g.append(h('div', { class: 'glass card', style: { gridColumn: '1/-1' } },
         h('div', { class: 'empty' }, icon('key'), h('div', { class: 'empty__t' }, t('vaultEmpty')), h('div', { class: 'empty__d' }, t('vaultEmptySub')))));
@@ -74,6 +202,7 @@ export async function renderVault(root) {
   function totpCard(e) {
     const color = COLORS[e.color] ?? e.color ?? '#7c8cff';
     const acc = state.addresses.find((a) => a.id === e.address_id);
+    const fld = folders.find((f) => f.id === e.folder_id);
     const codeEl = h('div', { class: 'totp-code', dataset: { id: e.id }, html: formatCode(e.code ?? '', e.digits) });
     const ring = ringSvg(e.remaining ?? 0, e.period ?? 30, color);
 
@@ -87,6 +216,9 @@ export async function renderVault(root) {
           h('button', { class: 'icon-btn', title: t('edit'), onclick: (ev) => { ev.stopPropagation(); entryModal(e, { onDone: load }); } }, icon('edit')),
           h('button', { class: 'icon-btn', title: t('deleteEntry'), onclick: (ev) => { ev.stopPropagation(); confirmBox(t('deleteEntryConfirm'), async () => { await api.del(`/api/totp/${e.id}`); entries = entries.filter((x) => x.id !== e.id); draw(); toast(t('deletedN'), 'ok', 1500); }); } }, icon('trash')),
         )),
+      fld ? h('button', {
+        class: 'totp-card__acc chip', onclick: (ev) => { ev.stopPropagation(); fscope = fld.id; draw(); },
+      }, icon(fld.icon || 'folder'), fld.name) : '',
       acc ? h('button', {
         class: 'totp-card__acc chip', onclick: () => { location.hash = '#/mail'; },
       }, h('span', { class: 'chip-dot', style: { background: acc.kind === 'temp' ? 'var(--warn)' : 'var(--acc)' } }, ''), `${t('acctLinked')} — ${acc.address}`) : '',
@@ -220,6 +352,13 @@ export function entryModal(entry = null, opts = {}) {
     state.addresses.map((a) => h('option', { value: a.id, selected: a.id === addressId || undefined }, a.label || a.address)));
   addrSel.addEventListener('change', () => { addressId = addrSel.value || null; });
 
+  // folder link (user-managed groups)
+  let folderId = entry?.folder_id ?? null;
+  const fldSel = h('select', { class: 'input' },
+    h('option', { value: '', selected: !folderId || undefined }, t('folderNone')),
+    folders.map((f) => h('option', { value: f.id, selected: f.id === folderId || undefined }, f.name)));
+  fldSel.addEventListener('change', () => { folderId = fldSel.value || null; });
+
   const secretFields = entry ? [] : [
     h('div', { class: 'field' }, h('label', {}, t('secret')), secret),
     h('div', { class: 'field' }, h('label', {}, t('orPasteUri')), uri),
@@ -250,7 +389,7 @@ export function entryModal(entry = null, opts = {}) {
   const saveBtn = entry
     ? h('button', { class: 'btn btn--primary', onclick: async () => {
         try {
-          await api.patch(`/api/totp/${entry.id}`, { name: name.value.trim(), issuer: issuer.value.trim(), color, icon: glyph, address_id: addressId });
+          await api.patch(`/api/totp/${entry.id}`, { name: name.value.trim(), issuer: issuer.value.trim(), color, icon: glyph, address_id: addressId, folder_id: folderId });
           toast(t('saved'), 'ok', 1400); m.close(); refreshCard();
         } catch (e) { toast(errText(e), 'err'); }
       } }, t('save'))
@@ -261,7 +400,7 @@ export function entryModal(entry = null, opts = {}) {
             name: name.value.trim(), issuer: issuer.value.trim(),
             secret: secret.value.trim(), uri: uri.value.trim(),
             algo: algo.value, digits: parseInt(digits.value, 10), period: parseInt(period.value, 10) || 30,
-            color, icon: glyph, address_id: addressId,
+            color, icon: glyph, address_id: addressId, folder_id: folderId,
           });
           toast(t('saved'), 'ok', 1400); m.close(); refreshCard();
         } catch (e) { toast(errText(e), 'err'); saveBtn.disabled = false; }
@@ -281,6 +420,7 @@ export function entryModal(entry = null, opts = {}) {
       pickerWrap,
       ...secretFields,
       h('div', { class: 'field' }, h('label', {}, t('acct2fa')), addrSel),
+      h('div', { class: 'field' }, h('label', {}, t('folderField')), fldSel),
       h('div', { class: 'field' }, h('label', {}, t('color')), colorRow),
       extraRow,
     ],

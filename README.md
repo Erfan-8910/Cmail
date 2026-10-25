@@ -11,7 +11,7 @@
 
 Temporary & permanent inboxes · notes on every email · built-in 2FA vault · unlimited domains · outgoing mail · zero servers, zero monthly bills
 
-[![Version](https://img.shields.io/badge/version-1.6.0-4f8f60)](https://github.com/Erfan-8910/CMail/releases)
+[![Version](https://img.shields.io/badge/version-1.7.0-4f8f60)](https://github.com/Erfan-8910/CMail/releases)
 [![License](https://img.shields.io/badge/license-MIT-56725c)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-F38020)](https://workers.cloudflare.com)
 [![PRs](https://img.shields.io/badge/PRs-welcome-b4cda3)](https://github.com/Erfan-8910/CMail/pulls)
