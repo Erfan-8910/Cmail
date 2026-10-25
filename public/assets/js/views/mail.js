@@ -26,7 +26,7 @@ window.addEventListener('cmail:switch-inbox', (e) => {
   if (!document.getElementById('email-list')) return;
   state.currentAddressId = e.detail;
   selected.clear();
-  drawSidebar(); drawList(); loadEmails();
+  drawSidebar(); drawAcctStrip(); drawList(); loadEmails();
 });
 
 export function renderMail(root, arg) {
@@ -71,6 +71,7 @@ async function loadAddresses() {
       state.currentAddressId = state.addresses[0]?.id ?? null;
     }
     drawSidebar();
+    drawAcctStrip();
     drawList();
     if (state.currentAddressId) loadEmails();
   } catch (e) { toast(errText(e), 'err'); }
@@ -82,7 +83,6 @@ function buildSidebar() {
     h('h3', {}, icon('user'), t('navAddresses')),
     h('div', { class: 'row', style: { gap: '2px' } },
       h('button', { class: 'icon-btn', title: t('newAlias'), onclick: () => createAddressModal(() => { loadAddresses(); }) }, icon('plus')),
-      h('button', { class: 'icon-btn', title: t('navAddresses'), onclick: () => location.hash = '#/addresses' }, icon('external')),
     ));
   sidebarScroll = h('div', { class: 'mail__scroll', id: 'addr-list' });
   const aside = h('aside', { class: 'mail__col glass mail__sidebar' }, head, sidebarScroll);
@@ -98,7 +98,7 @@ function drawSidebar() {
       onclick: () => {
         state.currentAddressId = a.id;
         selected.clear(); selecting = false;
-        drawSidebar(); drawList(); loadEmails();
+        drawSidebar(); drawAcctStrip(); drawList(); loadEmails();
         document.querySelector('.mail')?.classList.remove('show-sidebar');
       },
     },
@@ -150,6 +150,7 @@ async function accountModal(a) {
         const me = state.addresses.find((x) => x.id === a.id);
         if (me) { me.label = labelIn.value.trim() || null; me.notes = notesIn.value; }
         drawSidebar();
+        drawAcctStrip();
         if (immediateToast) toast(t('saved'), 'ok', 1400);
       } catch (e) { toast(errText(e), 'err'); }
     }, immediateToast ? 0 : 550);
@@ -217,7 +218,8 @@ async function accountModal(a) {
 let listScroll = null;
 let emails = [];
 
-function buildList() {
+  // account switcher strip — every mailbox is its own space, picked from the top
+  function buildList() {
   const canSend = sendReady();
   const head = h('div', { class: 'mail__head' },
     h('h3', {}, icon('inbox'), t('inbox')),
@@ -226,6 +228,8 @@ function buildList() {
       h('button', { class: 'icon-btn', title: t('refresh'), onclick: (e) => { e.currentTarget.querySelector('svg')?.classList.add('spin'); loadEmails(true); setTimeout(() => document.querySelector('.mail .icon-btn svg.spin')?.classList.remove('spin'), 700); } }, icon('refresh')),
       h('button', { class: 'icon-btn', title: t('navAddresses'), onclick: () => document.querySelector('.mail')?.classList.toggle('show-sidebar'), dataset: { mobile: 'menu' } }, icon('menu')),
     ));
+
+  const acctStrip = h('div', { class: 'acct-strip', id: 'acct-strip' });
 
   const searchInput = h('input', {
     class: 'input mail__search', type: 'search', placeholder: t('search'),
@@ -241,11 +245,33 @@ function buildList() {
   }
 
   listScroll = h('div', { class: 'mail__scroll', id: 'email-list' });
-  const bulk = h('div', { class: 'filters hidden', id: 'bulk-bar' });
-  listScroll.after(bulk);
+  const bulk = h('div', { class: 'filters filters--bulk hidden', id: 'bulk-bar' });
 
-  const sec = h('section', { class: 'mail__col glass mail__list-col' }, head, searchInput, filters, listScroll);
+  const sec = h('section', { class: 'mail__col glass mail__list-col' }, head, acctStrip, searchInput, filters, bulk, listScroll);
   return sec;
+}
+
+function drawAcctStrip() {
+  const strip = document.getElementById('acct-strip');
+  if (!strip) return;
+  clear(strip);
+  for (const a of state.addresses) {
+    strip.append(h('button', {
+      class: `acct-pill ${a.id === state.currentAddressId ? 'is-on' : ''}`,
+      title: a.address,
+      onclick: (e) => {
+        state.currentAddressId = a.id;
+        selected.clear(); selecting = false;
+        strip.querySelectorAll('.acct-pill').forEach((p) => p.classList.remove('is-on'));
+        e.currentTarget.classList.add('is-on');
+        drawSidebar(); drawList(); loadEmails();
+        vibrate(5);
+      },
+    },
+      h('span', { class: 'email-row__ava acct-pill__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
+      h('span', { class: 'acct-pill__t' }, a.label || a.address),
+      a.unread > 0 ? h('span', { class: 'acct-pill__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : ''));
+  }
 }
 
 function drawBulkBar() {
@@ -257,18 +283,21 @@ function drawBulkBar() {
   bar.append(
     h('span', { class: 'chip is-on' }, `${selected.size}`),
     h('button', { class: 'chip', onclick: () => bulkAction('read') }, icon('check'), t('markSelRead')),
-    h('button', { class: 'chip', onclick: () => bulkAction('delete') }, icon('trash'), t('deleteSel')),
-    h('button', { class: 'chip', onclick: () => { selected.clear(); drawList(); } }, icon('x'), t('clearSel')),
+    h('button', { class: 'chip chip--danger', onclick: () => confirmBox(t('deleteSelConfirm'), () => bulkAction('delete')) }, icon('trash'), t('deleteSel')),
+    h('button', { class: 'chip', onclick: () => { selected.clear(); selecting = false; drawList(); } }, icon('x'), t('clearSel')),
   );
 }
 
 async function bulkAction(action) {
   try {
     await api.post('/api/emails/bulk', { ids: [...selected], action });
-    toast(t('deletedN'), 'ok', 1600);
+    toast(action === 'delete' ? t('deletedN') : t('saved'), 'ok', 1600);
     selected.clear();
+    selecting = false;
     drawList();
-    loadEmails(true);
+    drawBulkBar();
+    // unread badges, per-account counts and the list itself stay honest
+    loadAddresses();
   } catch (e) { toast(errText(e), 'err'); }
 }
 
@@ -587,7 +616,6 @@ function drawViewer(col, r) {
     bHtml.style.display = em.html_body ? '' : 'none';
     bWidth.querySelector('span:not(.icn)').textContent = narrow ? t('viewWide') : t('viewNarrow');
     bWidth.style.display = mode === 'html' ? '' : 'none';
-    zoomRow.style.display = mode === 'html' ? '' : 'none';
   }
   bHtml.onclick = () => { mode = 'html'; drawSeg(); drawBody(); };
   bText.onclick = () => { mode = 'text'; drawSeg(); drawBody(); };
@@ -631,14 +659,14 @@ function drawViewer(col, r) {
     } else {
       frame = null;
       bodyWrap.append(h('div', { class: 'mail-frame-wrap' },
-        h('div', { class: 'viewer__plain', style: { flex: 1 } }, em.text_body || em.preview || '—')));
+        h('div', { class: 'viewer__plain', style: { flex: '1', fontSize: `${Math.round(14.5 * zoom * 10) / 10}px` } }, em.text_body || em.preview || '—')));
     }
   }
   drawBody();
 
   col.append(bodyWrap);
 
-  // note panel — collapsible on phones (the mail gets the full height)
+  // note panel — collapsible everywhere; open by default only when a note exists
   const noteBody = h('textarea', { class: 'input', rows: 3, placeholder: t('notePlaceholder') });
   if (r.note) noteBody.value = r.note.body;
   let noteColor = r.note?.color ?? 'amber';
@@ -661,7 +689,7 @@ function drawViewer(col, r) {
   }
   noteBody.addEventListener('input', saveNote);
 
-  const notePanel = h('div', { class: `note-panel ${r.note?.body ? 'has-note' : ''}` });
+  const notePanel = h('div', { class: `note-panel ${r.note?.body ? 'has-note is-open' : ''}` });
   notePanel.append(
     h('button', { class: 'note-panel__head', onclick: () => notePanel.classList.toggle('is-open') },
       icon('note'), h('span', {}, t('noteTitle')),

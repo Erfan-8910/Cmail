@@ -11,15 +11,64 @@ const app = new Hono<AppEnv>();
 type Entry = {
   id: string; name: string; issuer: string | null; secret_enc: string;
   algo: string; digits: number; period: number; color: string | null; sort: number;
-  icon: string | null; address_id: string | null;
+  icon: string | null; address_id: string | null; folder_id: string | null;
 };
+
+// ---------- folders (user-managed groups of keys) ----------
+
+// list folders with entry counts
+app.get('/folders', requireUser, async (c) => {
+  const u = c.get('user') as SessionUser;
+  const { results } = await c.env.DB.prepare(
+    `SELECT f.id, f.name, f.icon, f.color, f.created_at,
+       (SELECT COUNT(*) FROM totp_entries e WHERE e.folder_id = f.id) AS count
+     FROM totp_folders f WHERE f.user_id = ? ORDER BY f.created_at`
+  ).bind(u.id).all();
+  return c.json({ ok: true, folders: results ?? [] });
+});
+
+// create folder
+app.post('/folders', requireUser, async (c) => {
+  const u = c.get('user') as SessionUser;
+  const body = await c.req.json<{ name?: string; icon?: string; color?: string }>().catch(() => null);
+  const name = clean(body?.name, 40);
+  if (!name) return c.json({ ok: false, error: 'name_required' }, 400);
+  const count = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM totp_folders WHERE user_id = ?').bind(u.id).first<{ n: number }>();
+  if ((count?.n ?? 0) >= 30) return c.json({ ok: false, error: 'folder_limit' }, 409);
+  const id = uid('fld_');
+  await c.env.DB.prepare('INSERT INTO totp_folders (id, user_id, name, icon, color, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(id, u.id, name, clean(body?.icon, 40) || null, clean(body?.color, 20) || null, now()).run();
+  return c.json({ ok: true, folder: { id, name, icon: clean(body?.icon, 40) || null, color: clean(body?.color, 20) || null, count: 0 } });
+});
+
+// rename / restyle folder
+app.patch('/folders/:id', requireUser, async (c) => {
+  const u = c.get('user') as SessionUser;
+  const id = c.req.param('id');
+  const own = await c.env.DB.prepare('SELECT id FROM totp_folders WHERE id = ? AND user_id = ?').bind(id, u.id).first();
+  if (!own) return c.json({ ok: false, error: 'not_found' }, 404);
+  const body = await c.req.json<{ name?: string; icon?: string; color?: string }>().catch(() => null);
+  if (body?.name !== undefined) await c.env.DB.prepare('UPDATE totp_folders SET name = ? WHERE id = ?').bind(clean(body.name, 40) || 'unnamed', id).run();
+  if (body?.icon !== undefined) await c.env.DB.prepare('UPDATE totp_folders SET icon = ? WHERE id = ?').bind(clean(body.icon, 40) || null, id).run();
+  if (body?.color !== undefined) await c.env.DB.prepare('UPDATE totp_folders SET color = ? WHERE id = ?').bind(clean(body.color, 20) || null, id).run();
+  return c.json({ ok: true });
+});
+
+// delete folder — its keys stay, they just become ungrouped
+app.delete('/folders/:id', requireUser, async (c) => {
+  const u = c.get('user') as SessionUser;
+  const id = c.req.param('id');
+  await c.env.DB.prepare('UPDATE totp_entries SET folder_id = NULL WHERE folder_id = ? AND user_id = ?').bind(id, u.id).run();
+  await c.env.DB.prepare('DELETE FROM totp_folders WHERE id = ? AND user_id = ?').bind(id, u.id).run();
+  return c.json({ ok: true });
+});
 
 // list entries (no secrets) + fresh code for each; ?address_id= scopes to one mailbox
 app.get('/', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
   const scope = (c.req.query('address_id') ?? '').trim();
   const { results } = await c.env.DB.prepare(
-    `SELECT id, name, issuer, algo, digits, period, color, sort, created_at, icon, address_id FROM totp_entries
+    `SELECT id, name, issuer, algo, digits, period, color, sort, created_at, icon, address_id, folder_id FROM totp_entries
      WHERE user_id = ? ${scope ? 'AND address_id = ?' : ''} ORDER BY sort, created_at`
   ).bind(...(scope ? [u.id, scope] : [u.id])).all<any>();
   const entries = results ?? [];
@@ -59,7 +108,7 @@ app.post('/', requireUser, async (c) => {
   const body = await c.req.json<{
     name?: string; issuer?: string; secret?: string; uri?: string;
     algo?: string; digits?: number; period?: number; color?: string;
-    icon?: string; address_id?: string;
+    icon?: string; address_id?: string; folder_id?: string;
   }>().catch(() => null);
 
   let name = clean(body?.name, 60);
@@ -95,9 +144,15 @@ app.post('/', requireUser, async (c) => {
     if (own) addressId = body.address_id;
   }
   const icon = clean(body?.icon, 40) || null;
+  // optional folder (must belong to this user)
+  let folderId: string | null = null;
+  if (body?.folder_id) {
+    const fown = await c.env.DB.prepare('SELECT id FROM totp_folders WHERE id = ? AND user_id = ?').bind(body.folder_id, u.id).first();
+    if (fown) folderId = body.folder_id;
+  }
   await c.env.DB.prepare(
-    'INSERT INTO totp_entries (id, user_id, name, issuer, secret_enc, algo, digits, period, color, sort, created_at, icon, address_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(id, u.id, name, issuer || null, sealed, algo, digits, period, clean(body?.color, 20) || null, (count?.n ?? 0), now(), icon, addressId).run();
+    'INSERT INTO totp_entries (id, user_id, name, issuer, secret_enc, algo, digits, period, color, sort, created_at, icon, address_id, folder_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(id, u.id, name, issuer || null, sealed, algo, digits, period, clean(body?.color, 20) || null, (count?.n ?? 0), now(), icon, addressId, folderId).run();
 
   const code = await totp(secret, algo, digits, period);
   return c.json({ ok: true, entry: { id, name, issuer, algo, digits, period, color: body?.color ?? null, icon, address_id: addressId, code, remaining: await totpRemaining(period) } });
@@ -133,7 +188,7 @@ app.get('/:id/secret', requireUser, async (c) => {
 app.patch('/:id', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
   const id = c.req.param('id');
-  const body = await c.req.json<{ name?: string; issuer?: string; color?: string; sort?: number; icon?: string; address_id?: string | null }>().catch(() => null);
+  const body = await c.req.json<{ name?: string; issuer?: string; color?: string; sort?: number; icon?: string; address_id?: string | null; folder_id?: string | null }>().catch(() => null);
   const row = await c.env.DB.prepare('SELECT id FROM totp_entries WHERE id = ? AND user_id = ?').bind(id, u.id).first();
   if (!row) return c.json({ ok: false, error: 'not_found' }, 404);
   if (body?.name !== undefined) await c.env.DB.prepare('UPDATE totp_entries SET name = ? WHERE id = ?').bind(clean(body.name, 60) || 'unnamed', id).run();
@@ -148,6 +203,14 @@ app.patch('/:id', requireUser, async (c) => {
       if (own) addressId = body.address_id;
     }
     await c.env.DB.prepare('UPDATE totp_entries SET address_id = ? WHERE id = ?').bind(addressId, id).run();
+  }
+  if (body?.folder_id !== undefined) {
+    let folderId: string | null = null;
+    if (body.folder_id) {
+      const fown = await c.env.DB.prepare('SELECT id FROM totp_folders WHERE id = ? AND user_id = ?').bind(body.folder_id, u.id).first();
+      if (fown) folderId = body.folder_id;
+    }
+    await c.env.DB.prepare('UPDATE totp_entries SET folder_id = ? WHERE id = ?').bind(folderId, id).run();
   }
   return c.json({ ok: true });
 });
