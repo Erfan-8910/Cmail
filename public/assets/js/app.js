@@ -1,7 +1,8 @@
 // Cmail — app shell: boot, router, sidebar + topbar + mobile tabbar
 import { api, state, errText } from './api.js';
 import { t, setLang, lang } from './i18n.js';
-import { h, clear, icon, toast, dropdown, timeAgo } from './ui.js';
+import { h, clear, icon, toast, dropdown, timeAgo, vibrate } from './ui.js';
+import { openCmdk, closeCmdk, cmdkIsOpen, cmdkKey } from './cmdk.js';
 import { renderLogin, renderSetup } from './views/auth.js';
 import { renderGate } from './views/gate.js';
 import { renderMail } from './views/mail.js';
@@ -179,6 +180,8 @@ function renderShell(page, authView) {
 
   clear(tbEnd);
   tbEnd.append(
+    h('button', { class: 'spot-pill', title: t('searchMail'), 'aria-label': t('searchMail'), onclick: () => openCmdk() },
+      icon('search'), h('span', { class: 't' }, t('searchMail')), h('kbd', { class: 'kbd' }, isMac() ? '⌘K' : 'Ctrl K')),
     h('span', { class: 'topbar__date' }, dateLabel()),
     h('button', { class: 'icon-btn', title: t('theme'), 'aria-label': t('theme'), onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')),
     h('button', { class: 'icon-btn', title: t('language'), 'aria-label': t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); route(); } }, icon('globe')),
@@ -203,6 +206,8 @@ function dateLabel() {
     return new Date().toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   } catch { return ''; }
 }
+
+function isMac() { return /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent); }
 
 function openSidebar() {
   sidebar.classList.add('open');
@@ -231,7 +236,7 @@ function userMenu() {
 export function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem('cmail_theme', theme);
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'dark' ? '#171d18' : '#f5f7f2');
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'dark' ? '#141a15' : '#f5f7f2');
   // refresh icons that depend on theme
   if (!topbar.hidden) {
     const btn = tbEnd?.querySelector('.icon-btn');
@@ -244,15 +249,17 @@ export function setAccent(accent) {
   localStorage.setItem('cmail_accent', accent);
 }
 
-// ---------- session keepalive (refresh unread badge) ----------
+// ---------- session keepalive (refresh unread badge + new-mail notify) ----------
 setInterval(async () => {
   if (!state.user || topbar.hidden) return;
   try {
     const r = await api.get('/api/auth/me');
     state.user = r.user;
     if (r.unread !== state.unread) {
+      const grew = state.unread > 0 && r.unread > state.unread;
       state.unread = r.unread;
       updateUnreadBadge();
+      if (grew) toast(t('newMailToast'), 'ok', 3200);
     }
   } catch { /* silent */ }
 }, 20_000);
@@ -265,6 +272,7 @@ export function updateUnreadBadge() {
     if (!el) continue;
     el.textContent = txt;
     el.style.display = show ? '' : 'none';
+    if (show) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
   }
 }
 
@@ -277,7 +285,33 @@ export function updateUnreadBadge() {
     state.user = null;
     if (!location.hash.startsWith('#/login')) { toast(t('invalidCredentials'), 'err'); location.hash = '#/login'; }
   });
+  window.addEventListener('cmail:rerender', () => { if (!location.hash.includes('/status')) route(); });
   window.addEventListener('hashchange', route);
+
+  // ⌘K / Ctrl+K — command palette · “/” focus mail search
+  const kbdHandler = (e) => {
+    const t = e.target;
+    const typing = t && (/^(input|textarea|select)$/i.test(t.tagName) || t.isContentEditable);
+    const fromOuterDoc = t?.ownerDocument && t.ownerDocument !== document;
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); back_open_or_close(); return; }
+    if (cmdkIsOpen() && fromOuterDoc && cmdkKey(e)) return;
+    if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+    // plain keys pressed on the embedding page → forward into the app
+    if (fromOuterDoc) {
+      try { document.dispatchEvent(new KeyboardEvent('keydown', { key: e.key, bubbles: true, cancelable: true })); } catch { /* */ }
+      return;
+    }
+    if (e.key === '/' && document.getElementById('email-list')) {
+      e.preventDefault();
+      document.querySelector('.mail__search')?.focus();
+    }
+  };
+  document.addEventListener('keydown', kbdHandler);
+  // also listen on the embedding page so ⌘K works before the iframe is focused
+  if (window.parent && window.parent !== window) {
+    try { window.parent.document.addEventListener('keydown', kbdHandler); } catch { /* cross-origin */ }
+  }
+  function back_open_or_close() { if (document.querySelector('.cmdk-back')) closeCmdk(); else openCmdk(); }
 
   // silent session check
   try {

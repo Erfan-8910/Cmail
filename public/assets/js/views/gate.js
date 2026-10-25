@@ -2,7 +2,7 @@
 // Shows live status, a progress ring, and a complete fix-guide for each missing piece.
 import { api, state, errText } from '../api.js';
 import { t, lang, setLang } from '../i18n.js';
-import { h, clear, icon, toast, copyText } from '../ui.js';
+import { h, clear, icon, toast, copyText, vibrate } from '../ui.js';
 import { setTheme } from '../app.js';
 import { copyLine, dnsTable } from './auth.js';
 
@@ -243,6 +243,10 @@ export async function renderGate(root) {
     if (allOk) {
       card.classList.add('is-done');
       const stay = location.hash.includes('stay');
+      if (!card.dataset.celebrated) {
+        card.dataset.celebrated = '1';
+        celebrate();
+      }
       if (stay && state.user) {
         clear(reBtn);
         reBtn.append(icon('inbox'), t('navMail'));
@@ -253,8 +257,32 @@ export async function renderGate(root) {
       }
     } else {
       card.classList.remove('is-done');
+      delete card.dataset.celebrated;
     }
     updateEyebrow();
+  }
+
+  // Apple-style success moment: one-shot confetti burst in accent colors
+  function celebrate() {
+    vibrate([10, 40, 10, 40, 18]);
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const colors = ['#b9cda3', '#a7cbd6', '#cab6da', '#e3c795', '#93c793', '#ffffff'];
+    const box = h('div', { class: 'confetti', 'aria-hidden': 'true' });
+    for (let i = 0; i < 56; i++) {
+      const p = h('i');
+      const round = Math.random() > .6;
+      p.style.cssText =
+        `left:${Math.random() * 100}vw;` +
+        `background:${colors[i % colors.length]};` +
+        `width:${round ? 8 : 6 + Math.random() * 4}px;height:${round ? 8 : 10 + Math.random() * 8}px;` +
+        `border-radius:${round ? '50%' : '2px'};` +
+        `animation-duration:${2.2 + Math.random() * 1.8}s;` +
+        `animation-delay:${Math.random() * .7}s;` +
+        `transform:rotate(${Math.random() * 360}deg);`;
+      box.append(p);
+    }
+    document.body.append(box);
+    setTimeout(() => box.remove(), 5200);
   }
 
   function drawOffline() {

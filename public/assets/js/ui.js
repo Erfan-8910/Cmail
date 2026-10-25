@@ -85,20 +85,29 @@ export function icon(name, cls = '') {
   return span;
 }
 
+// ---------- haptic feedback (mobile, silent no-op elsewhere) ----------
+export function vibrate(ms = 8) {
+  try { navigator.vibrate?.(ms); } catch { /* unsupported */ }
+}
+
 // ---------- toast ----------
 export function toast(msg, kind = 'info', ms = 2600) {
   const box = document.getElementById('toasts');
   const el = h('div', { class: `toast toast--${kind}`, role: 'status' }, icon(kind === 'ok' ? 'check' : kind === 'err' ? 'x' : 'info'), h('span', {}, msg));
   box.append(el);
+  vibrate(kind === 'err' ? [14, 60, 14] : 8);
   setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 320); }, ms);
 }
 
-// ---------- modal ----------
+// ---------- modal (bottom-sheet on touch devices, like iOS) ----------
 export function modal({ title, iconName, body, footer, wide, onClose }) {
   const root = document.getElementById('modals');
   const back = h('div', { class: 'modal-back' });
-  const m = h('div', { class: `modal ${wide ? 'modal--wide' : ''}`, role: 'dialog', 'aria-modal': 'true' });
+  const sheet = window.matchMedia?.('(max-width: 860px)').matches;
+  const m = h('div', { class: `modal ${wide ? 'modal--wide' : ''} ${sheet ? 'modal--sheet' : ''}`, role: 'dialog', 'aria-modal': 'true' });
+  if (sheet) m.append(h('span', { class: 'modal__grab', 'aria-hidden': 'true' }));
   const close = () => { back.remove(); onClose?.(); };
+  vibrate(5);
   back.addEventListener('click', (e) => { if (e.target === back) close(); });
   document.addEventListener('keydown', function esc2(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc2); } });
 
@@ -125,6 +134,7 @@ export function confirmBox(text, onYes, danger = true) {
 
 // ---------- dropdown menu ----------
 export function dropdown(anchor, items) {
+  vibrate(5);
   document.querySelectorAll('.menu').forEach((m) => m.remove());
   const menu = h('div', { class: 'menu', role: 'menu' });
   for (const it of items) {
