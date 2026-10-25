@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "cmail" generated at 2026-10-25T16:05:32.175Z.

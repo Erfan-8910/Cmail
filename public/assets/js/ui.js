@@ -85,6 +85,86 @@ export function icon(name, cls = '') {
   return span;
 }
 
+// ---------- glyph marks (built-in logo library for 2FA entries) ----------
+// bold stroke marks on a colored tile — no network, no external names
+const G = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+
+export const glyphCats = {
+  dev: ['code', 'terminal', 'branch', 'bug', 'database', 'cpu'],
+  social: ['chat', 'heart', 'users', 'camera', 'hash', 'at'],
+  infra: ['cloud', 'server', 'upload', 'shield', 'key', 'lock'],
+  money: ['coin', 'chart', 'wallet', 'card', 'gem'],
+  shop: ['bag', 'cart', 'tag', 'gift'],
+  media: ['play', 'music', 'image', 'mic', 'game'],
+  work: ['doc', 'folder', 'calendar', 'clock', 'pin', 'star', 'bolt', 'flame', 'rocket', 'crown', 'layers', 'cube'],
+  life: ['moon', 'sun', 'coffee', 'leaf', 'globe', 'anchor', 'feather', 'compass', 'bell', 'wifi', 'eye'],
+};
+
+export const glyphs = {
+  code: G('<path d="m14.5 5 7 7-7 7"/><path d="m9.5 5-7 7 7 7"/>'),
+  terminal: G('<rect x="2.5" y="3.5" width="19" height="17" rx="3"/><path d="m7 9 3.5 3L7 15"/><path d="M13 15h4"/>'),
+  branch: G('<circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="9" r="2.2"/><path d="M6 7.2v9.6"/><path d="M18 11.2c0 3-2 4.7-5 5.3"/>'),
+  bug: G('<path d="M8.5 7a3.5 3.5 0 0 1 7 0"/><rect x="7" y="8.5" width="10" height="10.5" rx="5"/><path d="M7 12H3.8M20.2 12H17M7.5 16 4 18M20 18l-3.5-2M8.5 8.5 6 6M18 6l-2.5 2.5"/>'),
+  database: G('<ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5V12c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8V5.5"/><path d="M4.5 12v6.5c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8V12"/>'),
+  cpu: G('<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="10" y="10" width="4" height="4"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/>'),
+  chat: G('<path d="M21 11.6a8.3 8.3 0 0 1-8.4 8.2c-1.5 0-2.9-.4-4.1-1L3 20l1.3-4.8a8.1 8.1 0 0 1-1.3-4.6A8.3 8.3 0 0 1 12.6 3 8.3 8.3 0 0 1 21 11.6z"/>'),
+  heart: G('<path d="M12 20.5 4.7 13a4.9 4.9 0 0 1 7-7l.3.4.3-.4a4.9 4.9 0 0 1 7 7z"/>'),
+  users: G('<circle cx="9" cy="8.5" r="3.3"/><path d="M2.8 20c.7-3.3 3.2-5 6.2-5s5.5 1.7 6.2 5"/><path d="M16 5.6a3.4 3.4 0 0 1 0 5.8M18.5 15.4c1.6.8 2.5 2.3 2.8 4.6"/>'),
+  camera: G('<path d="M4 8h2.5l1.8-2.6a1.4 1.4 0 0 1 1.1-.6h5.2a1.4 1.4 0 0 1 1.1.6L17.5 8H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/><circle cx="12" cy="13.5" r="3.3"/>'),
+  hash: G('<path d="M9.5 3.5 7.5 20.5M16.5 3.5l-2 17M4 8.5h17M3 15.5h17"/>'),
+  at: G('<circle cx="12" cy="12" r="3.6"/><path d="M15.6 12v1.3a2.3 2.3 0 0 0 4.6 0V12a8.2 8.2 0 1 0-3.2 6.5"/>'),
+  cloud: G('<path d="M7 18.5a4.5 4.5 0 0 1-.4-9A6 6 0 0 1 18 8.6a4.5 4.5 0 0 1-1 9.9z"/>'),
+  server: G('<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>'),
+  upload: G('<path d="M21 15v3a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3"/><path d="m7 8 5-5 5 5"/><path d="M12 3v12"/>'),
+  shield: G('<path d="M12 21.5s7.5-3.4 7.5-9.5V5.2L12 2.5 4.5 5.2V12c0 6.1 7.5 9.5 7.5 9.5z"/><path d="m9 11.8 2.2 2.2 4-4.4"/>'),
+  key: G('<circle cx="7.5" cy="15.5" r="4.2"/><path d="m10.5 12.5 9.5-9.5M16.5 6.5l3 3M13.5 9.5l2.5 2.5"/>'),
+  lock: G('<rect x="4.5" y="10.5" width="15" height="10" rx="3"/><path d="M8 10.5V7.2a4 4 0 0 1 8 0v3.3"/><path d="M12 14.5v2.5"/>'),
+  coin: G('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M15 9.2c-.6-1-1.7-1.5-3-1.5-1.6 0-2.9.8-2.9 2.1 0 2.9 5.8 1.5 5.8 4.3 0 1.4-1.3 2.2-2.9 2.2-1.4 0-2.6-.6-3.2-1.6"/>'),
+  chart: G('<path d="M3.5 3.5v17h17"/><path d="m7 14.5 3.5-4 3 2.5 4.5-5.5"/>'),
+  wallet: G('<path d="M3 7a2 2 0 0 1 2-2h12.5A1.5 1.5 0 0 1 19 6.5V9"/><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H5a2 2 0 0 1-2-2z"/><circle cx="16.5" cy="14" r="1.2"/>'),
+  card: G('<rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19"/><path d="M6 14.5h4"/>'),
+  gem: G('<path d="M7 3.5h10L21 9l-9 11.5L3 9z"/><path d="M3 9h18M9.5 3.5 7.5 9l4.5 11.5L16.5 9l-2-5.5"/>'),
+  bag: G('<path d="M5.5 8h13l-1 12a1.8 1.8 0 0 1-1.8 1.6H8.3A1.8 1.8 0 0 1 6.5 20z"/><path d="M8.5 10.5v-3a3.5 3.5 0 0 1 7 0v3"/>'),
+  cart: G('<circle cx="9.5" cy="19.5" r="1.4"/><circle cx="17.5" cy="19.5" r="1.4"/><path d="M2.5 3.5h2.6l2.5 12h10.9l2-8.5H6"/>'),
+  tag: G('<path d="M3 11V4a1 1 0 0 1 1-1h7l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1.4"/>'),
+  gift: G('<rect x="3.5" y="8" width="17" height="4.5" rx="1"/><path d="M5 12.5V19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6.5"/><path d="M12 8v13"/><path d="M12 8s-4.5.2-4.5-2.5C7.5 3.6 10.8 3.7 12 8z"/><path d="M12 8s4.5.2 4.5-2.5C16.5 3.6 13.2 3.7 12 8z"/>'),
+  play: G('<circle cx="12" cy="12" r="9"/><path d="M10 8.8v6.4l5.4-3.2z"/>'),
+  music: G('<path d="M9 18.5V5.8L20 4v12.7"/><circle cx="6.5" cy="18.5" r="2.4"/><circle cx="17.5" cy="16.5" r="2.4"/>'),
+  image: G('<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="m3 17 5-4.5 4 3.5 3.5-3L21 17"/>'),
+  mic: G('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/>'),
+  game: G('<path d="M6.5 7h11a5.5 5.5 0 0 1 0 11c-2 0-2.8-1-5.5-1s-3.5 1-5.5 1a5.5 5.5 0 0 1 0-11z"/><path d="M8 10.5v3M6.5 12h3M15.5 11h.01M17.5 13h.01"/>'),
+  doc: G('<path d="M6 2.5h8L20 8.5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-15a2 2 0 0 1 2-2z"/><path d="M14 2.5v6h6"/><path d="M8.5 13h7M8.5 16.5h5"/>'),
+  folder: G('<path d="M3 7a2 2 0 0 1 2-2h4.5l2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  calendar: G('<rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 10h17M8 2.5V6M16 2.5V6"/>'),
+  clock: G('<circle cx="12" cy="12" r="8.8"/><path d="M12 7v5.2l3.4 2"/>'),
+  pin: G('<path d="M12 21.5s7-6 7-11a7 7 0 1 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10.3" r="2.6"/>'),
+  star: G('<path d="m12 3 2.8 5.6 6.2.9-4.5 4.4 1.1 6.2L12 17.2l-5.6 2.9 1.1-6.2L3 9.5l6.2-.9z"/>'),
+  bolt: G('<path d="M13 2.5 4 13.8h6.4L9.8 21.5 19 10.2h-6.4z"/>'),
+  flame: G('<path d="M12 21.5c-4.1 0-6.5-2.6-6.5-6 0-2.7 1.7-4.6 3.1-6.4C9.9 7.4 11 5.5 11 3c3 1.5 4.6 3.7 4.2 6.5 1-.4 1.7-1.2 2-2.3 1.5 1.7 2.3 3.9 2.3 6.3 0 4.4-3.4 8-7.5 8z"/>'),
+  rocket: G('<path d="M12 15.5c5.5-3.5 7.5-8 7.5-12-4 0-8.5 2-12 7.5z"/><path d="M7.5 11 4 12.5 6.5 15M13 16.5l-1.5 3.5L8.5 17.5"/><circle cx="14.5" cy="9.5" r="1.7"/>'),
+  crown: G('<path d="m3 8 4.5 3L12 4.5 16.5 11 21 8l-1.5 10.5h-15z"/>'),
+  layers: G('<path d="m12 3 9 5-9 5-9-5z"/><path d="m4.2 12.6 7.8 4.3 7.8-4.3M4.2 16.6l7.8 4.3 7.8-4.3"/>'),
+  cube: G('<path d="M12 2.8 20.5 7v10L12 21.2 3.5 17V7z"/><path d="M3.7 7.2 12 11.5l8.3-4.3M12 11.5V21"/>'),
+  moon: G('<path d="M20.5 13.5A8.5 8.5 0 1 1 10.5 3.5a7 7 0 0 0 10 10z"/>'),
+  sun: G('<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5V5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.7 1.7M17.3 17.3 19 19M5 19l1.7-1.7M17.3 6.7 19 5"/>'),
+  coffee: G('<path d="M4 8.5h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 9.5h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M7.5 2.5c-1 1.2-1 2.3 0 3.5M11.5 2.5c-1 1.2-1 2.3 0 3.5"/>'),
+  leaf: G('<path d="M11 20A7.5 7.5 0 0 1 9.7 5.9C15.7 4.7 17.2 4.2 19.3 1.6c1 2.1 2.1 4.4 2.1 8.4 0 5.8-5 10-10.4 10z"/><path d="M3 21c0-3.2 2-5.7 5.4-6.4C11.7 14 14 12.4 15 11.3"/>'),
+  globe: G('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14.5 14.5 0 0 1 0 18 14.5 14.5 0 0 1 0-18z"/>'),
+  anchor: G('<circle cx="12" cy="5.5" r="2.5"/><path d="M12 8v13"/><path d="M4.5 13c.5 4.5 3.6 8 7.5 8s7-3.5 7.5-8M4.5 13H7M19.5 13H17"/>'),
+  feather: G('<path d="M20 4c-6 0-12 3-13.5 9.5L5 20l6.5-1.5C18 17 20 10 20 4z"/><path d="M5 20 16 9"/>'),
+  compass: G('<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>'),
+  bell: G('<path d="M6 9.5a6 6 0 0 1 12 0c0 5 1.5 6 1.5 6h-15s1.5-1 1.5-6"/><path d="M10 19a2.2 2.2 0 0 0 4 0"/>'),
+  wifi: G('<path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.7 16a5 5 0 0 1 6.6 0"/><circle cx="12" cy="19" r="1.4"/>'),
+  eye: G('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3.2"/>'),
+};
+
+// glyph tile: colored rounded square with the mark, or a letter fallback
+export function glyphTile(id, color, letter) {
+  const mark = glyphs[id];
+  return h('span', { class: 'glyph-tile', style: { '--gc': color } },
+    mark ? h('span', { class: 'glyph-tile__mark', html: mark }) : h('span', { class: 'glyph-tile__letter' }, (letter ?? '?').toUpperCase()));
+}
+
 // ---------- haptic feedback (mobile, silent no-op elsewhere) ----------
 export function vibrate(ms = 8) {
   try { navigator.vibrate?.(ms); } catch { /* unsupported */ }

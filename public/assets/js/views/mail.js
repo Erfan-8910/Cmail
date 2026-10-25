@@ -1,8 +1,10 @@
-// Cmail — mail view: 3-pane inbox (inboxes / list / viewer) + notes + compose
+// Cmail — mail view: account-style inboxes / list / viewer + notes + compose
+// Each mailbox behaves like its own account: its mail, its notes, its 2FA codes.
 // HTML emails are sanitized and rendered in a height-adaptive sandboxed frame.
 import { api, state, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
-import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avatarColor, fmtBytes, vibrate } from '../ui.js';
+import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avatarColor, fmtBytes, vibrate, glyphTile } from '../ui.js';
+import { entryModal } from './vault.js';
 
 let box = 'inbox';
 let search = '';
@@ -10,6 +12,10 @@ let selected = new Set();
 let viewerState = null;
 let cursorIdx = -1;      // keyboard cursor over the visible list
 let lastFirstId = null;  // for new-mail highlight
+let selecting = false;   // touch selection mode
+let vaultCache = [];     // per-account 2FA entries (id, code, remaining, ...)
+
+const sendReady = () => state.setup?.sending_ready !== false && !!state.setup?.admin_created;
 
 // global cross-module events (command palette → mail)
 window.addEventListener('cmail:refresh-mail', () => {
@@ -29,17 +35,22 @@ export function renderMail(root, arg) {
   selected.clear();
   cursorIdx = -1;
   lastFirstId = null;
+  selecting = false;
 
   const view = h('div', { class: 'view view--full' });
   const grid = h('div', { class: 'mail' });
+  const scrim = h('div', { class: 'mail__scrim', onclick: () => grid.classList.remove('show-sidebar') });
 
   const sidebar = buildSidebar();
   const listCol = buildList();
   const viewerCol = h('section', { class: 'mail__col glass mail__viewer-col viewer' }, emptyViewer());
 
-  grid.append(sidebar, listCol, viewerCol);
+  grid.append(sidebar, listCol, viewerCol, scrim);
   view.append(grid);
-  view.append(h('button', { class: 'compose-fab', title: t('compose'), 'aria-label': t('compose'), onclick: () => openCompose() }, icon('send')));
+  // the compose option exists only when a sending provider is actually connected
+  if (sendReady()) {
+    view.append(h('button', { class: 'compose-fab', title: t('compose'), 'aria-label': t('compose'), onclick: () => openCompose() }, icon('send')));
+  }
   root.append(view);
 
   loadAddresses().then(() => {
@@ -51,7 +62,7 @@ function emptyViewer() {
   return h('div', { class: 'empty' }, icon('mail'), h('div', { class: 'empty__t' }, t('selectEmail')), h('div', { class: 'empty__d' }, t('selectEmailSub')));
 }
 
-// ---------- sidebar: inboxes ----------
+// ---------- sidebar: mailbox accounts ----------
 async function loadAddresses() {
   try {
     const r = await api.get('/api/addresses');
@@ -68,7 +79,7 @@ async function loadAddresses() {
 let sidebarScroll = null;
 function buildSidebar() {
   const head = h('div', { class: 'mail__head' },
-    h('h3', {}, icon('mail'), t('navAddresses')),
+    h('h3', {}, icon('user'), t('navAddresses')),
     h('div', { class: 'row', style: { gap: '2px' } },
       h('button', { class: 'icon-btn', title: t('newAlias'), onclick: () => createAddressModal(() => { loadAddresses(); }) }, icon('plus')),
       h('button', { class: 'icon-btn', title: t('navAddresses'), onclick: () => location.hash = '#/addresses' }, icon('external')),
@@ -82,23 +93,124 @@ function drawSidebar() {
   const box2 = clear(document.getElementById('addr-list') ?? sidebarScroll);
   for (const a of state.addresses) {
     const color = a.kind === 'temp' ? 'var(--warn)' : 'var(--acc)';
-    box2.append(h('button', {
+    const item = h('div', {
       class: `addr-item ${a.id === state.currentAddressId ? 'is-on' : ''}`,
       onclick: () => {
         state.currentAddressId = a.id;
-        selected.clear();
+        selected.clear(); selecting = false;
         drawSidebar(); drawList(); loadEmails();
         document.querySelector('.mail')?.classList.remove('show-sidebar');
       },
     },
       h('span', { class: 'addr-item__dot', style: { background: color, opacity: a.id === state.currentAddressId ? 1 : .45 } }),
+      h('span', { class: 'email-row__ava addr-item__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
       h('span', { class: 'addr-item__body' },
         h('span', { class: 'addr-item__addr' }, a.address),
         h('span', { class: 'addr-item__meta' },
           h('span', { class: `kind-tag kind-tag--${a.kind === 'temp' ? 'temp' : 'perm'}` }, a.kind === 'temp' ? t('temporary') : t('permanent')),
-          a.label ? h('span', {}, a.label) : '')),
-      a.unread > 0 ? h('span', { class: 'addr-item__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : ''));
+          a.label ? h('span', {}, a.label) : '',
+          a.total ? h('span', { class: 'faint' }, `${a.total} ${t('acctMails')}`) : '')),
+      a.unread > 0 ? h('span', { class: 'addr-item__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : '',
+      h('button', {
+        class: 'icon-btn addr-item__info', title: t('acctProfile'), 'aria-label': t('acctProfile'),
+        onclick: (e) => { e.stopPropagation(); accountModal(a); },
+      }, icon('edit')));
+    box2.append(item);
   }
+  // account-switcher row: add another account
+  box2.append(h('button', {
+    class: 'addr-add',
+    onclick: () => createAddressModal(() => { loadAddresses(); }),
+  }, h('span', { class: 'addr-add__plus' }, icon('plus')), h('span', {}, t('acctNew'))));
+}
+
+// ---------- mailbox account modal: identity + notes + its own 2FA ----------
+async function accountModal(a) {
+  vibrate(5);
+  const color = avatarColor(a.address);
+
+  // fetch entries scoped to this mailbox + live codes
+  let entries = [];
+  try {
+    const r = await api.get(`/api/totp?address_id=${encodeURIComponent(a.id)}`);
+    entries = r.entries ?? [];
+    vaultCache = entries;
+  } catch { /* vault fetch is best-effort here */ }
+
+  const labelIn = h('input', { class: 'input', value: a.label ?? '', placeholder: t('label') });
+  const notesIn = h('textarea', { class: 'input acct-notes', rows: 5, placeholder: t('acctNotesPh') });
+  notesIn.value = a.notes ?? '';
+
+  let saveT = null;
+  const saveAccount = (immediateToast) => {
+    clearTimeout(saveT);
+    saveT = setTimeout(async () => {
+      try {
+        await api.patch(`/api/addresses/${a.id}`, { label: labelIn.value.trim(), notes: notesIn.value });
+        const me = state.addresses.find((x) => x.id === a.id);
+        if (me) { me.label = labelIn.value.trim() || null; me.notes = notesIn.value; }
+        drawSidebar();
+        if (immediateToast) toast(t('saved'), 'ok', 1400);
+      } catch (e) { toast(errText(e), 'err'); }
+    }, immediateToast ? 0 : 550);
+  };
+  labelIn.addEventListener('input', () => saveAccount(false));
+  notesIn.addEventListener('input', () => saveAccount(false));
+
+  const totpWrap = h('div', { class: 'acct-totps' });
+  function drawTotp() {
+    clear(totpWrap);
+    if (!entries.length) {
+      totpWrap.append(h('div', { class: 'acct-totps__empty' }, icon('key'), h('span', {}, t('acct2faEmpty'))));
+      return;
+    }
+    for (const e of entries) {
+      const codeEl = h('span', { class: 'acct-totp__code mono', html: esc(e.code ?? '——————') });
+      totpWrap.append(h('div', { class: 'acct-totp' },
+        glyphTile(e.icon, e.color ?? color, (e.issuer || e.name).slice(0, 1)),
+        h('span', { class: 'acct-totp__name' }, e.name),
+        codeEl,
+        h('button', {
+          class: 'icon-btn', title: t('deleteEntry'),
+          onclick: async (ev) => {
+            ev.stopPropagation();
+            confirmBox(t('deleteEntryConfirm'), async () => {
+              await api.del(`/api/totp/${e.id}`);
+              entries = entries.filter((x) => x.id !== e.id);
+              drawTotp(); toast(t('deletedN'), 'ok', 1500);
+            });
+          },
+        }, icon('trash'))));
+    }
+  }
+  drawTotp();
+
+  const m = modal({
+    title: t('acctProfile'), iconName: 'user', wide: true,
+    body: [
+      h('div', { class: 'acct-head' },
+        h('span', { class: 'email-row__ava', style: { background: color, width: '44px', height: '44px', borderRadius: '14px', fontSize: '18px' } }, (a.label || a.address).slice(0, 1).toUpperCase()),
+        h('div', { class: 'grow' },
+          h('div', { class: 'acct-head__addr mono', onclick: async () => { await copyText(a.address); toast(t('copied'), 'ok', 1300); } }, a.address, icon('copy')),
+          h('div', { class: 'small muted' }, `${a.kind === 'temp' ? t('temporary') : t('permanent')} · ${a.total ?? 0} ${t('acctMails')}`)),
+      ),
+      h('div', { class: 'field' }, h('label', {}, t('label')), labelIn),
+      h('div', { class: 'field' }, h('label', {}, t('acctNotes')), notesIn),
+      h('div', { class: 'acct-2fa' },
+        h('div', { class: 'acct-2fa__head' }, icon('key'), h('b', {}, t('acct2fa')),
+          h('button', {
+            class: 'btn btn--sm btn--primary', onclick: async () => {
+              m.close();
+              await entryModal(null, { addressId: a.id, onDone: async () => { drawSidebar(); } });
+            },
+          }, icon('plus'), h('span', { class: 'hide-sm' }, t('acct2faAdd')))),
+        totpWrap),
+    ],
+    footer: [
+      h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('cancel')),
+      h('button', { class: 'btn btn--primary', onclick: () => { saveAccount(true); m.close(); } }, t('save')),
+    ],
+  });
 }
 
 // ---------- list ----------
@@ -106,10 +218,11 @@ let listScroll = null;
 let emails = [];
 
 function buildList() {
+  const canSend = sendReady();
   const head = h('div', { class: 'mail__head' },
     h('h3', {}, icon('inbox'), t('inbox')),
     h('div', { class: 'row', style: { gap: '4px' } },
-      h('button', { class: 'btn btn--sm btn--primary', onclick: () => openCompose() }, icon('send'), h('span', { class: 'hide-sm' }, t('compose'))),
+      canSend ? h('button', { class: 'btn btn--sm btn--primary', onclick: () => openCompose() }, icon('send'), h('span', { class: 'hide-sm' }, t('compose'))) : '',
       h('button', { class: 'icon-btn', title: t('refresh'), onclick: (e) => { e.currentTarget.querySelector('svg')?.classList.add('spin'); loadEmails(true); setTimeout(() => document.querySelector('.mail .icon-btn svg.spin')?.classList.remove('spin'), 700); } }, icon('refresh')),
       h('button', { class: 'icon-btn', title: t('navAddresses'), onclick: () => document.querySelector('.mail')?.classList.toggle('show-sidebar'), dataset: { mobile: 'menu' } }, icon('menu')),
     ));
@@ -180,6 +293,7 @@ async function loadEmails(silent) {
 
 function drawList() {
   const list = clear(document.getElementById('email-list') ?? listScroll);
+  document.querySelector('.mail')?.classList.toggle('is-selecting', selecting || selected.size > 0);
   if (!emails.length) {
     list.append(h('div', { style: { height: '100%', display: 'grid', placeItems: 'center' } },
       h('div', { class: 'empty' }, icon('inbox'), h('div', { class: 'empty__t' }, t('noEmails')), h('div', { class: 'empty__d' }, t('noEmailsSub')))));
@@ -198,11 +312,11 @@ function drawList() {
 function emailRow(em) {
   const color = avatarColor(em.from_addr);
   const flags = h('div', { class: 'email-row__flags' });
-  if (em.starred) flags.append(h('span', { class: 'flag-star' }, icon('star')));
+  // starred state already lives in the star slot — no duplicate flag here
   if (em.has_note) flags.append(h('span', { class: 'flag-note' }, icon('note')));
   if (em.size > 200_000) flags.append(h('span', { class: 'flag-clip' }, icon('paperclip')));
 
-  // hover quick actions
+  // hover quick actions — replace the time slot on pointer devices
   const qa = h('div', { class: 'email-row__qa' },
     h('button', {
       title: t('star'), 'aria-label': t('star'),
@@ -220,11 +334,21 @@ function emailRow(em) {
       },
     }, icon('trash')));
 
-  return h('div', {
+  // touch: the star lives beside the time — one tap, never opens the mail
+  const starSlot = h('button', {
+    class: `email-row__star ${em.starred ? 'is-on' : ''}`, title: t('star'), 'aria-label': t('star'),
+    onclick: async (e) => {
+      e.stopPropagation(); vibrate(6);
+      const on = !em.starred;
+      try { await api.patch(`/api/emails/${em.id}`, { starred: on }); em.starred = on ? 1 : 0; e.currentTarget.classList.toggle('is-on', on); loadEmails(true); } catch (err) { toast(errText(err), 'err'); }
+    },
+  }, icon('star'));
+
+  const row = h('div', {
     class: `email-row ${em.is_read ? '' : 'is-unread'} ${selected.has(em.id) ? 'is-selected' : ''} ${viewerState === em.id ? 'is-active' : ''}`,
     dataset: { id: em.id },
     onclick: () => {
-      if (selected.size) { toggleSelect(em.id); return; }
+      if (selecting || selected.size) { toggleSelect(em.id); return; }
       viewerState = em.id;
       cursorIdx = emails.findIndex((x) => x.id === em.id);
       document.querySelector('.mail')?.classList.add('show-viewer');
@@ -237,16 +361,32 @@ function emailRow(em) {
     h('span', { class: 'email-row__body' },
       h('span', { class: 'email-row__top' },
         h('span', { class: 'email-row__from' }, em.from_name || em.from_addr),
-        h('span', { class: 'email-row__time' }, timeAgo(em.received_at, t))),
+        h('span', { class: 'email-row__end' }, starSlot, h('span', { class: 'email-row__time' }, timeAgo(em.received_at, t)))),
       h('div', { class: 'email-row__subj' }, em.subject || '(no subject)'),
       h('div', { class: 'email-row__prev' }, em.preview || ''),
       flags.children.length ? flags : ''),
     qa);
+
+  // touch: long-press enters multi-select mode
+  let lpT = null;
+  let moved = false;
+  row.addEventListener('touchstart', () => { moved = false; lpT = setTimeout(() => {
+    if (moved || selecting) return;
+    selecting = true;
+    vibrate(12);
+    toggleSelect(em.id);
+    toast(t('selHint'), 'ok', 2200);
+  }, 480); }, { passive: true });
+  row.addEventListener('touchmove', () => { moved = true; clearTimeout(lpT); }, { passive: true });
+  row.addEventListener('touchend', () => clearTimeout(lpT), { passive: true });
+  row.addEventListener('contextmenu', (e) => { if (selecting || selected.size) e.preventDefault(); });
+  return row;
 }
 
 function toggleSelect(id) {
   if (selected.has(id)) selected.delete(id); else selected.add(id);
   vibrate(5);
+  if (!selected.size) selecting = false;
   drawList();
   drawBulkBar();
 }
@@ -270,7 +410,7 @@ document.addEventListener('keydown', (e) => {
     }
   }
   else if (e.key === 'Escape') {
-    if (selected.size) { selected.clear(); drawList(); drawBulkBar(); return; }
+    if (selected.size || selecting) { selected.clear(); selecting = false; drawList(); drawBulkBar(); return; }
     if (document.querySelector('.mail.show-viewer')) {
       document.querySelector('.mail')?.classList.remove('show-viewer');
       viewerState = null; drawList();
@@ -372,8 +512,11 @@ function drawViewer(col, r) {
   clear(col);
 
   const actions = h('div', { class: 'viewer__actions' });
+  if (sendReady()) {
+    actions.append(
+      h('button', { class: 'btn btn--sm btn--ghost', title: t('reply'), onclick: () => openCompose({ to: em.from_addr, subject: `Re: ${em.subject ?? ''}` }) }, icon('arrow'), h('span', { class: 'hide-sm' }, t('reply'))));
+  }
   actions.append(
-    h('button', { class: 'btn btn--sm btn--ghost', title: t('reply'), onclick: () => openCompose({ to: em.from_addr, subject: `Re: ${em.subject ?? ''}` }) }, icon('arrow'), h('span', { class: 'hide-sm' }, t('reply'))),
     h('button', { class: `btn btn--sm btn--ghost ${em.starred ? 'is-on' : ''}`, title: t('star'), onclick: async (e) => {
       const on = !em.starred;
       await api.patch(`/api/emails/${em.id}`, { starred: on });
@@ -495,7 +638,7 @@ function drawViewer(col, r) {
 
   col.append(bodyWrap);
 
-  // note panel
+  // note panel — collapsible on phones (the mail gets the full height)
   const noteBody = h('textarea', { class: 'input', rows: 3, placeholder: t('notePlaceholder') });
   if (r.note) noteBody.value = r.note.body;
   let noteColor = r.note?.color ?? 'amber';
@@ -518,9 +661,14 @@ function drawViewer(col, r) {
   }
   noteBody.addEventListener('input', saveNote);
 
-  col.append(h('div', { class: 'note-panel' },
-    h('div', { class: 'note-panel__head' }, icon('note'), t('noteTitle')),
-    noteBody, colorRow));
+  const notePanel = h('div', { class: `note-panel ${r.note?.body ? 'has-note' : ''}` });
+  notePanel.append(
+    h('button', { class: 'note-panel__head', onclick: () => notePanel.classList.toggle('is-open') },
+      icon('note'), h('span', {}, t('noteTitle')),
+      noteBody.value ? h('span', { class: 'note-panel__dot' }, '') : '',
+      h('span', { class: 'note-panel__chev icn' }, icon('chevron'))),
+    h('div', { class: 'note-panel__in' }, noteBody, colorRow));
+  col.append(notePanel);
 
   // mobile back
   col.append(h('button', { class: 'btn btn--sm btn--ghost viewer-back', style: { margin: '8px 14px 12px', alignSelf: 'flex-start' }, onclick: () => { document.querySelector('.mail')?.classList.remove('show-viewer'); viewerState = null; } }, icon('arrow'), h('span', {}, t('navMail'))));

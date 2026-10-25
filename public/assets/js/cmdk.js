@@ -111,8 +111,10 @@ function buildSources(q) {
   // --- actions ---
   const acts = [];
   if (state.user) {
+    if (state.setup?.sending_ready !== false) {
+      acts.push({ icn: 'send', label: t('cmdkCompose'), kw: 'compose new mail', run: () => openCompose() });
+    }
     acts.push(
-      { icn: 'send', label: t('cmdkCompose'), kw: 'compose new mail', run: () => openCompose() },
       { icn: 'plus', label: t('cmdkNewAlias'), kw: 'alias inbox address create', run: () => createAddressModal(() => window.dispatchEvent(new CustomEvent('cmail:refresh-mail'))) },
       { icn: 'refresh', label: t('refresh'), kw: 'reload inbox sync', run: () => { window.dispatchEvent(new CustomEvent('cmail:refresh-mail')); toast(t('refresh'), 'ok', 1200); } },
     );
@@ -126,7 +128,7 @@ function buildSources(q) {
   if (actHits.length) s.push({ title: t('cmdkActions'), items: actHits });
 
   // --- accent palettes (only when typing "acc"/"pal"/palette names) ---
-  const accents = [['sage', 'paletteSage'], ['blue', 'paletteBlue'], ['violet', 'paletteViolet'], ['amber', 'paletteAmber']];
+  const accents = [['sage', 'paletteSage'], ['blue', 'paletteBlue'], ['violet', 'paletteViolet'], ['amber', 'paletteAmber'], ['rose', 'paletteRose']];
   const accHits = accents
     .map(([key, lk]) => ({ key, label: t(lk), kw: 'accent color palette theme' }))
     .filter((a) => query && (rank(a.label) >= 0 || /acc|pal|رنگ|پالت/.test(query)));

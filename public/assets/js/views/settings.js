@@ -76,10 +76,11 @@ async function appearancePane() {
 // ---------- accent palette picker ----------
 function paletteCard() {
   const palettes = [
-    { key: 'sage', name: () => t('paletteSage'), light: '#b9cda3', deep: '#56725c' },
-    { key: 'blue', name: () => t('paletteBlue'), light: '#a7cbd6', deep: '#4e7684' },
-    { key: 'violet', name: () => t('paletteViolet'), light: '#cab6da', deep: '#7d6a8e' },
-    { key: 'amber', name: () => t('paletteAmber'), light: '#e3c795', deep: '#8a6d3b' },
+    { key: 'sage', name: () => t('paletteSage'), light: '#aed890', deep: '#4f8f60' },
+    { key: 'blue', name: () => t('paletteBlue'), light: '#8cc8de', deep: '#3f89a6' },
+    { key: 'violet', name: () => t('paletteViolet'), light: '#c2a7e2', deep: '#7e5fa6' },
+    { key: 'amber', name: () => t('paletteAmber'), light: '#eec27e', deep: '#a06a24' },
+    { key: 'rose', name: () => t('paletteRose'), light: '#f2a6ba', deep: '#b45370' },
   ];
   const cur = document.documentElement.dataset.accent || 'sage';
   const grid = h('div', { class: 'palette-grid' });
@@ -295,6 +296,8 @@ async function sendingPane() {
             sending_from_email: fromEmail.value.trim(),
             sending_from_name: fromName.value.trim(),
           });
+          // refresh the boot status so the compose option appears right away
+          state.setup = await api.get('/api/setup/status').catch(() => state.setup);
           toast(t('settingsSaved'), 'ok');
           renderSettings(document.getElementById('app'));
         } catch (e) { toast(errText(e), 'err'); }
