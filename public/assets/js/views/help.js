@@ -10,6 +10,23 @@ export function renderHelp(root) {
     h('div', {}, h('div', { class: 'eyebrow' }, t('eyebrowHelp')), h('h2', { class: 'page-title' }, t('helpTitle')), h('div', { class: 'page-sub' }, t('helpSub'))),
   ));
 
+  // keyboard shortcuts (Apple Mail style)
+  const K = (keys, label) => h('div', { class: 'kb-row' },
+    h('span', { class: 'kb-keys' }, keys.map((k) => h('kbd', { class: 'kbd' }, k))),
+    h('span', { class: 'kb-lbl' }, label));
+  const shortcuts = h('section', { class: 'glass card kb-card' },
+    h('div', { class: 'card-head' }, icon('zap'), h('h3', {}, t('kbTitle'))),
+    h('p', { class: 'small muted', style: { margin: '0 0 10px' } }, t('kbSub')),
+    h('div', { class: 'kb-grid' },
+      K(['⌘', 'K'], t('kbPalette')),
+      K(['/'], t('kbSearch')),
+      K(['J', 'K'], t('kbNext')),
+      K(['↵'], t('kbOpen')),
+      K(['X'], t('kbSelect')),
+      K(['S'], t('kbStar')),
+      K(['esc'], t('kbClose')),
+    ));
+
   const content = h('div', { class: 'glass card' });
 
   // 1 — install
@@ -90,6 +107,7 @@ npx wrangler deploy`);
     ),
   );
 
+  view.append(shortcuts);
   view.append(content);
   root.append(view);
 

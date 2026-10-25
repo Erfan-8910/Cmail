@@ -1,7 +1,7 @@
 // Cmail — views: login / register / 2FA + first-run setup wizard
 import { api, state, errText } from '../api.js';
 import { t, lang, setLang } from '../i18n.js';
-import { h, clear, icon, toast, copyText } from '../ui.js';
+import { h, clear, icon, toast, copyText, vibrate } from '../ui.js';
 import { setTheme } from '../app.js';
 
 export function renderLogin(root) {
@@ -60,6 +60,14 @@ export function renderLogin(root) {
     return h('div', { class: 'field' }, h('label', {}, label), input);
   }
 
+  function shakeCard() {
+    vibrate([12, 50, 12]);
+    card.classList.remove('shake');
+    void card.offsetWidth;
+    card.classList.add('shake');
+    setTimeout(() => card.classList.remove('shake'), 600);
+  }
+
   async function submit() {
     const fd = Object.fromEntries(new FormData(form).entries());
     const btn = form.querySelector('button[type=submit]');
@@ -77,6 +85,7 @@ export function renderLogin(root) {
       }
     } catch (e) {
       toast(errText(e), 'err');
+      shakeCard();
       btn.disabled = false;
     }
   }
@@ -100,6 +109,7 @@ export function renderLogin(root) {
         location.hash = '#/mail';
       } catch (err) {
         toast(errText(err), 'err');
+        shakeCard();
         btn.disabled = false;
       }
     });

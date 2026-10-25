@@ -2,17 +2,33 @@
 // HTML emails are sanitized and rendered in a height-adaptive sandboxed frame.
 import { api, state, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
-import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avatarColor, fmtBytes } from '../ui.js';
+import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avatarColor, fmtBytes, vibrate } from '../ui.js';
 
 let box = 'inbox';
 let search = '';
 let selected = new Set();
 let viewerState = null;
+let cursorIdx = -1;      // keyboard cursor over the visible list
+let lastFirstId = null;  // for new-mail highlight
+
+// global cross-module events (command palette → mail)
+window.addEventListener('cmail:refresh-mail', () => {
+  if (!document.getElementById('email-list')) return;
+  loadEmails(true);
+});
+window.addEventListener('cmail:switch-inbox', (e) => {
+  if (!document.getElementById('email-list')) return;
+  state.currentAddressId = e.detail;
+  selected.clear();
+  drawSidebar(); drawList(); loadEmails();
+});
 
 export function renderMail(root, arg) {
   box = 'inbox';
   search = '';
   selected.clear();
+  cursorIdx = -1;
+  lastFirstId = null;
 
   const view = h('div', { class: 'view view--full' });
   const grid = h('div', { class: 'mail' });
@@ -151,7 +167,13 @@ async function loadEmails(silent) {
     if (box !== 'inbox') params.set('box', box);
     if (search) params.set('q', search);
     const r = await api.get(`/api/emails?${params}`);
-    emails = r.emails ?? [];
+    const fresh = r.emails ?? [];
+    // detect brand-new first message (auto-refresh, not search-driven)
+    if (silent && fresh.length && fresh[0].id !== lastFirstId && !search && box === 'inbox') {
+      lastFirstId = fresh[0].id;
+    }
+    emails = fresh;
+    if (cursorIdx >= emails.length) cursorIdx = emails.length - 1;
     drawList();
   } catch (e) { toast(errText(e), 'err'); }
 }
@@ -161,9 +183,16 @@ function drawList() {
   if (!emails.length) {
     list.append(h('div', { style: { height: '100%', display: 'grid', placeItems: 'center' } },
       h('div', { class: 'empty' }, icon('inbox'), h('div', { class: 'empty__t' }, t('noEmails')), h('div', { class: 'empty__d' }, t('noEmailsSub')))));
+    cursorIdx = -1;
     return;
   }
-  for (const em of emails) list.append(emailRow(em));
+  emails.forEach((em, i) => {
+    const row = emailRow(em);
+    if (i === cursorIdx) row.classList.add('is-cursor');
+    if (lastFirstId && em.id === lastFirstId && i === 0) row.classList.add('is-new');
+    list.append(row);
+  });
+  setTimeout(() => list.querySelector('.email-row.is-new')?.classList.remove('is-new'), 1600);
 }
 
 function emailRow(em) {
@@ -173,12 +202,31 @@ function emailRow(em) {
   if (em.has_note) flags.append(h('span', { class: 'flag-note' }, icon('note')));
   if (em.size > 200_000) flags.append(h('span', { class: 'flag-clip' }, icon('paperclip')));
 
+  // hover quick actions (Apple Mail style)
+  const qa = h('div', { class: 'email-row__qa' },
+    h('button', {
+      title: t('star'), 'aria-label': t('star'),
+      onclick: async (e) => {
+        e.stopPropagation(); vibrate(6);
+        const on = !em.starred;
+        try { await api.patch(`/api/emails/${em.id}`, { starred: on }); em.starred = on ? 1 : 0; loadEmails(true); } catch (err) { toast(errText(err), 'err'); }
+      },
+    }, icon('star')),
+    h('button', {
+      title: t('delete'), 'aria-label': t('delete'),
+      onclick: async (e) => {
+        e.stopPropagation(); vibrate([10, 40, 10]);
+        try { await api.del(`/api/emails/${em.id}`); toast(t('deletedN'), 'ok', 1400); loadEmails(true); } catch (err) { toast(errText(err), 'err'); }
+      },
+    }, icon('trash')));
+
   return h('div', {
     class: `email-row ${em.is_read ? '' : 'is-unread'} ${selected.has(em.id) ? 'is-selected' : ''} ${viewerState === em.id ? 'is-active' : ''}`,
     dataset: { id: em.id },
     onclick: () => {
       if (selected.size) { toggleSelect(em.id); return; }
       viewerState = em.id;
+      cursorIdx = emails.findIndex((x) => x.id === em.id);
       document.querySelector('.mail')?.classList.add('show-viewer');
       drawList();
       openEmail(em.id);
@@ -192,13 +240,58 @@ function emailRow(em) {
         h('span', { class: 'email-row__time' }, timeAgo(em.received_at, t))),
       h('div', { class: 'email-row__subj' }, em.subject || '(no subject)'),
       h('div', { class: 'email-row__prev' }, em.preview || ''),
-      flags.children.length ? flags : ''));
+      flags.children.length ? flags : ''),
+    qa);
 }
 
 function toggleSelect(id) {
   if (selected.has(id)) selected.delete(id); else selected.add(id);
+  vibrate(5);
   drawList();
   drawBulkBar();
+}
+
+// ---------- keyboard navigation (j/k/Enter/x/s/Escape) ----------
+document.addEventListener('keydown', (e) => {
+  if (!document.getElementById('email-list')) return;                 // only in mail view
+  if (document.querySelector('.modal-back, .cmdk-back, .menu')) return; // nothing overlaying
+  const typing = /^(input|textarea|select)$/i.test(e.target.tagName) || e.target.isContentEditable;
+  if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+
+  if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); moveCursor(1); }
+  else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); moveCursor(-1); }
+  else if (e.key === 'Enter' || e.key === 'o') { openCursor(); }
+  else if (e.key.toLowerCase() === 'x') { if (emails[cursorIdx]) { e.preventDefault(); toggleSelect(emails[cursorIdx].id); } }
+  else if (e.key.toLowerCase() === 's') {
+    if (emails[cursorIdx]) {
+      e.preventDefault(); vibrate(6);
+      const em = emails[cursorIdx];
+      api.patch(`/api/emails/${em.id}`, { starred: !em.starred }).then(() => { em.starred = em.starred ? 0 : 1; loadEmails(true); }).catch(() => {});
+    }
+  }
+  else if (e.key === 'Escape') {
+    if (selected.size) { selected.clear(); drawList(); drawBulkBar(); return; }
+    if (document.querySelector('.mail.show-viewer')) {
+      document.querySelector('.mail')?.classList.remove('show-viewer');
+      viewerState = null; drawList();
+    }
+  }
+});
+
+function moveCursor(dir) {
+  if (!emails.length) return;
+  cursorIdx = Math.min(emails.length - 1, Math.max(0, cursorIdx + dir));
+  drawList();
+  document.querySelector('.email-row.is-cursor')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function openCursor() {
+  const em = emails[cursorIdx];
+  if (!em) return;
+  viewerState = em.id;
+  document.querySelector('.mail')?.classList.add('show-viewer');
+  drawList();
+  openEmail(em.id);
 }
 
 // ---------- viewer ----------
@@ -247,13 +340,13 @@ function detectDir(doc) {
 }
 
 // the base stylesheet injected into every rendered email
-function mailFrameCss() {
+function mailFrameCss(zoom = 1) {
   return `
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body {
-      font: 14.5px/1.7 -apple-system, 'Segoe UI', 'Vazirmatn', Tahoma, sans-serif;
+      font: ${Math.round(14.5 * zoom * 10) / 10}px/1.7 -apple-system, 'Segoe UI', 'Vazirmatn', Tahoma, sans-serif;
       color: #20261f; background: transparent;
       padding: 18px 20px 26px;
       word-break: break-word; overflow-wrap: break-word;
@@ -323,12 +416,27 @@ function drawViewer(col, r) {
   // ----- render mode state -----
   let mode = em.html_body ? 'html' : 'text';
   let narrow = false;
+  let zoom = 1;                      // html reading zoom (0.8 – 1.5)
   const bodyWrap = h('div', { class: 'viewer__body' });
 
   const seg = h('div', { class: 'seg' });
   const bHtml = h('button', { type: 'button' }, icon('eye'), t('viewRendered'));
   const bText = h('button', { type: 'button' }, icon('code'), t('viewSource'));
   const bWidth = h('button', { type: 'button', class: 'chip', title: t('viewNarrow') }, icon('columns'), h('span', { class: 'hide-sm' }, t('viewNarrow')));
+  seg.append(bHtml, bText);
+  const zoomOut = h('button', { type: 'button', class: 'chip zoom-chip', title: t('zoomOut'), 'aria-label': t('zoomOut') }, 'A−');
+  const zoomLbl = h('span', { class: 'zoom-lbl small faint mono' }, '100%');
+  const zoomIn = h('button', { type: 'button', class: 'chip zoom-chip', title: t('zoomIn'), 'aria-label': t('zoomIn') }, 'A+');
+  const zoomRow = h('div', { class: 'zoom-ctl' }, zoomOut, zoomLbl, zoomIn);
+
+  function drawZoom() {
+    zoomLbl.textContent = `${Math.round(zoom * 100)}%`;
+    zoomOut.disabled = zoom <= 0.8;
+    zoomIn.disabled = zoom >= 1.5;
+  }
+  zoomOut.onclick = () => { zoom = Math.max(0.8, Math.round((zoom - 0.1) * 10) / 10); drawZoom(); drawBody(); };
+  zoomIn.onclick = () => { zoom = Math.min(1.5, Math.round((zoom + 0.1) * 10) / 10); drawZoom(); drawBody(); };
+  drawZoom();
 
   function drawSeg() {
     bHtml.classList.toggle('is-on', mode === 'html');
@@ -336,13 +444,14 @@ function drawViewer(col, r) {
     bHtml.style.display = em.html_body ? '' : 'none';
     bWidth.querySelector('span:not(.icn)').textContent = narrow ? t('viewWide') : t('viewNarrow');
     bWidth.style.display = mode === 'html' ? '' : 'none';
+    zoomRow.style.display = mode === 'html' ? '' : 'none';
   }
   bHtml.onclick = () => { mode = 'html'; drawSeg(); drawBody(); };
   bText.onclick = () => { mode = 'text'; drawSeg(); drawBody(); };
   bWidth.onclick = () => { narrow = !narrow; drawBody(); };
   drawSeg();
 
-  col.append(h('div', { class: 'mtools' }, seg, bWidth));
+  col.append(h('div', { class: 'mtools' }, seg, bWidth, zoomRow));
 
   let frame = null;
   function buildFrame() {
@@ -357,7 +466,7 @@ function drawViewer(col, r) {
     f.setAttribute('srcdoc',
       `<!doctype html><html dir="${dir}" lang="${doc.documentElement.getAttribute('lang') || 'en'}"><head>` +
       `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank">` +
-      `<style>${mailFrameCss()}</style>${doc.head.innerHTML}</head>` +
+      `<style>${mailFrameCss(zoom)}</style>${doc.head.innerHTML}</head>` +
       `<body>${doc.body.innerHTML}</body></html>`);
     f.addEventListener('load', () => {
       try {
