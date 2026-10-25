@@ -66,10 +66,10 @@ function currentRoute() {
 async function route() {
   const { page } = currentRoute();
 
-  // fetch system status (may be offline)
-  if (!state.setup) {
+  // fetch system status (may be offline); always fresh on gate entry
+  if (!state.setup || page === 'status' || page === 'setup') {
     try { state.setup = await api.get('/api/setup/status'); }
-    catch { state.setup = null; }
+    catch { if (!state.setup) state.setup = null; }
   }
   const ready = !!state.setup?.ready;
 

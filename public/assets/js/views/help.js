@@ -10,7 +10,7 @@ export function renderHelp(root) {
     h('div', {}, h('div', { class: 'eyebrow' }, t('eyebrowHelp')), h('h2', { class: 'page-title' }, t('helpTitle')), h('div', { class: 'page-sub' }, t('helpSub'))),
   ));
 
-  // keyboard shortcuts (Apple Mail style)
+  // keyboard shortcuts
   const K = (keys, label) => h('div', { class: 'kb-row' },
     h('span', { class: 'kb-keys' }, keys.map((k) => h('kbd', { class: 'kbd' }, k))),
     h('span', { class: 'kb-lbl' }, label));

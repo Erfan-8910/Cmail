@@ -7,6 +7,10 @@
   "compatibility_date": "2024-11-01",
   "workers_dev": true,
 
+  "vars": {
+    "APP_VERSION": "1.4.0"
+  },
+
   "assets": {
     "directory": "./public",
     "binding": "ASSETS"

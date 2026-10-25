@@ -1,4 +1,4 @@
-// Cmail — Command Palette (⌘K) · Spotlight-style launcher
+// Cmail — Command Palette (⌘K) · quick launcher
 // search across navigation, actions, inboxes and live email results
 import { api, state } from './api.js';
 import { t, setLang, lang } from './i18n.js';
