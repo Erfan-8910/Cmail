@@ -128,7 +128,7 @@ function buildSources(q) {
   if (actHits.length) s.push({ title: t('cmdkActions'), items: actHits });
 
   // --- accent palettes (only when typing "acc"/"pal"/palette names) ---
-  const accents = [['sage', 'paletteSage'], ['blue', 'paletteBlue'], ['violet', 'paletteViolet'], ['amber', 'paletteAmber'], ['rose', 'paletteRose']];
+  const accents = [['sage', 'paletteSage'], ['emerald', 'paletteEmerald'], ['ocean', 'paletteOcean'], ['blue', 'paletteBlue'], ['midnight', 'paletteMidnight'], ['violet', 'paletteViolet'], ['sakura', 'paletteSakura'], ['rose', 'paletteRose'], ['wine', 'paletteWine'], ['amber', 'paletteAmber'], ['gold', 'paletteGold'], ['coral', 'paletteCoral'], ['ice', 'paletteIce']];
   const accHits = accents
     .map(([key, lk]) => ({ key, label: t(lk), kw: 'accent color palette theme' }))
     .filter((a) => query && (rank(a.label) >= 0 || /acc|pal|رنگ|پالت/.test(query)));

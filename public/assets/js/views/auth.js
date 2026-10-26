@@ -32,6 +32,8 @@ export function recoveryPanel({ open = false } = {}) {
 
 export function renderLogin(root) {
   const view = h('div', { class: 'view view--auth' });
+  // living aurora backdrop — the sign-in stage breathes with the accent color
+  view.append(h('div', { class: 'auth-aurora', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')));
   const wrap = h('div', { class: 'auth-wrap' });
   view.append(wrap);
   root.append(view);

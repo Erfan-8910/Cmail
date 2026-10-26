@@ -1,7 +1,7 @@
 // Cmail — domains view (admin)
 import { api, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
-import { h, clear, icon, toast, modal, confirmBox, copyText } from '../ui.js';
+import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo } from '../ui.js';
 
 export async function renderDomains(root) {
   const view = h('div', { class: 'view' });
@@ -26,11 +26,12 @@ export async function renderDomains(root) {
   function draw(domains) {
     clear(table);
     table.append(h('thead', {}, h('tr', {},
-      h('th', {}, t('domain')), h('th', {}, t('active')), h('th', {}, t('catchAll')), h('th', {}, t('addressesN')), h('th', {}, ''))));
+      h('th', {}, t('domain')), h('th', {}, t('domStatus')), h('th', {}, t('active')), h('th', {}, t('catchAll')), h('th', {}, t('addressesN')), h('th', {}, ''))));
     const tb = h('tbody', {});
     for (const d of domains) {
       tb.append(h('tr', {},
         h('td', {}, h('span', { class: 'mono', style: { fontWeight: 700 } }, d.name)),
+        h('td', {}, healthChip(d)),
         h('td', {}, h('div', { class: `switch ${d.active ? 'is-on' : ''}`, onclick: async () => { await api.patch(`/api/addresses/domains/${d.id}`, { active: !d.active }); load(); } })),
         h('td', {}, h('div', { class: `switch ${d.catch_all ? 'is-on' : ''}`, onclick: async () => { await api.patch(`/api/addresses/domains/${d.id}`, { catch_all: !d.catch_all }); load(); } })),
         h('td', {}, String(d.address_count ?? 0)),
@@ -40,6 +41,19 @@ export async function renderDomains(root) {
         ))));
     }
     table.append(tb);
+  }
+
+  // setup health: is this domain actually receiving mail, or is something missing?
+  function healthChip(d) {
+    const st = !d.active ? ['dom-st--off', 'domOff']
+      : !d.catch_all ? ['dom-st--warn', 'domNoCatch']
+      : d.last_mail ? ['dom-st--ok', 'domHealthy']
+      : ['dom-st--warn', 'domAwaiting'];
+    const kids = [h('i'), h('span', {}, t(st[1]))];
+    if (st[0] === 'dom-st--ok' && d.last_mail) {
+      kids.push(h('span', { class: 'faint', style: { fontWeight: 600 } }, `· ${timeAgo(d.last_mail, t)}`));
+    }
+    return h('span', { class: `dom-st ${st[0]}`, title: t(st[1]) }, ...kids);
   }
 
   function addModal(onDone) {
