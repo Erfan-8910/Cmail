@@ -11,7 +11,7 @@
 
 Temporary & permanent inboxes · notes on every email · built-in 2FA vault · unlimited domains · outgoing mail · zero servers, zero monthly bills
 
-[![Version](https://img.shields.io/badge/version-1.8.0-4f8f60)](https://github.com/Erfan-8910/CMail/releases)
+[![Version](https://img.shields.io/badge/version-1.9.0-4f8f60)](https://github.com/Erfan-8910/CMail/releases)
 [![License](https://img.shields.io/badge/license-MIT-56725c)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-F38020)](https://workers.cloudflare.com)
 [![PRs](https://img.shields.io/badge/PRs-welcome-b4cda3)](https://github.com/Erfan-8910/CMail/pulls)
@@ -96,8 +96,8 @@ Cmail از یک سؤال ساده شروع شد: **چرا برای یک صندو
 
 ### ⬇️ دانلود آماده — بدون کلون کردن ریپو
 
-- **بستهٔ کامل v1.8.0:** [`CMail-v1.8.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/CMail-v1.8.0.zip) — شامل همه‌ی فایل‌ها، پوشه‌ی `public/` برای آپلود ظاهر و پوشه‌ی `migrations/` برای ساخت جدول‌ها. فهرست همه‌ی نسخه‌ها: [Releases](https://github.com/Erfan-8910/Cmail/releases)
-- **فایل آماده‌ی [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/worker.js)** — همان کد کامپایل‌شده‌ای که در «راه ۲» داخل ادیتور Cloudflare پیست می‌کنی؛ یک کلیک، ذخیره، تمام.
+- **بستهٔ کامل v1.9.0:** [`CMail-v1.9.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v1.9.0/CMail-v1.9.0.zip) — شامل همه‌ی فایل‌ها، پوشه‌ی `public/` برای آپلود ظاهر و پوشه‌ی `migrations/` برای ساخت جدول‌ها. فهرست همه‌ی نسخه‌ها: [Releases](https://github.com/Erfan-8910/Cmail/releases)
+- **فایل آماده‌ی [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v1.9.0/worker.js)** — همان کد کامپایل‌شده‌ای که در «راه ۲» داخل ادیتور Cloudflare پیست می‌کنی؛ یک کلیک، ذخیره، تمام.
 
 #### راه ۱ — خودکار با یک دستور (ترمینال)
 
@@ -116,12 +116,12 @@ bash deploy.sh
 **۱) دیتابیس را بساز**
 - وارد [dash.cloudflare.com](https://dash.cloudflare.com) شو ← از منوی کنار: **Storage & Databases ← D1 SQL Database ← Create**
 - اسمش را بگذار `cmail-db` و Create را بزن.
-- حالا از تب‌های بالای دیتابیس، **Console** را باز کن. در همین ریپو فایل [`migrations/0001_init.sql`](migrations/0001_init.sql) را باز کن، همه‌ی محتوایش را کپی کن و داخل Console پیست کن ← **Execute**. جدول‌ها ساخته می‌شوند. تمام؛ دیگر با دیتابیس کاری نداری.
+- حالا از تب‌های بالای دیتابیس، **Console** را باز کن. در همین ریپو پوشه‌ی [`migrations/`](migrations/) سه فایل دارد و باید **هر سه را به‌ترتیب** اجرا کنی: اول [`0001_init.sql`](migrations/0001_init.sql)، بعد [`0002_mailbox_identity.sql`](migrations/0002_mailbox_identity.sql) و آخر [`0003_vault_folders.sql`](migrations/0003_vault_folders.sql). محتوای هر فایل را کامل کپی کن، داخل Console پیست کن ← **Execute** — صبر کن پیام موفقیت بیاید، بعد برو سراغ فایل بعدی. جدول‌ها که ساخته شدند، دیگر با دیتابیس کاری نداری.
 
 **۲) Worker را بساز**
 - از منو: **Workers & Pages ← Create ← Workers ← Create Worker**
 - اسمش را بگذار `cmail` و یک بار با همان کد پیش‌فرض **Deploy** بزن.
-- روی **Edit code** بزن؛ تمام کد پیش‌فرض را پاک کن، محتوای کامل فایل [`worker.js`](worker.js) (همین ریپو، ریشه‌ی پروژه — یا مستقیم از [دانلود آماده](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/worker.js)) را جای آن پیست کن و **Deploy** بزن.
+- روی **Edit code** بزن؛ تمام کد پیش‌فرض را پاک کن، محتوای کامل فایل [`worker.js`](worker.js) (همین ریپو، ریشه‌ی پروژه — یا مستقیم از [دانلود آماده](https://github.com/Erfan-8910/Cmail/releases/download/v1.9.0/worker.js)) را جای آن پیست کن و **Deploy** بزن.
 
 **۳) فایل‌های ظاهر (UI) را به Worker وصل کن**
 - برگرد به Worker و **Settings ← Domains & Routes ← Attach assets** (یا در صفحه‌ی اول ساخت Worker گزینه‌ی **Upload assets** را انتخاب کن) و محتویات پوشه‌ی [`public/`](public/) را آپلود کن. نام binding باید همان `ASSETS` بماند.
@@ -314,8 +314,8 @@ And because a mailbox alone is never enough, Cmail behaves like an **ecosystem**
 
 ### ⬇️ Ready-made downloads — no clone needed
 
-- **Full package v1.8.0:** [`CMail-v1.8.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/CMail-v1.8.0.zip) — every file, the `public/` folder for the UI assets and `migrations/` for the schema. All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/worker.js)** — the compiled code you paste into the Cloudflare editor in Route 2; one click, save, done.
+- **Full package v1.9.0:** [`CMail-v1.9.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v1.9.0/CMail-v1.9.0.zip) — every file, the `public/` folder for the UI assets and `migrations/` for the schema. All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v1.9.0/worker.js)** — the compiled code you paste into the Cloudflare editor in Route 2; one click, save, done.
 
 #### Route 1 — one command (terminal)
 
@@ -334,12 +334,12 @@ Everything happens in your browser, inside the Cloudflare dashboard:
 **1) Create the database**
 - Sign in to [dash.cloudflare.com](https://dash.cloudflare.com) ← **Storage & Databases ← D1 SQL Database ← Create**
 - Name it `cmail-db` and create it.
-- Open the **Console** tab of the database. In this repo, open [`migrations/0001_init.sql`](migrations/0001_init.sql), copy its entire content, paste it into the Console ← **Execute**. The tables are ready and you never touch SQL again.
+- Open the **Console** tab of the database. In this repo the [`migrations/`](migrations/) folder holds **three files — run all three, in order**: [`0001_init.sql`](migrations/0001_init.sql), then [`0002_mailbox_identity.sql`](migrations/0002_mailbox_identity.sql), then [`0003_vault_folders.sql`](migrations/0003_vault_folders.sql). Copy each file's entire content, paste it into the Console ← **Execute**, wait for the success message, then move to the next. Once the tables are in, you never touch SQL again.
 
 **2) Create the Worker**
 - **Workers & Pages ← Create ← Workers ← Create Worker**
 - Name it `cmail` and **Deploy** once with the default code.
-- Click **Edit code**, delete the default code, paste the full content of [`worker.js`](worker.js) (the repo root — or grab it straight from the [downloads](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/worker.js)) and **Deploy**.
+- Click **Edit code**, delete the default code, paste the full content of [`worker.js`](worker.js) (the repo root — or grab it straight from the [downloads](https://github.com/Erfan-8910/Cmail/releases/download/v1.9.0/worker.js)) and **Deploy**.
 
 **3) Attach the UI files**
 - Back on the Worker: **Settings ← Domains & Routes ← Attach assets** (or pick **Upload assets** when creating the Worker) and upload the contents of the [`public/`](public/) folder. The binding name must stay `ASSETS`.

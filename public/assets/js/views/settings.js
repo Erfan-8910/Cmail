@@ -77,10 +77,18 @@ async function appearancePane() {
 function paletteCard() {
   const palettes = [
     { key: 'sage', name: () => t('paletteSage'), light: '#aed890', deep: '#4f8f60' },
+    { key: 'emerald', name: () => t('paletteEmerald'), light: '#86dcab', deep: '#2f9e63' },
+    { key: 'ocean', name: () => t('paletteOcean'), light: '#82c8ea', deep: '#2f7fb0' },
     { key: 'blue', name: () => t('paletteBlue'), light: '#8cc8de', deep: '#3f89a6' },
+    { key: 'midnight', name: () => t('paletteMidnight'), light: '#9fadea', deep: '#5765c9' },
     { key: 'violet', name: () => t('paletteViolet'), light: '#c2a7e2', deep: '#7e5fa6' },
-    { key: 'amber', name: () => t('paletteAmber'), light: '#eec27e', deep: '#a06a24' },
+    { key: 'sakura', name: () => t('paletteSakura'), light: '#f2bcd9', deep: '#c25f95' },
     { key: 'rose', name: () => t('paletteRose'), light: '#f2a6ba', deep: '#b45370' },
+    { key: 'wine', name: () => t('paletteWine'), light: '#e2a3b2', deep: '#a34a63' },
+    { key: 'amber', name: () => t('paletteAmber'), light: '#eec27e', deep: '#a06a24' },
+    { key: 'gold', name: () => t('paletteGold'), light: '#ecd27e', deep: '#ab8a2e' },
+    { key: 'coral', name: () => t('paletteCoral'), light: '#f2a58f', deep: '#c05f43' },
+    { key: 'ice', name: () => t('paletteIce'), light: '#bce2ea', deep: '#5f9aa8' },
   ];
   const cur = document.documentElement.dataset.accent || 'sage';
   const grid = h('div', { class: 'palette-grid' });

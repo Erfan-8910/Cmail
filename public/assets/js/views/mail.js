@@ -282,6 +282,8 @@ function drawBulkBar() {
   clear(bar);
   bar.append(
     h('span', { class: 'chip is-on' }, `${selected.size}`),
+    // delete leads the bar — the action people pick must be the first one there
+    h('button', { class: 'chip chip--danger', onclick: () => confirmBox(t('deleteSelConfirm'), () => bulkAction('delete')) }, icon('trash'), t('deleteSel')),
     h('button', { class: 'chip', onclick: () => {
       const visible = emails.filter((x) => !x.expired);
       const every = visible.length && visible.every((x) => selected.has(x.id));
@@ -290,7 +292,6 @@ function drawBulkBar() {
       drawList(); drawBulkBar();
     } }, icon('check'), t('selectAll')),
     h('button', { class: 'chip', onclick: () => bulkAction('read') }, icon('check'), t('markSelRead')),
-    h('button', { class: 'chip chip--danger', onclick: () => confirmBox(t('deleteSelConfirm'), () => bulkAction('delete')) }, icon('trash'), t('deleteSel')),
     h('button', { class: 'chip', onclick: () => { selected.clear(); selecting = false; drawList(); } }, icon('x'), t('clearSel')),
   );
 }
@@ -380,6 +381,12 @@ function emailRow(em) {
     },
   }, icon('star'));
 
+  // per-row overflow menu — the touch-proof way to star / mark / delete
+  const kebab = h('button', {
+    class: 'email-row__kebab', title: t('more'), 'aria-label': t('more'),
+    onclick: (e) => { e.stopPropagation(); vibrate(5); rowMenu(em); },
+  }, icon('more'));
+
   const row = h('div', {
     class: `email-row ${em.is_read ? '' : 'is-unread'} ${selected.has(em.id) ? 'is-selected' : ''} ${viewerState === em.id ? 'is-active' : ''}`,
     dataset: { id: em.id },
@@ -399,7 +406,7 @@ function emailRow(em) {
     h('span', { class: 'email-row__body' },
       h('span', { class: 'email-row__top' },
         h('span', { class: 'email-row__from' }, em.from_name || em.from_addr),
-        h('span', { class: 'email-row__end' }, starSlot, h('span', { class: 'email-row__time' }, timeAgo(em.received_at, t)))),
+        h('span', { class: 'email-row__end' }, starSlot, kebab, h('span', { class: 'email-row__time' }, timeAgo(em.received_at, t)))),
       h('div', { class: 'email-row__subj' }, em.subject || '(no subject)'),
       h('div', { class: 'email-row__prev' }, em.preview || ''),
       flags.children.length ? flags : ''),
@@ -427,6 +434,31 @@ function toggleSelect(id) {
   if (!selected.size) selecting = false;
   drawList();
   drawBulkBar();
+}
+
+// ---------- per-row action sheet (touch-proof star / read / delete) ----------
+function rowMenu(em) {
+  let m = null;
+  const act = (label, icn, fn, cls = 'btn') => h('button', {
+    class: `${cls} menu-act`,
+    onclick: () => { m.close(); fn(); },
+  }, icon(icn), label);
+  m = modal({
+    title: (em.subject || '(no subject)').slice(0, 64), iconName: 'mail',
+    body: [
+      h('div', { class: 'menu-stack' },
+        act(em.starred ? t('unstar') : t('star'), 'star', async () => {
+          try { await api.patch(`/api/emails/${em.id}`, { starred: !em.starred }); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
+        }),
+        act(em.is_read ? t('markUnread') : t('markRead'), 'eye', async () => {
+          try { await api.patch(`/api/emails/${em.id}`, { is_read: !em.is_read }); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
+        }),
+        act(t('delete'), 'trash', () => confirmBox(t('confirm'), async () => {
+          try { await api.del(`/api/emails/${em.id}`); toast(t('deletedN'), 'ok', 1400); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
+        }), 'btn btn--danger')),
+    ],
+    footer: [h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('cancel'))],
+  });
 }
 
 // ---------- keyboard navigation (j/k/Enter/x/s/Escape) ----------

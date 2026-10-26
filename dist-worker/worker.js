@@ -1,4 +1,3 @@
-/* Cmail — compiled bundle. Rebuild: npx esbuild src/worker.ts --bundle --format=esm --outfile=worker.js */
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __esm = (fn, res) => function __init() {
@@ -7404,7 +7403,15 @@ app3.get("/domains", requireUser, async (c) => {
     `SELECT d.id, COUNT(a.id) AS n FROM domains d LEFT JOIN addresses a ON a.domain_id = d.id GROUP BY d.id`
   ).all();
   const countMap = new Map((counts.results ?? []).map((r) => [r.id, r.n]));
-  return c.json({ ok: true, domains: (results ?? []).map((d) => ({ ...d, address_count: countMap.get(d.id) ?? 0 })) });
+  const lasts = await c.env.DB.prepare(
+    `SELECT d.id AS id, MAX(e.received_at) AS last_mail
+     FROM domains d
+     LEFT JOIN addresses a ON a.domain_id = d.id
+     LEFT JOIN emails e ON e.address_id = a.id
+     GROUP BY d.id`
+  ).all();
+  const lastMap = new Map((lasts.results ?? []).map((r) => [r.id, r.last_mail]));
+  return c.json({ ok: true, domains: (results ?? []).map((d) => ({ ...d, address_count: countMap.get(d.id) ?? 0, last_mail: lastMap.get(d.id) ?? null })) });
 });
 app3.post("/domains", requireAdmin, async (c) => {
   const body = await c.req.json().catch(() => null);
