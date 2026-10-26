@@ -362,8 +362,6 @@ export const dict = {
     cmdkNewAlias: 'ساخت صندوق جدید',
     searchMail: 'جستجو',
     newMailToast: 'ایمیل جدید به صندوقت رسید',
-    zoomIn: 'بزرگ‌نمایی',
-    zoomOut: 'کوچک‌نمایی',
     // keyboard shortcuts
     kbTitle: 'میان‌برهای صفحه‌کلید',
     kbSub: 'با صفحه‌کلید کار کن؛ Cmail برای سرعتِ حرفه‌ای‌ها طراحی شده است.',
@@ -768,8 +766,6 @@ export const dict = {
     cmdkNewAlias: 'Create new inbox',
     searchMail: 'Search',
     newMailToast: 'A new email just landed',
-    zoomIn: 'Zoom in',
-    zoomOut: 'Zoom out',
     // keyboard shortcuts
     kbTitle: 'Keyboard shortcuts',
     kbSub: 'Work keyboard-first — Cmail is built for pro speed.',

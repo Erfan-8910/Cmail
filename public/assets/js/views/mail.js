@@ -282,6 +282,13 @@ function drawBulkBar() {
   clear(bar);
   bar.append(
     h('span', { class: 'chip is-on' }, `${selected.size}`),
+    h('button', { class: 'chip', onclick: () => {
+      const visible = emails.filter((x) => !x.expired);
+      const every = visible.length && visible.every((x) => selected.has(x.id));
+      visible.forEach((x) => { if (every) selected.delete(x.id); else selected.add(x.id); });
+      selecting = selected.size > 0;
+      drawList(); drawBulkBar();
+    } }, icon('check'), t('selectAll')),
     h('button', { class: 'chip', onclick: () => bulkAction('read') }, icon('check'), t('markSelRead')),
     h('button', { class: 'chip chip--danger', onclick: () => confirmBox(t('deleteSelConfirm'), () => bulkAction('delete')) }, icon('trash'), t('deleteSel')),
     h('button', { class: 'chip', onclick: () => { selected.clear(); selecting = false; drawList(); } }, icon('x'), t('clearSel')),
@@ -386,7 +393,9 @@ function emailRow(em) {
     },
   },
     h('span', { class: 'select-box', onclick: (e) => { e.stopPropagation(); toggleSelect(em.id); } }),
-    h('span', { class: 'email-row__ava', style: { background: color } }, (em.from_name || em.from_addr || '?').slice(0, 1).toUpperCase()),
+    h('span', { class: 'email-row__ava', style: { background: color }, title: t('selHint'),
+      onclick: (e) => { e.stopPropagation(); toggleSelect(em.id); } },
+      (em.from_name || em.from_addr || '?').slice(0, 1).toUpperCase()),
     h('span', { class: 'email-row__body' },
       h('span', { class: 'email-row__top' },
         h('span', { class: 'email-row__from' }, em.from_name || em.from_addr),
@@ -509,13 +518,13 @@ function detectDir(doc) {
 }
 
 // the base stylesheet injected into every rendered email
-function mailFrameCss(zoom = 1) {
+function mailFrameCss() {
   return `
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body {
-      font: ${Math.round(14.5 * zoom * 10) / 10}px/1.7 -apple-system, 'Segoe UI', 'Vazirmatn', Tahoma, sans-serif;
+      font: 14.5px/1.7 -apple-system, 'Segoe UI', 'Vazirmatn', Tahoma, sans-serif;
       color: #20261f; background: transparent;
       padding: 18px 20px 26px;
       word-break: break-word; overflow-wrap: break-word;
@@ -588,7 +597,6 @@ function drawViewer(col, r) {
   // ----- render mode state -----
   let mode = em.html_body ? 'html' : 'text';
   let narrow = false;
-  let zoom = 1;                      // html reading zoom (0.8 – 1.5)
   const bodyWrap = h('div', { class: 'viewer__body' });
 
   const seg = h('div', { class: 'seg' });
@@ -596,19 +604,6 @@ function drawViewer(col, r) {
   const bText = h('button', { type: 'button' }, icon('code'), t('viewSource'));
   const bWidth = h('button', { type: 'button', class: 'chip', title: t('viewNarrow') }, icon('columns'), h('span', { class: 'hide-sm' }, t('viewNarrow')));
   seg.append(bHtml, bText);
-  const zoomOut = h('button', { type: 'button', class: 'chip zoom-chip', title: t('zoomOut'), 'aria-label': t('zoomOut') }, 'A−');
-  const zoomLbl = h('span', { class: 'zoom-lbl small faint mono' }, '100%');
-  const zoomIn = h('button', { type: 'button', class: 'chip zoom-chip', title: t('zoomIn'), 'aria-label': t('zoomIn') }, 'A+');
-  const zoomRow = h('div', { class: 'zoom-ctl' }, zoomOut, zoomLbl, zoomIn);
-
-  function drawZoom() {
-    zoomLbl.textContent = `${Math.round(zoom * 100)}%`;
-    zoomOut.disabled = zoom <= 0.8;
-    zoomIn.disabled = zoom >= 1.5;
-  }
-  zoomOut.onclick = () => { zoom = Math.max(0.8, Math.round((zoom - 0.1) * 10) / 10); drawZoom(); drawBody(); };
-  zoomIn.onclick = () => { zoom = Math.min(1.5, Math.round((zoom + 0.1) * 10) / 10); drawZoom(); drawBody(); };
-  drawZoom();
 
   function drawSeg() {
     bHtml.classList.toggle('is-on', mode === 'html');
@@ -622,7 +617,7 @@ function drawViewer(col, r) {
   bWidth.onclick = () => { narrow = !narrow; drawBody(); };
   drawSeg();
 
-  col.append(h('div', { class: 'mtools' }, seg, bWidth, zoomRow));
+  col.append(h('div', { class: 'mtools' }, seg, bWidth));
 
   let frame = null;
   function buildFrame() {
@@ -637,7 +632,7 @@ function drawViewer(col, r) {
     f.setAttribute('srcdoc',
       `<!doctype html><html dir="${dir}" lang="${doc.documentElement.getAttribute('lang') || 'en'}"><head>` +
       `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank">` +
-      `<style>${mailFrameCss(zoom)}</style>${doc.head.innerHTML}</head>` +
+      `<style>${mailFrameCss()}</style>${doc.head.innerHTML}</head>` +
       `<body>${doc.body.innerHTML}</body></html>`);
     f.addEventListener('load', () => {
       try {
@@ -659,7 +654,7 @@ function drawViewer(col, r) {
     } else {
       frame = null;
       bodyWrap.append(h('div', { class: 'mail-frame-wrap' },
-        h('div', { class: 'viewer__plain', style: { flex: '1', fontSize: `${Math.round(14.5 * zoom * 10) / 10}px` } }, em.text_body || em.preview || '—')));
+        h('div', { class: 'viewer__plain', style: { flex: '1', fontSize: '14.5px' } }, em.text_body || em.preview || '—')));
     }
   }
   drawBody();

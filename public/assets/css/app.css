@@ -529,11 +529,24 @@ html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
 .auth-alt { margin-top: 14px; font-size: 13px; color: var(--muted); text-align: center; }
 .auth-foot { margin-top: 18px; font-size: 11.5px; color: var(--faint); text-align: center; }
 .auth-ctrls { position: fixed; top: 18px; inset-inline-end: 18px; z-index: 50; display: flex; gap: 6px; }
-/* short laptop windows: shrink the hero so the card always fits comfortably */
+/* short laptop windows: shrink the hero so the card — with its Sign-in button —
+   always paints inside the first viewport; the brand row compresses in steps */
 @media (max-height: 700px) {
-  .auth-logo { width: 76px; animation: none; }
-  .auth-foot { margin-top: 8px; }
-  .auth-wrap { padding: 4px 0; }
+  .auth-logo { width: 64px; animation: none; }
+  .auth-foot { margin-top: 6px; }
+  .auth-wrap { padding: 2px 0; }
+  .auth-card { margin-top: 8px; }
+  .auth-sub { margin-bottom: 12px; }
+  .auth-help .rec-body { max-height: 46vh; overflow-y: auto; }
+}
+@media (max-height: 560px) {
+  .view--auth { padding-top: 12px; }
+  .auth-logo { width: 50px; }
+  .auth-foot { display: none; }
+  .auth-card { padding: 16px 16px 14px; }
+  .auth-sub { margin-bottom: 10px; font-size: 12.5px; }
+  .auth-form { gap: 8px; }
+  .auth-help .rec-body { max-height: 38vh; }
 }
 
 /* ---------- setup gate width ---------- */
@@ -623,7 +636,10 @@ html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
   content: ''; position: absolute; inset-inline-start: 3px; top: 50%; transform: translateY(-50%);
   width: 3.5px; height: 30px; border-radius: 99px; background: var(--acc);
 }
-.email-row__ava { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-weight: 800; font-size: 14px; color: var(--acc-text); flex: none; margin-top: 2px; opacity: .92; }
+.email-row__ava { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-weight: 800; font-size: 14px; color: var(--acc-text); flex: none; margin-top: 2px; opacity: .92; cursor: pointer; transition: transform .15s var(--ease), box-shadow .2s var(--ease); }
+.email-row__ava:hover { transform: scale(1.06); }
+.email-row.is-selected .email-row__ava { box-shadow: 0 0 0 2.5px var(--acc); opacity: 1; }
+@media (hover: none) { .email-row__ava:hover { transform: none; } }
 .email-row__body { flex: 1; min-width: 0; }
 .email-row__top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .email-row__from { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1061,7 +1077,7 @@ kbd.kbd, .kbd {
 }
 /* tabular numbers everywhere digits align */
 .email-row__time, .totp-code, .stat-tile__n, .ab-stat b, .ring__val,
-.topbar__date, .badge, .addr-item__badge, .gate__auto, .zoom-lbl {
+.topbar__date, .badge, .addr-item__badge, .gate__auto {
   font-variant-numeric: tabular-nums;
 }
 
@@ -1239,25 +1255,6 @@ html[dir='rtl'] .cmdk__enter svg { transform: scaleX(-1); }
 .badge.pop { animation: badgePop .5s var(--spring); }
 @keyframes badgePop { 0% { transform: scale(.4); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
 
-/* ---------- viewer zoom control ---------- */
-.mtools { gap: 6px; }
-.zoom-ctl {
-  display: inline-flex; align-items: center; gap: 4px;
-  margin-inline-start: auto;
-  background: var(--field); border: 1px solid var(--field-line);
-  border-radius: 999px; padding: 2.5px;
-}
-.zoom-chip {
-  border: 0; background: none; padding: 3px 9px; border-radius: 999px;
-  font-size: 11px; font-weight: 800; color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  transition: all .2s var(--ease);
-}
-.zoom-chip:hover:not(:disabled) { background: var(--panel-3); color: var(--fg); }
-.zoom-chip:disabled { opacity: .35; cursor: default; }
-.zoom-lbl { min-width: 34px; text-align: center; }
-@media (max-width: 480px) { .zoom-lbl { display: none; } }
-
 /* ---------- auth shake ---------- */
 .shake { animation: shakeX .55s var(--ease); }
 @keyframes shakeX {
@@ -1389,7 +1386,6 @@ html[dir='rtl'] .cmdk__enter svg { transform: scaleX(-1); }
   .btn { padding: 9px 13px; font-size: 12.5px; }
   .compose-fab { width: 48px; height: 48px; inset-inline-end: 12px; }
   .viewer__subj { font-size: 15px; }
-  .zoom-chip { padding: 3px 7px; }
 }
 
 /* very tall phones: keep FAB reachable, lists breathe */

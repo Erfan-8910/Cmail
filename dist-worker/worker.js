@@ -1,3 +1,4 @@
+/* Cmail — compiled bundle. Rebuild: npx esbuild src/worker.ts --bundle --format=esm --outfile=worker.js */
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __esm = (fn, res) => function __init() {

@@ -11,7 +11,7 @@
 
 Temporary & permanent inboxes · notes on every email · built-in 2FA vault · unlimited domains · outgoing mail · zero servers, zero monthly bills
 
-[![Version](https://img.shields.io/badge/version-1.7.0-4f8f60)](https://github.com/Erfan-8910/CMail/releases)
+[![Version](https://img.shields.io/badge/version-1.8.0-4f8f60)](https://github.com/Erfan-8910/CMail/releases)
 [![License](https://img.shields.io/badge/license-MIT-56725c)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-F38020)](https://workers.cloudflare.com)
 [![PRs](https://img.shields.io/badge/PRs-welcome-b4cda3)](https://github.com/Erfan-8910/CMail/pulls)
@@ -94,6 +94,11 @@ Cmail از یک سؤال ساده شروع شد: **چرا برای یک صندو
 
 > پیش‌نیازها: یک **حساب Cloudflare** (پلن رایگان کاملاً کافی است). برای راه خودکار: Node.js نسخه ۱۸ به بالا.
 
+### ⬇️ دانلود آماده — بدون کلون کردن ریپو
+
+- **بستهٔ کامل v1.8.0:** [`CMail-v1.8.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/CMail-v1.8.0.zip) — شامل همه‌ی فایل‌ها، پوشه‌ی `public/` برای آپلود ظاهر و پوشه‌ی `migrations/` برای ساخت جدول‌ها. فهرست همه‌ی نسخه‌ها: [Releases](https://github.com/Erfan-8910/Cmail/releases)
+- **فایل آماده‌ی [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/worker.js)** — همان کد کامپایل‌شده‌ای که در «راه ۲» داخل ادیتور Cloudflare پیست می‌کنی؛ یک کلیک، ذخیره، تمام.
+
 #### راه ۱ — خودکار با یک دستور (ترمینال)
 
 ```bash
@@ -116,7 +121,7 @@ bash deploy.sh
 **۲) Worker را بساز**
 - از منو: **Workers & Pages ← Create ← Workers ← Create Worker**
 - اسمش را بگذار `cmail` و یک بار با همان کد پیش‌فرض **Deploy** بزن.
-- روی **Edit code** بزن؛ تمام کد پیش‌فرض را پاک کن، محتوای کامل فایل [`worker.js`](worker.js) (همین ریپو، ریشه‌ی پروژه) را جای آن پیست کن و **Deploy** بزن.
+- روی **Edit code** بزن؛ تمام کد پیش‌فرض را پاک کن، محتوای کامل فایل [`worker.js`](worker.js) (همین ریپو، ریشه‌ی پروژه — یا مستقیم از [دانلود آماده](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/worker.js)) را جای آن پیست کن و **Deploy** بزن.
 
 **۳) فایل‌های ظاهر (UI) را به Worker وصل کن**
 - برگرد به Worker و **Settings ← Domains & Routes ← Attach assets** (یا در صفحه‌ی اول ساخت Worker گزینه‌ی **Upload assets** را انتخاب کن) و محتویات پوشه‌ی [`public/`](public/) را آپلود کن. نام binding باید همان `ASSETS` بماند.
@@ -307,6 +312,11 @@ And because a mailbox alone is never enough, Cmail behaves like an **ecosystem**
 
 > Prerequisites: a **Cloudflare account** (the free plan is plenty). For the terminal routes: Node.js 18+.
 
+### ⬇️ Ready-made downloads — no clone needed
+
+- **Full package v1.8.0:** [`CMail-v1.8.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/CMail-v1.8.0.zip) — every file, the `public/` folder for the UI assets and `migrations/` for the schema. All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/worker.js)** — the compiled code you paste into the Cloudflare editor in Route 2; one click, save, done.
+
 #### Route 1 — one command (terminal)
 
 ```bash
@@ -329,7 +339,7 @@ Everything happens in your browser, inside the Cloudflare dashboard:
 **2) Create the Worker**
 - **Workers & Pages ← Create ← Workers ← Create Worker**
 - Name it `cmail` and **Deploy** once with the default code.
-- Click **Edit code**, delete the default code, paste the full content of [`worker.js`](worker.js) (the repo root) and **Deploy**.
+- Click **Edit code**, delete the default code, paste the full content of [`worker.js`](worker.js) (the repo root — or grab it straight from the [downloads](https://github.com/Erfan-8910/Cmail/releases/download/v1.8.0/worker.js)) and **Deploy**.
 
 **3) Attach the UI files**
 - Back on the Worker: **Settings ← Domains & Routes ← Attach assets** (or pick **Upload assets** when creating the Worker) and upload the contents of the [`public/`](public/) folder. The binding name must stay `ASSETS`.
