@@ -1,4 +1,16 @@
--- Cmail database schema (D1 / SQLite)
+-- ============================================================================
+--  Cmail migration 0001 — foundation
+-- ----------------------------------------------------------------------------
+--  Creates the core of the system: account + sessions + rate limiting,
+--  domains and inboxes, the mail store with attachments and sticky notes,
+--  the 2FA vault, the settings key/value store — plus the first round of
+--  indexes for the hot paths (inbox lists, retention sweeps).
+--
+--  Every statement is IF NOT EXISTS: safe to run more than once.
+--  CLI users:  npx wrangler d1 migrations apply cmail-db --remote
+--  Fresh installs can skip the chain entirely — schema.sql (or the
+--  one-click button on the Setup screen) builds this final shape in one go.
+-- ============================================================================
 
 CREATE TABLE IF NOT EXISTS users (
   id            TEXT PRIMARY KEY,
