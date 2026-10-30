@@ -56,8 +56,13 @@ export function tokenFrom(c: Context): string | undefined {
 }
 
 // middleware: attach user if any
+// (fail-open: a half-configured deployment must not explode here —
+//  the diagnostics page / setup wizard handles that path)
 export async function attachUser(c: Context, next: Next) {
-  const user = await getUserFromToken(c.env as Env, tokenFrom(c));
+  let user: SessionUser | null = null;
+  try {
+    user = await getUserFromToken(c.env as Env, tokenFrom(c));
+  } catch { user = null; }
   c.set('user', user);
   await next();
 }
@@ -86,23 +91,30 @@ export async function destroySession(env: Env, token: string | undefined) {
 // persistent counter in D1, 10 attempts / 10 minutes per ip+route
 
 export async function rateLimit(env: Env, ip: string, route: string, max = 10, windowMs = 10 * 60_000): Promise<boolean> {
-  const key = `${route}:${ip}`;
-  const t = now();
-  const row = await env.DB.prepare('SELECT count, window_start FROM auth_attempts WHERE key = ?').bind(key)
-    .first<{ count: number; window_start: number }>();
-  if (!row || t - row.window_start > windowMs) {
-    await env.DB.prepare(
-      'INSERT INTO auth_attempts (key, count, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = 1, window_start = excluded.window_start'
-    ).bind(key, t).run();
+  try {
+    const key = `${route}:${ip}`;
+    const t = now();
+    const row = await env.DB!.prepare('SELECT count, window_start FROM auth_attempts WHERE key = ?').bind(key)
+      .first<{ count: number; window_start: number }>();
+    if (!row || t - row.window_start > windowMs) {
+      await env.DB!.prepare(
+        'INSERT INTO auth_attempts (key, count, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = 1, window_start = excluded.window_start'
+      ).bind(key, t).run();
+      return true;
+    }
+    if (row.count >= max) return false;
+    await env.DB!.prepare('UPDATE auth_attempts SET count = count + 1 WHERE key = ?').bind(key).run();
+    return true;
+  } catch {
+    // auth_attempts not created yet (pre-init) → do not block setup flows
     return true;
   }
-  if (row.count >= max) return false;
-  await env.DB.prepare('UPDATE auth_attempts SET count = count + 1 WHERE key = ?').bind(key).run();
-  return true;
 }
 
 export async function rateLimitClear(env: Env, ip: string, route: string) {
-  await env.DB.prepare('DELETE FROM auth_attempts WHERE key = ?').bind(`${route}:${ip}`).run();
+  try {
+    await env.DB!.prepare('DELETE FROM auth_attempts WHERE key = ?').bind(`${route}:${ip}`).run();
+  } catch { /* table may not exist yet */ }
 }
 
 export function clientIp(c: Context): string {

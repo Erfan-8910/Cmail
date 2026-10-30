@@ -1,5 +1,10 @@
 // Cmail — Cloudflare Workers configuration
 // deploy.sh fills <D1_ID> automatically during installation.
+//
+// NOTE: there is intentionally NO "assets" block here. The worker embeds
+// every UI file inside itself (scripts/build-worker.mjs), so the whole app
+// is ONE file: paste worker.js in the dashboard editor, add a single D1
+// binding named DB, done.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cmail",
@@ -8,12 +13,7 @@
   "workers_dev": true,
 
   "vars": {
-    "APP_VERSION": "1.9.0"
-  },
-
-  "assets": {
-    "directory": "./public",
-    "binding": "ASSETS"
+    "APP_VERSION": "2.0.0"
   },
 
   "d1_databases": [

@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
 import { usernameValid, passwordStrong, hashPassword, uid, now, getSettings, setSetting } from '../util';
 import { createSession, setSessionCookie, clientIp, rateLimit } from '../auth';
+import { SCHEMA } from '../generated/schema';
 
 const app = new Hono<AppEnv>();
 
@@ -10,18 +11,32 @@ const app = new Hono<AppEnv>();
 app.get('/status', async (c) => {
   const env = c.env;
 
-  // 1) database reachable?
+  // 1) D1 binding present at all?
+  const db_binding = !!env.DB;
+
+  // 2) database reachable?
   let database = false;
-  try {
-    await env.DB.prepare('SELECT 1').first();
-    database = true;
-  } catch { database = false; }
+  if (env.DB) {
+    try {
+      await env.DB.prepare('SELECT 1').first();
+      database = true;
+    } catch { database = false; }
+  }
+
+  // 3) schema initialized?
+  let tables = false;
+  if (database && env.DB) {
+    try {
+      await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first();
+      tables = true;
+    } catch { tables = false; }
+  }
 
   let admin_created = false;
   let domain = false;
   const settings: Record<string, string> = {};
 
-  if (database) {
+  if (tables && env.DB) {
     try {
       const [adminCount, domainCount, s] = await Promise.all([
         env.DB.prepare("SELECT COUNT(*) AS n FROM users").first<{ n: number }>(),
@@ -31,7 +46,7 @@ app.get('/status', async (c) => {
       admin_created = (adminCount?.n ?? 0) > 0;
       domain = (domainCount?.n ?? 0) > 0;
       Object.assign(settings, s);
-    } catch { /* tables may not exist yet */ }
+    } catch { /* tables may be half-migrated */ }
   }
 
   const sendingProvider = settings.sending_provider || 'none';
@@ -40,7 +55,7 @@ app.get('/status', async (c) => {
     && !!settings.sending_from_email;
 
   const checks = [
-    { id: 'database', ok: database },
+    { id: 'database', ok: db_binding && database && tables },
     { id: 'admin', ok: admin_created },
     { id: 'domain', ok: domain },
     { id: 'sending', ok: sending },
@@ -51,6 +66,9 @@ app.get('/status', async (c) => {
     ok: true,
     ready,
     checks,
+    db_binding,
+    database,
+    tables,
     admin_created,
     login_username: (settings.login_username ?? '1') !== '0',
     domains_configured: domain,
@@ -60,6 +78,42 @@ app.get('/status', async (c) => {
     app_name: settings.app_name || 'Cmail',
     version: c.env.APP_VERSION || '',
   });
+});
+
+// one-click schema creation — the wizard calls this so nobody has to paste
+// SQL into a console ever again. Runs the embedded statement list in order;
+// "healing" ALTERs on older databases fail harmlessly (duplicate column).
+app.post('/init', async (c) => {
+  const env = c.env;
+  if (!env.DB) return c.json({ ok: false, error: 'db_binding_missing' }, 400);
+
+  const ip = clientIp(c);
+  if (!(await rateLimit(env, ip, 'init', 10))) return c.json({ ok: false, error: 'rate_limited' }, 429);
+
+  // refuse once the platform is in use — this is a first-run tool only
+  let already = false;
+  try {
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>();
+    already = (n?.n ?? 0) > 0;
+  } catch { /* users table missing → fresh, proceed */ }
+  if (already) return c.json({ ok: false, error: 'already_setup' }, 409);
+
+  const applied: string[] = [];
+  const skipped: string[] = [];
+  for (const stmt of SCHEMA) {
+    try {
+      await env.DB.prepare(stmt.sql).run();
+      applied.push(stmt.name);
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e);
+      if (stmt.optional || /duplicate column|already exists/i.test(msg)) {
+        skipped.push(stmt.name);
+      } else {
+        return c.json({ ok: false, error: 'init_failed', detail: msg.slice(0, 240), applied, skipped }, 500);
+      }
+    }
+  }
+  return c.json({ ok: true, applied: applied.length, skipped: skipped.length });
 });
 
 // create the one and only account (first visit — choose a username & password)

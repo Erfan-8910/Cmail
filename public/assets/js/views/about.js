@@ -8,7 +8,7 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 export function renderAbout(root) {
   const app = root;
   const FA = (n) => lang === 'fa' ? String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : String(n);
-  const VERSION = '1.9.0';
+  const VERSION = '2.0.0';
 
   // ---------- hero ----------
   const hero = h('section', { class: 'ab-hero glass' },

@@ -53,13 +53,51 @@ export async function renderGate(root) {
     ...children);
 
   // ---------- tutorials ----------
-  function tutDatabase() {
+  // database: three shapes — no binding yet / binding ok, tables missing / all good
+  function tutBinding() {
     return tutPanel(t('tutDbTitle'), 'database',
-      step(1, h('div', {}, t('tutDb1'), term('npx wrangler d1 create cmail-db'))),
-      step(2, h('div', {}, t('tutDb2'), term('"database_id": "…"' ))),
-      step(3, h('div', {}, t('tutDb3'), term('npx wrangler d1 execute cmail-db --remote --file=migrations/0001_init.sql'))),
-      step(4, h('div', {}, t('tutDb4'))),
+      step(1, t('bind1')),
+      step(2, t('bind2')),
+      step(3, t('bind3')),
+      step(4, h('div', {}, t('bind4'), term('npx wrangler d1 create cmail-db'))),
     );
+  }
+
+  function tutInit() {
+    const btn = h('button', { class: 'btn btn--primary init-cta', type: 'button' }, icon('database'), h('span', {}, t('initBtn')));
+    const st = h('span', { class: 'init-st' });
+    btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.classList.add('is-busy');
+      st.textContent = t('initRunning');
+      try {
+        await api.post('/api/setup/init', {});
+        st.textContent = '';
+        toast(t('initDone'), 'ok', 2000);
+        await recheck(true);
+      } catch (err) {
+        btn.disabled = false;
+        btn.classList.remove('is-busy');
+        st.textContent = '';
+        toast(errText(err), 'err');
+      }
+    });
+    return tutPanel(t('initTitle'), 'database',
+      h('p', { class: 'tut__d' }, t('initDesc')),
+      h('div', { class: 'tut__cta init-row' }, btn, st),
+      h('details', { class: 'tut__manual' },
+        h('summary', {}, t('initManual')),
+        step(1, h('div', {}, t('initManualD'), term('npx wrangler d1 execute cmail-db --remote --file=schema.sql'))),
+        step(2, t('initManual2'))),
+    );
+  }
+
+  function tutDatabase() {
+    const s = state.setup || {};
+    if (!s.db_binding) return tutBinding();
+    if (!s.tables) return tutInit();
+    return tutPanel(t('tutDbTitle'), 'database', h('p', { class: 'tut__d' }, t('checkDatabaseD')));
   }
 
   function tutAdmin() {
@@ -198,7 +236,11 @@ export async function renderGate(root) {
         pill.textContent = st == null ? t('gateWaiting') : st ? t('gateConnected') : t('gateNotConnected');
         if (st === false) {
           icn.innerHTML = icon(def.icn).innerHTML;
-          const body = isAdmin() ? tutorials[def.id]?.() ?? memberNote() : memberNote();
+          // the database step is public on purpose: a fresh deployment has no
+          // session yet, and the one-click table setup must be reachable then.
+          const body = isAdmin() || def.id === 'database'
+            ? tutorials[def.id]?.() ?? memberNote()
+            : memberNote();
           clear(tutBox).append(body);
           tutBox.style.display = '';
         } else {

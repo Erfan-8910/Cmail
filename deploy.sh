@@ -79,6 +79,7 @@ good "wrangler.jsonc updated"
 say "Applying database migrations…"
 npx wrangler d1 migrations apply "$DB_NAME" --remote
 good "schema applied"
+echo -e "${DIM}  (CLI users just got every table; dashboard users get a one-click\n   “Create tables automatically” button in the setup wizard instead.)${R}"
 
 say "Setting APP_SECRET…"
 if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
@@ -119,7 +120,9 @@ echo -e "  ${OK}Cmail is live at:${R} $WORKER_URL"
 echo ""
 echo -e "  ${BRAND}Next steps${R}"
 echo -e "  1. Open the URL above — the setup wizard will guide you:"
-echo -e "     admin account → domain → outgoing mail"
+echo -e "     database tables (one click) → admin account → domain → outgoing mail"
+echo -e "  2. The wizard never touches a SQL console — the Init button creates"
+echo -e "     every table and index automatically, and is safe to re-run."
 echo ""
 echo -e "  ${BRAND}Manual Email Routing (if skipped above)${R}"
 echo -e "  • Cloudflare Dashboard → your domain → Email Routing"
