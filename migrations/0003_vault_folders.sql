@@ -1,4 +1,11 @@
--- Cmail 0003 — vault folders: group 2FA keys into folders the user manages
+-- ============================================================================
+--  Cmail migration 0003 — vault folders
+-- ----------------------------------------------------------------------------
+--  Group 2FA keys into user-managed folders: create, rename, delete.
+--  Deleting a folder releases its keys (folder_id becomes NULL) —
+--  no key is ever lost with the folder.
+-- ============================================================================
+
 CREATE TABLE IF NOT EXISTS totp_folders (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,

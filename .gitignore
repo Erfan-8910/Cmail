@@ -4,3 +4,5 @@ node_modules
 _dist
 _check.png
 *.log
+
+dist-worker/
