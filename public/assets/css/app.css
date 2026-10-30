@@ -885,6 +885,30 @@ html[data-theme='light'] .gate__logo { content: url('../img/logo-dark.png'); }
 .tut__step-b { min-width: 0; flex: 1; }
 .tut__d { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); line-height: 1.8; }
 .tut__cta { margin-top: 10px; }
+/* one-click database initialization */
+.init-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.init-cta { padding: 11px 18px; font-size: 13.5px; border-radius: 13px; }
+.init-cta svg { width: 18px; height: 18px; }
+.init-cta.is-busy { animation: initPulse 1.1s ease-in-out infinite; pointer-events: none; }
+@keyframes initPulse {
+  0%, 100% { filter: brightness(1); box-shadow: 0 8px 22px -10px color-mix(in srgb, var(--acc) 55%, transparent); }
+  50% { filter: brightness(1.14); box-shadow: 0 10px 30px -8px color-mix(in srgb, var(--acc) 70%, transparent); }
+}
+.init-st { font-size: 12.5px; color: var(--muted); }
+.init-st:empty { display: none; }
+details.tut__manual {
+  margin-top: 12px; border: 1px dashed var(--line); border-radius: 12px;
+  padding: 9px 13px; background: color-mix(in srgb, var(--panel-2) 55%, transparent);
+}
+details.tut__manual summary {
+  cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--muted);
+  list-style: none; user-select: none;
+}
+details.tut__manual summary::-webkit-details-marker { display: none; }
+details.tut__manual summary::before { content: '▸ '; }
+details.tut__manual[open] summary::before { content: '▾ '; }
+details.tut__manual[open] { padding-bottom: 13px; }
+details.tut__manual .term { margin-top: 8px; }
 .tut__dns { margin-top: 12px; }
 .tut .term, .tut .gate__form, .tut .gate__inline { margin-top: 7px; }
 .term {

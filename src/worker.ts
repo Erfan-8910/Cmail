@@ -1,9 +1,14 @@
 // Cmail — Cloudflare Worker entry
-// API (Hono) + incoming email handler + scheduled cleanup + static assets
+// API (Hono) + incoming email handler + scheduled cleanup + fully
+// self-contained UI (every asset is embedded in the bundle — the worker
+// serves its own interface, so deployment needs nothing but this file
+// and one D1 binding).
 import { Hono } from 'hono';
 import type { Env, AppEnv } from './util';
-import { attachUser, destroySession, tokenFrom } from './auth';
+import { attachUser } from './auth';
 import { handleEmail, scheduledCleanup } from './emailin';
+import { ASSET_FILES } from './generated/assets';
+import { diagnosticResponse } from './diag';
 import setupRoutes from './routes/setup';
 import authRoutes from './routes/auth';
 import addressRoutes from './routes/addresses';
@@ -38,6 +43,37 @@ app.use('*', async (c, next) => {
   }
 });
 
+// ---------- embedded UI ----------
+function asset(name: string): Response | null {
+  const f = ASSET_FILES[name];
+  if (!f) return null;
+  const headers: Record<string, string> = {
+    'Content-Type': f.type,
+    ETag: f.tag,
+    'Cache-Control': f.type.startsWith('image/') ? 'public, max-age=86400' : 'no-cache',
+  };
+  const body: BodyInit = f.text !== undefined ? f.text : Uint8Array.from(atob(f.b64!), (ch) => ch.charCodeAt(0));
+  return new Response(body, { status: 200, headers });
+}
+
+app.get('/', (c) => {
+  const hit = asset('index.html');
+  if (hit && c.req.header('If-None-Match') === hit.headers.get('ETag')) return c.body(null, 304);
+  return hit ?? c.text('Not found', 404);
+});
+app.get('/index.html', (c) => asset('index.html') ?? c.text('Not found', 404));
+app.get('/manifest.json', (c) => asset('manifest.json') ?? c.text('Not found', 404));
+app.get('/assets/*', (c) => {
+  let name = '';
+  try { name = decodeURIComponent(new URL(c.req.url).pathname); } catch { return c.text('Bad request', 400); }
+  // '/assets/css/app.css' → 'assets/css/app.css' (keys are paths relative to public/)
+  name = name.replace(/^\/+/, '');
+  const hit = asset(name);
+  if (!hit) return c.text('Not found', 404);
+  if (c.req.header('If-None-Match') === hit.headers.get('ETag')) return c.body(null, 304);
+  return hit;
+});
+
 // ---------- api ----------
 app.use('/api/*', attachUser);
 app.use('/api/*', async (c, next) => {
@@ -57,18 +93,38 @@ app.get('/api/health', (c) => c.json({ ok: true, service: 'cmail', time: Date.no
 // api 404
 app.all('/api/*', (c) => c.json({ ok: false, error: 'not_found' }, 404));
 
-// ---------- spa fallback (non-api GET) ----------
-app.notFound(async (c) => {
+// ---------- fallbacks ----------
+app.notFound((c) => {
   if (c.req.method === 'GET' && !c.req.path.startsWith('/api')) {
-    return c.env.ASSETS.fetch(new Request(new URL('/', c.req.url).toString(), { method: 'GET' }));
+    return asset('index.html') ?? c.text('Not found', 404);
   }
   return c.text('Not found', 404);
+});
+
+// API errors stay JSON; pages get the styled diagnostics page.
+app.onError((err, c) => {
+  if (c.req.path.startsWith('/api')) {
+    return c.json(
+      { ok: false, error: 'server_error', detail: String(err?.message ?? err).slice(0, 200) },
+      500
+    );
+  }
+  return diagnosticResponse(c.req.raw, c.env, err);
 });
 
 // ---------- exports ----------
 
 export default {
-  fetch: app.fetch,
+  // last-resort net: even a broken deployment shows guidance, never a bare
+  // "internal server error". (try/catch for synchronous throws, .catch for
+  // async rejections — both layers matter.)
+  fetch: (req: Request, env: Env, ctx: ExecutionContext) => {
+    try {
+      return app.fetch(req, env, ctx).catch((e: unknown) => diagnosticResponse(req, env, e));
+    } catch (e) {
+      return diagnosticResponse(req, env, e);
+    }
+  },
 
   // Cloudflare Email Routing receiver
   async email(message: ForwardableEmailMessage, env: Env, _ctx: ExecutionContext) {

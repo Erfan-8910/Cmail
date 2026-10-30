@@ -3,8 +3,9 @@ import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 export type Env = {
+  // D1 — the ONLY binding Cmail needs. If a deployment ships without it the
+  // diagnostics layer answers with setup guidance instead of a raw 500.
   DB: D1Database;
-  ASSETS: Fetcher;
   APP_SECRET?: string;
   APP_VERSION?: string;
 };
@@ -106,6 +107,7 @@ export async function getSettings(env: Env, keys: string[]): Promise<Record<stri
 // Application secret used for AES key derivation (TOTP encryption, tokens).
 export async function appSecret(env: Env): Promise<string> {
   if (env.APP_SECRET && env.APP_SECRET.length >= 16) return env.APP_SECRET;
+  if (!env.DB) throw new Error('D1 binding (DB) is not configured for this Worker');
   let s = await getSetting(env, 'app_secret');
   if (!s) {
     const buf = new Uint8Array(32);
