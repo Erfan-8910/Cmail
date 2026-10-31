@@ -1,8 +1,9 @@
-// Cmail — settings view (appearance, security, admin: general/sending/users)
+// Cmail — settings view (appearance, security, admin: health/general/sending/users)
 import { api, state, errText } from '../api.js';
 import { t, lang, setLang } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, fmtBytes, fmtDate } from '../ui.js';
 import { setTheme, setAccent } from '../app.js';
+import { healthPane } from '../health.js';
 
 export async function renderSettings(root) {
   clear(root);
@@ -16,12 +17,12 @@ export async function renderSettings(root) {
 
   const isAdmin = state.user?.role === 'admin';
   const tabs = isAdmin
-    ? [['appearance', t('appearance'), 'sun'], ['security', t('security'), 'shield'], ['general', t('general'), 'settings'], ['sending', t('sending'), 'send']]
+    ? [['health', t('health'), 'zap'], ['appearance', t('appearance'), 'sun'], ['security', t('security'), 'shield'], ['general', t('general'), 'settings'], ['sending', t('sending'), 'send']]
     : [['appearance', t('appearance'), 'sun'], ['security', t('security'), 'shield']];
 
   const tabBar = h('div', { class: 'filters', style: { padding: 0, marginBottom: '14px' } });
   const body = h('div', {});
-  let current = 'appearance';
+  let current = isAdmin ? 'health' : 'appearance';
 
   function drawTabs() {
     clear(tabBar);
@@ -34,6 +35,7 @@ export async function renderSettings(root) {
     clear(body);
     if (current === 'appearance') body.append(await appearancePane());
     if (current === 'security') body.append(await securityPane());
+    if (isAdmin && current === 'health') body.append(await healthPane());
     if (isAdmin && current === 'general') body.append(await generalPane());
     if (isAdmin && current === 'sending') body.append(await sendingPane());
   }

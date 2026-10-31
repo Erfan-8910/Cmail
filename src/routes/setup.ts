@@ -4,32 +4,16 @@ import type { Env, AppEnv, SessionUser } from '../util';
 import { createSession, setSessionCookie, clientIp, rateLimit, requireUser } from '../auth';
 import { usernameValid, passwordStrong, hashPassword, uid, now, getSettings, setSetting, RE_DOMAIN } from '../util';
 import { SCHEMA } from '../generated/schema';
+import { TABLES, EXPECTED } from '../tables';
 
 const app = new Hono<AppEnv>();
 
 // --------------------------------------------------------------------------
-//  Table registry — the embedded schema parsed once into per-table groups,
-//  so the Setup screen can show exactly what exists, build what's missing
-//  and offer to drop what isn't ours. heal_* ALTERs ride along with their
-//  table so legacy databases get repaired by the same buttons.
+//  The table registry lives in src/tables.ts (shared with the Health panel)
+//  so the Setup screen shows exactly what exists, builds what's missing and
+//  offers to drop what isn't ours — and the heal_* ALTERs ride along with
+//  their table so legacy databases get repaired by the same buttons.
 // --------------------------------------------------------------------------
-type TableDef = { name: string; stmts: typeof SCHEMA };
-
-const TABLES: TableDef[] = (() => {
-  const map = new Map<string, TableDef>();
-  for (const stmt of SCHEMA) {
-    const m = /CREATE TABLE IF NOT EXISTS (\w+)/.exec(stmt.sql)
-      ?? /CREATE INDEX IF NOT EXISTS \w+ ON (\w+)/.exec(stmt.sql)
-      ?? /ALTER TABLE (\w+)/.exec(stmt.sql);
-    if (!m) continue;
-    let def = map.get(m[1]);
-    if (!def) { def = { name: m[1], stmts: [] }; map.set(m[1], def); }
-    def.stmts.push(stmt);
-  }
-  return [...map.values()];
-})();
-
-const EXPECTED = new Set(TABLES.map((t) => t.name));
 
 // a fresh install has no accounts yet — table tooling stays public until the
 // first admin exists, then it locks to admins only

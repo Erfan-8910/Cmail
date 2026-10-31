@@ -1,9 +1,10 @@
-// Cmail — admin: overview, users, settings
+// Cmail — admin: overview, users, settings, deep health report
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
 import { uid, now, clean, getSettings, setSetting, hashPassword, passwordStrong, RE_LOCAL_PART, randomLocalPart } from '../util';
 import { requireAdmin } from '../auth';
 import { testProvider } from '../emailout';
+import { TABLES, EXPECTED } from '../tables';
 
 const app = new Hono<AppEnv>();
 
@@ -124,6 +125,178 @@ app.post('/cleanup', requireAdmin, async (c) => {
   const { scheduledCleanup } = await import('../emailin');
   await scheduledCleanup(c.env);
   return c.json({ ok: true });
+});
+
+// --------------------------------------------------------------------------
+//  Deep health report — the single source the Health tab and the top-of-page
+//  alert banners both read. Every check maps to a fix the UI can offer:
+//  missing tables get a build button, old columns get a repair button, a
+//  silent cron or a stalled mail flow gets named in plain language.
+// --------------------------------------------------------------------------
+type Issue = { code: string; severity: 'err' | 'warn'; detail?: string };
+
+app.get('/health', requireAdmin, async (c) => {
+  const env = c.env;
+  const t0 = Date.now();
+  const issues: Issue[] = [];
+
+  // ---- 1) D1 binding + connectivity ----
+  const db_binding = !!env.DB;
+  let connected = false;
+  let latency_ms: number | null = null;
+  if (env.DB) {
+    try {
+      await env.DB.prepare('SELECT 1').first();
+      connected = true;
+      latency_ms = Date.now() - t0;
+    } catch { connected = false; }
+  }
+  if (!db_binding) issues.push({ code: 'db_binding', severity: 'err' });
+  else if (!connected) issues.push({ code: 'db_down', severity: 'err' });
+
+  // ---- 2) tables + expected columns ----
+  type TableRow = { name: string; exists: boolean; rows: number | null; missing_cols: string[] };
+  const tables: TableRow[] = [];
+  const extras: string[] = [];
+  let missingTables = 0;
+  let missingCols = 0;
+  if (connected) {
+    const { results } = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    ).all<{ name: string }>();
+    const existing = new Set((results ?? []).map((r) => r.name));
+    for (const t of TABLES) {
+      const exists = existing.has(t.name);
+      let rows: number | null = null;
+      let missing_cols: string[] = [];
+      if (exists) {
+        try { rows = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${t.name}`).first<{ n: number }>())?.n ?? 0; }
+        catch { rows = null; }
+        try {
+          const info = await env.DB.prepare(`PRAGMA table_info(${t.name})`).all<{ name: string }>();
+          const have = new Set((info.results ?? []).map((r) => r.name));
+          missing_cols = t.columns.filter((col) => !have.has(col));
+        } catch { /* pragma unavailable — treat as ok */ }
+      }
+      tables.push({ name: t.name, exists, rows, missing_cols });
+      if (!exists) missingTables++;
+      missingCols += missing_cols.length;
+    }
+    for (const n of existing) if (!EXPECTED.has(n)) extras.push(n);
+  }
+  if (missingTables > 0) issues.push({ code: 'tables_missing', severity: 'err', detail: String(missingTables) });
+  if (missingCols > 0) issues.push({ code: 'schema_outdated', severity: 'err', detail: String(missingCols) });
+
+  // ---- 3) background cleanup (cron) heartbeat ----
+  let cron_last: number | null = null;
+  let install_age_h: number | null = null;
+  try {
+    const s = await getSettings(env, ['last_cron_run']);
+    cron_last = s.last_cron_run ? parseInt(s.last_cron_run, 10) : null;
+    const first = await env.DB.prepare('SELECT MIN(created_at) AS t FROM users').first<{ t: number | null }>();
+    if (first?.t) install_age_h = (now() - first.t) / 3600_000;
+  } catch { /* tables may not exist yet */ }
+  const cron_age_h = cron_last ? (now() - cron_last) / 3600_000 : null;
+  const cron_dead = tables_ok() && install_age_h !== null && install_age_h > 26
+    && (cron_last === null || cron_age_h === null || cron_age_h > 26);
+  if (cron_dead) issues.push({ code: 'cron_dead', severity: 'warn' });
+
+  // ---- 4) mail flow ----
+  let emails_total = 0, addresses_total = 0, temp_active = 0;
+  let last_mail: number | null = null;
+  const ready_domains: string[] = [];
+  const stuck_domains: { name: string; status: string }[] = [];
+  if (connected) {
+    try {
+      const [em, ad, tp, lm] = await Promise.all([
+        env.DB.prepare('SELECT COUNT(*) AS n FROM emails').first<{ n: number }>(),
+        env.DB.prepare('SELECT COUNT(*) AS n FROM addresses').first<{ n: number }>(),
+        env.DB.prepare("SELECT COUNT(*) AS n FROM addresses WHERE kind='temp' AND expires_at > ?").bind(now()).first<{ n: number }>(),
+        env.DB.prepare('SELECT MAX(received_at) AS m FROM emails').first<{ m: number | null }>(),
+      ]);
+      emails_total = em?.n ?? 0;
+      addresses_total = ad?.n ?? 0;
+      temp_active = tp?.n ?? 0;
+      last_mail = lm?.m ?? null;
+    } catch { /* half-migrated db — leave zeros */ }
+    try {
+      const { results } = await env.DB.prepare('SELECT name, status FROM domains').all<{ name: string; status: string }>();
+      for (const d of results ?? []) {
+        if (d.status === 'verified' || d.status === 'unverified') ready_domains.push(d.name);
+        else stuck_domains.push({ name: d.name, status: d.status });
+      }
+    } catch { /* domains table missing */ }
+  }
+  // no mail ever, past the install grace window, while an inbox exists → nudge
+  const mail_stalled = ready_domains.length > 0 && addresses_total > 0
+    && last_mail === null && install_age_h !== null && install_age_h > 6;
+  if (mail_stalled) issues.push({ code: 'mail_stalled', severity: 'warn' });
+  if (stuck_domains.length > 0) issues.push({ code: 'domains_stuck', severity: 'warn', detail: String(stuck_domains.length) });
+
+  // ---- 5) sending provider (informational) ----
+  let sending = { provider: 'none', ready: false };
+  try {
+    const s = await getSettings(env, ['sending_provider', 'sending_api_key', 'sending_from_email']);
+    const provider = s.sending_provider || 'none';
+    sending = { provider, ready: provider !== 'none' && !!s.sending_api_key && !!s.sending_from_email };
+  } catch { /* settings table missing */ }
+
+  const status = issues.some((i) => i.severity === 'err') ? 'err' : issues.length ? 'warn' : 'ok';
+  return c.json({
+    ok: true,
+    version: env.APP_VERSION ?? '',
+    time: now(),
+    status,
+    issues,
+    db: { binding: db_binding, connected, latency_ms },
+    tables,
+    extras,
+    cron: { last_run: cron_last, age_hours: cron_age_h === null ? null : Math.round(cron_age_h * 10) / 10, dead: cron_dead },
+    mail: {
+      emails_total, addresses_total, temp_active,
+      last_mail, last_mail_age_h: last_mail ? Math.round(((now() - last_mail) / 3600_000) * 10) / 10 : null,
+      ready_domains, stuck_domains,
+    },
+    sending,
+  });
+
+  function tables_ok(): boolean { return connected && missingTables === 0; }
+});
+
+// one-press repair from the Health panel: recreate missing tables and add
+// columns that older installs never got — safe to run any time (every
+// statement is IF NOT EXISTS or tolerates a duplicate-column error)
+app.post('/health/repair', requireAdmin, async (c) => {
+  if (!c.env.DB) return c.json({ ok: false, error: 'db_binding_missing' }, 400);
+  const env = c.env;
+  const applied: string[] = [];
+  const skipped: string[] = [];
+
+  const { results } = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table'").all<{ name: string }>();
+  const existing = new Set((results ?? []).map((r) => r.name));
+
+  for (const t of TABLES) {
+    const wholeMissing = !existing.has(t.name);
+    if (!wholeMissing && !t.columns.length) continue; // nothing to compare
+    let needsHelp = wholeMissing;
+    if (!wholeMissing && t.columns.length) {
+      try {
+        const info = await env.DB.prepare(`PRAGMA table_info(${t.name})`).all<{ name: string }>();
+        const have = new Set((info.results ?? []).map((r) => r.name));
+        needsHelp = t.columns.some((col) => !have.has(col));
+      } catch { needsHelp = true; }
+    }
+    if (!needsHelp) continue;
+    for (const stmt of t.stmts) {
+      try { await env.DB.prepare(stmt.sql).run(); applied.push(stmt.name); }
+      catch (e) {
+        const msg = String((e as Error)?.message ?? e);
+        if (stmt.optional || /duplicate column|already exists/i.test(msg)) skipped.push(stmt.name);
+        else return c.json({ ok: false, error: 'repair_failed', detail: msg.slice(0, 240), applied, skipped }, 500);
+      }
+    }
+  }
+  return c.json({ ok: true, applied: applied.length, skipped: skipped.length });
 });
 
 export default app;

@@ -1,4 +1,7 @@
 // Cmail — incoming email handler (Cloudflare Email Routing → Worker)
+// Rule zero: a platform hiccup must never bounce real mail. Every database
+// touch below degrades gracefully — an older schema falls back to the
+// columns it actually has, a heartbeat failure stays silent.
 import PostalMime from 'postal-mime';
 import type { Env, } from './util';
 import { uid, now, previewOf, randomLocalPart } from './util';
@@ -14,15 +17,29 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
 
   const db = env.DB;
 
-  // find domain (with its registration lifecycle)
-  const domain = await db.prepare('SELECT id, catch_all, active, status, verify_code, verify_expires FROM domains WHERE name = ?')
-    .bind(domainName).first<{ id: string; catch_all: number; active: number; status: string; verify_code: string | null; verify_expires: number | null }>();
+  // find domain (with its registration lifecycle). On a database that hasn't
+  // run the 2.2 lifecycle migration yet, the wide SELECT would throw and the
+  // message would bounce — so fall back to the pre-2.2 column shape and keep
+  // delivering exactly like 2.1 did.
+  type DomRow = { id: string; catch_all: number; active: number; status?: string | null; verify_code?: string | null; verify_expires?: number | null };
+  let domain: DomRow | null = null;
+  let legacySchema = false;
+  try {
+    domain = await db.prepare('SELECT id, catch_all, active, status, verify_code, verify_expires FROM domains WHERE name = ?')
+      .bind(domainName).first<DomRow>();
+  } catch {
+    try {
+      domain = await db.prepare('SELECT id, catch_all, active FROM domains WHERE name = ?')
+        .bind(domainName).first<DomRow>();
+      legacySchema = true; // no lifecycle columns → behave like v2.1
+    } catch { domain = null; }
+  }
 
   // ---- connect-wizard loop verification ----
   // while a domain is 'verifying', the only mail it expects is the code mail:
   // any message to <verify_code>@<domain> proves the MX path works, flips the
   // domain to 'verified' and never touches the mail store.
-  if (domain && domain.status === 'verifying' && domain.verify_code
+  if (domain && !legacySchema && domain.status === 'verifying' && domain.verify_code
     && local === domain.verify_code
     && (!domain.verify_expires || domain.verify_expires > now())) {
     await db.prepare("UPDATE domains SET status = 'verified', stage = 3, verify_code = NULL, verify_expires = NULL WHERE id = ?")
@@ -31,7 +48,8 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
   }
 
   // a domain still inside its wizard holds no mailboxes yet: drop quietly
-  if (domain && (domain.status === 'draft' || domain.status === 'verifying')) return;
+  // (legacy schemas never enter the wizard, so they pass through)
+  if (domain && !legacySchema && (domain.status === 'draft' || domain.status === 'verifying')) return;
 
   // find address
   let addr = await db.prepare('SELECT id, user_id, expires_at, forward_to, kind FROM addresses WHERE address = ?').bind(to)
@@ -104,6 +122,12 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
 
   await db.prepare('UPDATE addresses SET last_mail_at = ? WHERE id = ?').bind(now(), addr.id).run();
 
+  // heartbeat for the health panel ("mail is flowing") — never fail the message over it
+  try {
+    await db.prepare("INSERT INTO settings (key, value) VALUES ('last_mail_at', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .bind(String(now())).run();
+  } catch { /* cosmetic only */ }
+
   // optional forwarding via Email Routing (destination must be verified in CF dashboard)
   const fwd = addr.forward_to;
   if (fwd) {
@@ -149,4 +173,9 @@ export async function scheduledCleanup(env: Env): Promise<void> {
   await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(t).run();
   // old rate-limit rows
   await env.DB.prepare('DELETE FROM auth_attempts WHERE window_start < ?').bind(t - 3600_000).run();
+  // heartbeat: the health panel shows "background cleanup ran X ago"
+  try {
+    await env.DB.prepare("INSERT INTO settings (key, value) VALUES ('last_cron_run', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .bind(String(t)).run();
+  } catch { /* cosmetic only */ }
 }
