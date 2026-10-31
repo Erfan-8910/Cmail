@@ -10,14 +10,16 @@
 --    · npx wrangler d1 execute cmail-db --remote --file=schema.sql
 --
 --  Shape: 11 tables · 15 indexes — the final form of every migration
---  (0001 → 0004) merged, so fresh installs skip the chain entirely.
+--  (0001 → 0005) merged, so fresh installs skip the chain entirely.
+--  Console-safe by design: comments carry no semicolons, every statement
+--  is IF NOT EXISTS, and nothing here can ever error on a re-run.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
 --  Identity & access
 -- ----------------------------------------------------------------------------
 
--- The single admin account. Passwords live as PBKDF2-SHA256 strings;
+-- The single admin account. Passwords live as PBKDF2-SHA256 strings and
 -- the TOTP secret is stored AES-GCM-sealed, never in the clear.
 CREATE TABLE IF NOT EXISTS users (
   id            TEXT PRIMARY KEY,
@@ -55,16 +57,23 @@ CREATE TABLE IF NOT EXISTS auth_attempts (
 -- ----------------------------------------------------------------------------
 
 -- Every domain routed through Cloudflare Email Routing to this Worker.
+-- Lifecycle: draft (wizard in progress) → verifying (awaiting the loop mail)
+-- → verified — or unverified (owner skipped the loop knowingly). Legacy rows
+-- default to verified, so pre-2.2 installs keep working untouched.
 CREATE TABLE IF NOT EXISTS domains (
-  id         TEXT PRIMARY KEY,
-  name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  label      TEXT,
-  active     INTEGER NOT NULL DEFAULT 1,
-  catch_all  INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL
+  id             TEXT PRIMARY KEY,
+  name           TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  label          TEXT,
+  active         INTEGER NOT NULL DEFAULT 1,
+  catch_all      INTEGER NOT NULL DEFAULT 1,
+  status         TEXT NOT NULL DEFAULT 'verified',  -- draft | verifying | verified | unverified
+  stage          INTEGER NOT NULL DEFAULT 3,        -- wizard stage kept for resume: 1 connect · 2 verify · 3 done
+  verify_code    TEXT,                              -- local part awaiting the loop mail (verifying only)
+  verify_expires INTEGER,                           -- code expiry, ms epoch
+  created_at     INTEGER NOT NULL
 );
 
--- The inboxes. 'permanent' addresses live forever; 'temp' ones carry an
+-- The inboxes. permanent addresses live forever, temp ones carry an
 -- expires_at stamp the cron enforces. notes is the per-mailbox memo
 -- (credentials hints, owner, purpose) shown in the account bar.
 CREATE TABLE IF NOT EXISTS addresses (
@@ -85,7 +94,7 @@ CREATE TABLE IF NOT EXISTS addresses (
 --  Mail
 -- ----------------------------------------------------------------------------
 
--- Full messages. html_body keeps the sanitized original; preview is the
+-- Full messages. html_body keeps the sanitized original, preview is the
 -- list-line snippet so the list never touches the big columns.
 CREATE TABLE IF NOT EXISTS emails (
   id          TEXT PRIMARY KEY,

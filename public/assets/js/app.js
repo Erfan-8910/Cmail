@@ -72,9 +72,13 @@ async function route() {
   }
   const ready = !!state.setup?.ready;
 
-  // GATE — the main app stays closed until every prerequisite is connected
+  // GATE — the main app stays closed until every prerequisite is connected.
+  // A fresh install lands on the setup screen itself: the D1 step comes
+  // before the username form. Once the tables exist, the sign-in page is
+  // reachable normally and the gate handles the remaining steps (domain…).
   if (!ready) {
-    const allowed = page === 'status' || page === 'login';
+    const dbPending = !!state.setup && !state.setup.tables;
+    const allowed = page === 'status' || (page === 'login' && !dbPending);
     if (!allowed) { location.hash = '#/status'; return; }
   } else if (page === 'status' && !location.hash.includes('stay')) {
     location.hash = state.user ? '#/mail' : '#/login'; return;

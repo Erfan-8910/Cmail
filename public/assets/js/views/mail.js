@@ -782,14 +782,17 @@ export async function createAddressModal(onDone) {
       state.domains = r.domains ?? [];
     }
   } catch (e) { toast(errText(e), 'err'); return; }
-  if (!state.domains.length) {
-    toast(t('invalidDomain'), 'err');
+  // only domains that finished their registration can hold a mailbox —
+  // drafts and verifying ones stay out of the picker entirely
+  const usable = state.domains.filter((d) => !d.status || d.status === 'verified' || d.status === 'unverified');
+  if (!usable.length) {
+    toast(t('noUsableDomain'), 'err');
     return;
   }
 
   let kind = 'temp';
   const kindRow = h('div', { class: 'row', style: { gap: '8px' } });
-  const domainSel = h('select', { class: 'input' }, state.domains.map((d) => h('option', { value: d.name }, d.name)));
+  const domainSel = h('select', { class: 'input' }, usable.map((d) => h('option', { value: d.name }, d.name)));
   const local = h('input', { class: 'input ltr', placeholder: 'name' });
   const labelIn = h('input', { class: 'input', placeholder: t('label') });
   const ttlSel = h('select', { class: 'input' },

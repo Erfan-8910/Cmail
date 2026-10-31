@@ -79,26 +79,90 @@ ${entries.map((e) => {
 writeFileSync(join(GEN, 'assets.ts'), assetsTs);
 
 // ---------- 2) schema statements ----------
+// ORDER MATTERS: strip whole-line comments BEFORE splitting on ';'.
+// Splitting first corrupts statements whenever a comment contains a
+// semicolon or quote (real bug: "-- …original; preview is the" glued the
+// fragment "preview is the" onto CREATE TABLE emails → init syntax error
+// on fresh installs). A statement list that starts with prose is exactly
+// how a deployed worker answers "internal server error" to the setup call.
 const schemaSql = readFileSync(join(ROOT, 'schema.sql'), 'utf8');
-const clean = (chunk) =>
-  chunk
-    .split('\n')
-    .filter((l) => !l.trim().startsWith('--'))
-    .join('\n')
-    .trim();
 
-const statements = schemaSql
-  .split(';')
-  .map(clean)
-  .filter((s) => s.length > 0)
+const STMT_START = /^(CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|REPLACE|BEGIN|COMMIT|VACUUM|ANALYZE|PRAGMA)\b/i;
+
+// remove -- comments (whole-line AND trailing) without touching '…' literals
+function stripSqlComments(raw) {
+  let out = '';
+  let inStr = false;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (inStr) {
+      out += ch;
+      if (ch === "'") {
+        if (raw[i + 1] === "'") { out += "'"; i++; } // escaped ''
+        else inStr = false;
+      }
+      continue;
+    }
+    if (ch === "'") { inStr = true; out += ch; continue; }
+    if (ch === '-' && raw[i + 1] === '-') {
+      while (i < raw.length && raw[i] !== '\n') i++;
+      out += '\n';
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+// split on ';' only outside string literals, validate every statement
+function parseStatements(raw, label) {
+  const text = stripSqlComments(raw);
+  const stmts = [];
+  let cur = '';
+  let inStr = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    cur += ch;
+    if (inStr) {
+      if (ch === "'") {
+        if (text[i + 1] === "'") { cur += "'"; i++; }
+        else inStr = false;
+      }
+      continue;
+    }
+    if (ch === "'") { inStr = true; continue; }
+    if (ch === ';') {
+      const s = cur.trim();
+      if (s.length > 1) stmts.push(s.slice(0, -1).trim());
+      cur = '';
+    }
+  }
+  const rest = cur.trim();
+  if (rest) stmts.push(rest);
+  return stmts.map((sql) => {
+    if (!STMT_START.test(sql)) {
+      throw new Error(
+        `${label}: split produced a non-SQL statement — "${sql.slice(0, 70).replace(/\s+/g, ' ')}…"`
+      );
+    }
+    return sql;
+  });
+}
+
+const statements = parseStatements(schemaSql, 'schema.sql')
   .map((sql, i) => ({ name: `stmt_${String(i + 1).padStart(2, '0')}`, sql, optional: false }));
 
 // healing statements: bring databases created by older releases up to date.
 // they fail harmlessly ("duplicate column") on fresh installs → marked optional.
 const healing = [];
-for (const m of ['migrations/0002_mailbox_identity.sql', 'migrations/0003_vault_folders.sql']) {
-  const sql = readFileSync(join(ROOT, m), 'utf8');
-  for (const st of sql.split(';').map(clean)) {
+for (const m of [
+  'migrations/0002_mailbox_identity.sql',
+  'migrations/0003_vault_folders.sql',
+  'migrations/0005_domain_lifecycle.sql',
+]) {
+  let sql;
+  try { sql = readFileSync(join(ROOT, m), 'utf8'); } catch { continue; }
+  for (const st of parseStatements(sql, m)) {
     if (/^ALTER TABLE/i.test(st)) healing.push({ name: `heal_${healing.length + 1}`, sql: st, optional: true });
   }
 }

@@ -15,7 +15,9 @@ app.get('/domains', requireUser, async (c) => {
   const admin = u.role === 'admin';
   const { results } = admin
     ? await c.env.DB.prepare('SELECT * FROM domains ORDER BY created_at DESC').all<{ id: string; name: string; label: string | null; active: number; catch_all: number; created_at: number }>()
-    : await c.env.DB.prepare('SELECT id, name, label FROM domains WHERE active = 1 ORDER BY created_at').all<{ id: string; name: string; label: string | null }>();
+    // members only ever see domains that finished registration — drafts and
+    // verifying ones are the admin's construction site
+    : await c.env.DB.prepare("SELECT id, name, label FROM domains WHERE active = 1 AND status IN ('verified', 'unverified') ORDER BY created_at").all<{ id: string; name: string; label: string | null }>();
   const counts = await c.env.DB.prepare(
     `SELECT d.id, COUNT(a.id) AS n FROM domains d LEFT JOIN addresses a ON a.domain_id = d.id GROUP BY d.id`
   ).all<{ id: string; n: number }>();
@@ -39,9 +41,84 @@ app.post('/domains', requireAdmin, async (c) => {
   const exists = await c.env.DB.prepare('SELECT id FROM domains WHERE name = ?').bind(name).first();
   if (exists) return c.json({ ok: false, error: 'domain_exists' }, 409);
   const id = uid('dom_');
-  await c.env.DB.prepare('INSERT INTO domains (id, name, label, catch_all, created_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(id, name, clean(body?.label, 80) || null, body?.catch_all === false ? 0 : 1, now()).run();
-  return c.json({ ok: true, domain: { id, name } });
+  // every domain enters as a draft at stage 1 — the connect wizard unlocks it
+  await c.env.DB.prepare('INSERT INTO domains (id, name, label, catch_all, status, stage, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, name, clean(body?.label, 80) || null, body?.catch_all === false ? 0 : 1, 'draft', 1, now()).run();
+  return c.json({ ok: true, domain: { id, name, status: 'draft', stage: 1 } });
+});
+
+// lightweight poll for the verification loop — the wizard hits this every few
+// seconds while waiting for the code mail to arrive
+app.get('/domains/:id/verify', requireAdmin, async (c) => {
+  const id = c.req.param('id');
+  const d = await c.env.DB.prepare('SELECT id, name, status, stage, verify_code, verify_expires FROM domains WHERE id = ?')
+    .bind(id).first<{ id: string; name: string; status: string; stage: number; verify_code: string | null; verify_expires: number | null }>();
+  if (!d) return c.json({ ok: false, error: 'not_found' }, 404);
+  return c.json({
+    ok: true,
+    domain: {
+      id: d.id, name: d.name, status: d.status, stage: d.stage,
+      verify_code: d.status === 'verifying' ? d.verify_code : null,
+      verify_expires: d.verify_expires,
+      code_expired: !!(d.verify_expires && d.verify_expires < now()),
+      verify_address: d.status === 'verifying' && d.verify_code ? `${d.verify_code}@${d.name}` : null,
+    },
+  });
+});
+
+// the connect-wizard state machine:
+//   draft(stage 1) → connect → verifying(stage 2) → mail lands → verified(3)
+//                                     ├→ skip  → unverified(3)  owner-responsibility
+//                                     └→ draft → draft(stage 2) saved for later
+app.post('/domains/:id/wizard', requireAdmin, async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json<{ action?: string; confirm?: boolean }>().catch(() => null);
+  const d = await c.env.DB.prepare('SELECT id, name, status, stage, verify_code, verify_expires FROM domains WHERE id = ?')
+    .bind(id).first<{ id: string; name: string; status: string; stage: number; verify_code: string | null; verify_expires: number | null }>();
+  if (!d) return c.json({ ok: false, error: 'not_found' }, 404);
+  if (d.status === 'verified') return c.json({ ok: false, error: 'already_verified' }, 400);
+
+  const action = body?.action ?? '';
+
+  if (action === 'connect') {
+    // "I connected the domain" (or resuming/resending) — arm a fresh loop code
+    const code = 'cm-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+    const expires = now() + 24 * 3600_000;
+    await c.env.DB.prepare("UPDATE domains SET status = 'verifying', stage = 2, verify_code = ?, verify_expires = ? WHERE id = ?")
+      .bind(code, expires, id).run();
+    return c.json({ ok: true, status: 'verifying', stage: 2, verify_code: code, verify_expires: expires, verify_address: `${code}@${d.name}` });
+  }
+
+  if (action === 'skip') {
+    if (!body?.confirm) return c.json({ ok: false, error: 'confirm_required' }, 400);
+    await c.env.DB.prepare("UPDATE domains SET status = 'unverified', stage = 3, verify_code = NULL, verify_expires = NULL WHERE id = ?")
+      .bind(id).run();
+    return c.json({ ok: true, status: 'unverified', stage: 3 });
+  }
+
+  if (action === 'draft') {
+    // save progress and walk away — stage stays so resume opens the same step
+    await c.env.DB.prepare("UPDATE domains SET status = 'draft' WHERE id = ?").bind(id).run();
+    return c.json({ ok: true, status: 'draft', stage: d.stage });
+  }
+
+  if (action === 'resume') {
+    if (d.stage >= 2) {
+      const alive = d.verify_code && d.verify_expires && d.verify_expires > now();
+      if (alive) {
+        await c.env.DB.prepare("UPDATE domains SET status = 'verifying' WHERE id = ?").bind(id).run();
+        return c.json({ ok: true, status: 'verifying', stage: 2, verify_code: d.verify_code, verify_expires: d.verify_expires, verify_address: `${d.verify_code}@${d.name}` });
+      }
+      const code = 'cm-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+      const expires = now() + 24 * 3600_000;
+      await c.env.DB.prepare("UPDATE domains SET status = 'verifying', verify_code = ?, verify_expires = ? WHERE id = ?")
+        .bind(code, expires, id).run();
+      return c.json({ ok: true, status: 'verifying', stage: 2, verify_code: code, verify_expires: expires, verify_address: `${code}@${d.name}` });
+    }
+    return c.json({ ok: true, status: 'draft', stage: d.stage }); // still at the connect guide
+  }
+
+  return c.json({ ok: false, error: 'bad_action' }, 400);
 });
 
 app.patch('/domains/:id', requireAdmin, async (c) => {
@@ -81,9 +158,14 @@ app.post('/', requireUser, async (c) => {
 
   const kind = body?.kind === 'temp' ? 'temp' : 'permanent';
   const domainName = (body?.domain ?? '').toLowerCase().trim();
-  const domain = await c.env.DB.prepare('SELECT id, name, active FROM domains WHERE name = ?').bind(domainName)
-    .first<{ id: string; name: string; active: number }>();
+  const domain = await c.env.DB.prepare('SELECT id, name, active, status FROM domains WHERE name = ?').bind(domainName)
+    .first<{ id: string; name: string; active: number; status: string }>();
   if (!domain || !domain.active) return c.json({ ok: false, error: 'invalid_domain' }, 400);
+  // a domain still inside its registration wizard cannot hold mailboxes —
+  // 'unverified' (skipped knowingly) is the one exception
+  if (domain.status !== 'verified' && domain.status !== 'unverified') {
+    return c.json({ ok: false, error: 'domain_not_ready', status: domain.status }, 403);
+  }
 
   let local = (body?.local ?? '').toLowerCase().trim();
   if (local === '__random__' || !local) local = randomLocalPart();

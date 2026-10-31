@@ -61,6 +61,7 @@ export function errText(e) {
     invalid_recipient: 'invalidRecipient',
     invalid_sender: 'invalidSender',
     cannot_delete_self: 'cannotDeleteSelf',
+    domain_not_ready: 'errDomainNotReady',
   };
   return map[e?.code] ? t(map[e.code]) : (e?.detail ? `${t('error')} — ${e.detail}` : t('error'));
 }

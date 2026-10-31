@@ -11,9 +11,9 @@
 
 Temporary & permanent inboxes · notes on every email · built-in 2FA vault · unlimited domains · outgoing mail · zero servers, zero monthly bills
 
-[![Version](https://img.shields.io/badge/version-2.1.0-4f8f60)](https://github.com/Erfan-8910/Cmail/releases)
+[![Version](https://img.shields.io/badge/version-2.2.0-4f8f60)](https://github.com/Erfan-8910/Cmail/releases)
 [![Deploy](https://img.shields.io/badge/deploy-one%20file%20%2B%20one%20binding-3d7a4f)](#installation)
-[![Tables](https://img.shields.io/badge/tables-one%20click-56725c)](#route-2--fully-graphical-zero-commands)
+[![Tables](https://img.shields.io/badge/tables-one%20click%20%2B%20inspector-56725c)](#route-2--fully-graphical-zero-commands)
 [![License](https://img.shields.io/badge/license-MIT-7c9c6d)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-F38020)](https://workers.cloudflare.com)
 
@@ -38,16 +38,17 @@ And because a mailbox alone is never enough, Cmail behaves like an **ecosystem**
 | | |
 |---|---|
 | 📬 **Temporary + permanent inboxes** | Disposable addresses with a live countdown and adjustable TTL, and permanent ones that are simply yours forever. |
-| 🌐 **Unlimited domains** | Attach every domain on your Cloudflare account — one Worker receives them all, each with a live health chip. |
+| 🌐 **Domain connect wizard** | Add a domain and it takes your hand: a crisp connect guide, then a verification code you mail to your own domain — mailboxes stay locked until the loop proves itself. |
+| 🔎 **D1 inspector** | The setup screen lists every expected table with its row count; build the missing ones with a button, drop the strays, keep your database honest. |
 | 🗒️ **Notes on emails** | A colored personal note under any message — order numbers, tracking links, anything. Search finds it instantly. |
-| 👤 **Every inbox is an account** | Each mailbox behaves like a standalone account: its mail, its private notes and its own 2FA codes stay inside that account only. Add one from the account bar like adding a fresh identity. |
+| 👤 **Every inbox is an account** | Each mailbox behaves like a standalone account: its mail, its private notes and its own 2FA codes stay inside that account only. |
 | 🔐 **2FA vault** | A built-in authenticator: live 6-digit codes with a countdown ring, encrypted at rest with AES-256-GCM, 77 built-in marks, folders, and per-inbox binding. |
 | 🛡️ **Account 2FA** | Signing in itself can be protected with TOTP. |
-| 📤 **Outgoing mail** | Connect Brevo or Resend with one API key and send from your own domain. |
+| 📤 **Outgoing mail — optional** | Connect Brevo or Resend with one API key and send from your own domain, with a real test probe. It never gates the rest of the app. |
 | ➡️ **Forwarding** | Mirror copies of any inbox to an address you already check. |
 | ⌘ **Command palette** | Press <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> anywhere: jump to anything, run actions, search mail live as you type. |
 | ⌨️ **Keyboard-first** | `j`/`k` to move, `Enter` to open, `x` to select, `s` to star — the full map lives inside the app. |
-| 🧹 **Auto-cleanup** | An hourly cron expires temporary inboxes and purges old mail on its own. |
+| 🧹 **Auto-cleanup** | An hourly cron expires temporary inboxes and purges old mail on its own — the full schedule lives below. |
 | 🌙 **Liquid-glass UI** | Dark & Daylight themes, adjustable glass transparency, 13 named color moods, Persian (RTL) + English. |
 | 📱 **Truly responsive** | From a 320px phone to a 1920px desktop — panes fold into drawers and bottom sheets. |
 | 🔒 **Your data, your rules** | Your D1, your keys. Nobody else holds your mail. |
@@ -68,9 +69,13 @@ And because a mailbox alone is never enough, Cmail behaves like an **ecosystem**
 |---|
 | <img src="docs/screenshot-vault.png" width="620" alt="2FA vault — live codes, folders, glyph marks"> |
 
-| **Mission control** — every domain, one glance, honest health chips |
+| **Mission control** — every domain, one glance, honest registration states |
 |---|
-| <img src="docs/screenshot-domains.png" width="620" alt="Domains — health chips, catch-all switches, inbox counts"> |
+| <img src="docs/screenshot-domains.png" width="620" alt="Domains — status chips, catch-all switches, inbox counts"> |
+
+| **The connect wizard** — one code, one loop mail, and the domain proves itself |
+|---|
+| <img src="docs/screenshot-wizard.png" width="620" alt="Domain wizard — the loop code, live polling, skip with responsibility"> |
 
 | **One keystroke from anywhere to everywhere** |
 |---|
@@ -94,20 +99,20 @@ And because a mailbox alone is never enough, Cmail behaves like an **ecosystem**
 
 </div>
 
-## What's new in 2.1 — the quiet-under-the-hood release
+## What's new in 2.2 — the release that took domains seriously
 
-- **A leaner, better-documented database.** [`schema.sql`](schema.sql) gained the one index it was missing (`emails(received_at)` — the hourly retention sweep was doing a table scan), and every table and index now carries a comment explaining *why* it exists. All four migrations got proper headers. The schema (11 tables · 15 indexes) is fully idempotent: paste it twice, nothing complains.
-- **Two guides instead of one merged file.** This README is the English original; the full Persian guide now lives in [`README.fa.md`](README.fa.md). Same structure, same depth.
-- **Fresh screenshots**, taken from the current build — new color moods, domain health chips, vault folders, the works.
-- Plus everything 2.0 brought: the entire app embedded in one `worker.js`, one-click table creation from the setup screen, and no more raw `internal server error` — every failure mode answers with a bilingual guide page instead.
+- **A connect wizard, start to finish.** Type a domain, press Add, and its wizard opens: a clean walkthrough of the Cloudflare side (enable Email Routing, point Catch-all at the worker) ending at an **"I've connected the domain"** button. Then verification: you get a one-of-a-kind code and send any message from any personal mailbox you own to your own domain. The screen re-checks itself every few seconds, and the moment the worker confirms the mail landed, mailbox creation for that domain unlocks.
+- **Leaving is always allowed.** Every wizard stage has an exit, and the exit asks first: **save as a draft, or leave for good?** Drafts wait in the domains table with a Continue button and resume from the exact step you stopped at.
+- **No finished registration, no mailbox.** Until the loop confirms the route, creating addresses on that domain is locked. If you know what you are doing, "Skip verification" accepts the responsibility with a straight-face warning.
+- **A D1 step on the setup screen, before the account.** Review every expected table with its row count; build anything missing one-by-one or all at once; drop tables that were never part of this app. The expected tables are protected and refuse to be dropped.
+- **Outgoing mail is officially optional.** Its row on the setup screen is tagged Optional and can never gate your way into the inbox. A test probe sends a real message to any address you type, so the wiring is proven on the spot.
+- **Console-proof SQL.** Reports came in that pasting the files into the D1 Console errored out. The root cause: semicolons inside SQL comments, which derail statement splitters. [`schema.sql`](schema.sql) is now officially console-safe — no semicolons or quotes inside comments, every statement `IF NOT EXISTS`, re-run twice and tested: zero errors. The `migrations/` files are terminal-only, and their headers say so loudly.
 
 <details>
-<summary><b>What 2.0 changed (for the curious)</b></summary>
+<summary><b>What 2.1 and 2.0 changed (for the curious)</b></summary>
 
-- Everything lives inside `worker.js`: pages, styles, scripts, fonts and icons. No "upload the UI folder", no "Attach assets" step — just **Edit Code + one binding**.
-- The setup screen has a **"Create tables automatically"** button: one press runs all 26 schema statements (11 tables, 15 indexes, plus healing statements that repair older databases without touching data).
-- A missing binding or missing tables no longer produces a raw error — the Worker answers with a calm bilingual page that says exactly which step is left.
-- [`migrations/0004_performance_indexes.sql`](migrations/0004_performance_indexes.sql) tunes the hot paths for installs that predate it.
+- **2.1** — [`schema.sql`](schema.sql) gained the retention index it was missing, every table and index carries a *why* comment, the guides split into an English original and a full Persian companion, and all screenshots were retaken from the current build.
+- **2.0** — the whole app became one file: pages, styles, scripts, fonts and icons all embedded in `worker.js`. No "upload the UI folder", no "Attach assets" — just **Edit Code + one binding**. One-click table creation landed on the setup screen, and every failure mode became a calm bilingual guide page instead of a raw error.
 
 </details>
 
@@ -116,13 +121,13 @@ And because a mailbox alone is never enough, Cmail behaves like an **ecosystem**
 - **Anyone tired of spam** — instead of handing your real address to every website, mint a one-hour address for each signup and keep your real inbox spotless.
 - **Developers and testers** — spin up dozens of test inboxes, catch system emails, try address variants, and let them expire when you are done.
 - **Privacy-minded people** — no analytics, no third-party scripts, no CDN calls; everything lives in your account, under your keys.
-- **Domain owners** — turn the domains already sitting on your Cloudflare into a complete mail ecosystem. Every domain, unlimited addresses.
+- **Domain owners** — turn the domains already sitting on your Cloudflare into a complete mail ecosystem, with a real wizard instead of tribal knowledge. Every domain, unlimited addresses.
 - **Anyone who wants their tools to actually belong to them** — set it up once, own it forever.
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.1.0/worker.js)** — the entire application in one file (~1.1 MB, ~470 KB gzipped). This is all Route 2 needs.
-- **Full package v2.1.0:** [`CMail-v2.1.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.1.0/CMail-v2.1.0.zip) — sources, `schema.sql`, migrations and scripts. All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.2.0/worker.js)** — the entire application in one file (~1.1 MB, ~470 KB gzipped). This is all Route 2 needs.
+- **Full package v2.2.0:** [`CMail-v2.2.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.2.0/CMail-v2.2.0.zip) — sources, `schema.sql`, migrations and scripts. All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 
 ## Installation
 
@@ -149,7 +154,7 @@ Five steps. No SQL, no folder uploads — only your browser and the Cloudflare d
 **2) Create the Worker and paste the code**
 - **Workers & Pages ← Create ← Workers ← Create Worker**
 - Name it `cmail` and **Deploy** once with the default code.
-- Click **Edit code**, delete the default code, paste the full content of [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.1.0/worker.js) and **Deploy**.
+- Click **Edit code**, delete the default code, paste the full content of [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.2.0/worker.js) and **Deploy**.
 
 **3) The only binding you need: D1**
 - Back on the Worker: **Settings ← Bindings ← Add**
@@ -160,8 +165,8 @@ Five steps. No SQL, no folder uploads — only your browser and the Cloudflare d
 - **Settings ← Trigger Events ← Cron Triggers ← Add** and enter: `17 * * * *`
 
 **5) Done!** Open `https://cmail.<your-subdomain>.workers.dev`:
-- With the binding in place you will see a single button — **"Create tables automatically"**. Press it once and every table is built (if something is missing, the same page tells you exactly which step slipped).
-- Then it asks you to **choose a username and password**, and walks you through the domain and the outgoing-mail service with step-by-step guides.
+- The **D1 step** opens first: every table with its status. Anything missing gets built with one button — individually or all at once — and stray tables you don't recognize get a clean Drop button.
+- Then it asks you to **choose a username and password**, opens the domain connect wizard by itself, and treats outgoing mail as the optional bonus it is — with a test probe whenever you want it.
 
 > 💡 Shortcut: on **Workers & Pages ← Create** you can connect your GitHub fork instead (Connect to Git) and let Cloudflare build automatically. Replace `REPLACE_WITH_D1_ID` in `wrangler.jsonc` with the real database id first.
 
@@ -183,36 +188,45 @@ npx wrangler secret put APP_SECRET     # a long random string
 npx wrangler deploy
 ```
 
-The CLI path applies tables as migrations (`0001`–`0004`); to build everything in one shot instead: `npx wrangler d1 execute cmail-db --remote --file=schema.sql`.
+The CLI path applies tables as migrations (`0001`–`0005`); to build everything in one shot instead: `npx wrangler d1 execute cmail-db --remote --file=schema.sql`.
 
 Then in the dashboard: your domain ← **Email ← Email Routing** ← enable it ← **Catch-all address ← Action: Send to Worker ← cmail**.
 
 </details>
 
-### Manual tables, the modern way (if ever needed)
+### Manual tables — one file, console-proof
 
 <details>
-<summary><b>Creating tables by hand with one file</b> (open)</summary>
+<summary><b>Creating tables by hand from the dashboard</b> (open)</summary>
 
-If you ever need to build the schema outside the app, there is exactly one file: [`schema.sql`](schema.sql). It carries:
+If you ever need to build the schema outside the app, there is exactly one file: [`schema.sql`](schema.sql). Why it is safe where older files weren't:
 
-- the final shape of all 11 tables (notes, folders and vault-mark columns included);
-- full idempotency — every statement is `IF NOT EXISTS`, so running it twice never errors;
-- 15 indexes, one per real query path: inbox lists, unread badges, session auth, cron sweeps.
+- **its comments carry no semicolons and no quotes** — the exact thing that derailed the Console's statement splitter and produced those "errors and won't import" reports;
+- **every statement is `IF NOT EXISTS`** — on a fresh, half-built, or already-complete database, pasting it again never errors;
+- it carries the final shape of all 11 tables and 15 indexes, domain-lifecycle columns included.
 
-Run it from the D1 **Console** tab in the dashboard (paste → Execute) or from a terminal:
+Run it from the dashboard: **Storage & Databases ← D1 ← cmail-db ← Console** ← paste the whole file ← Execute. Done. Interrupted halfway? Paste it again — it picks up exactly where the run left off.
 
 ```bash
 npx wrangler d1 execute cmail-db --remote --file=schema.sql
 ```
 
-For older installs that only ever ran `0001`, either apply migrations `0002`/`0003` in order or simply press the one-click button inside the app — its healing statements add any missing columns without errors.
+⚠️ The files under `migrations/` are terminal-only (their headers say so) — do not paste them into the Console. Their `ALTER` statements error on an already-migrated database and abort the whole batch.
 
 </details>
 
-## Receiving mail: domains & Email Routing
+## Domains: from "Add" to "Verified"
 
-Your domain must use Cloudflare DNS (free plan is fine); a dedicated subdomain like `mail.yourdomain.com` works great. Add the domain in Cmail's **Domains** panel — every domain carries a live health chip that tells you at a glance whether the connection is actually receiving mail. Enabling Email Routing makes Cloudflare add these records for you:
+Every domain now walks a clear path — guided by a wizard you can leave and resume at will:
+
+1. **Add** — type the domain or subdomain in the Domains panel (or the setup screen), say `mail.yourdomain.com`, press Add.
+2. **Connect** — the wizard walks the Cloudflare side step by step: enable Email Routing, the MX records land automatically, Catch-all points at the worker. It ends at **"I've connected the domain"**.
+3. **Verify** — you receive a one-of-a-kind code; send any message from a personal mailbox you own to that address (subject and body don't matter). The screen polls every few seconds; when the worker confirms the mail landed, the domain turns green.
+4. **Unlocked** — from that moment, creating mailboxes on the domain — permanent or temporary — is open.
+
+All along the way there is an **Exit** button, and pressing it asks: *save as a draft, or leave for good?* Drafts sit in the domains table wearing a "Draft — registration incomplete" chip with a Continue button that reopens the wizard at the saved stage. Until registration completes, mailbox creation stays locked — unless you consciously skip verification and accept the responsibility.
+
+Each domain wears a live status chip: healthy, awaiting first mail, awaiting verification, draft, or verification-skipped. Enabling Email Routing makes Cloudflare add these records for you:
 
 | Record | Value | Notes |
 |---|---|---|
@@ -221,11 +235,11 @@ Your domain must use Cloudflare DNS (free plan is fine); a dedicated subdomain l
 | MX | `route3.mx.cloudflare.net` (priority 30) | automatic |
 | TXT (SPF) | `v=spf1 include:_spf.mx.cloudflare.net ~all` | automatic |
 
-The final and most important step: **Email Routing ← Routing rules ← Catch-all address ← Action: Send to Worker ← cmail**. From that moment **every** address on your domain lands in Cmail — and with catch-all auto-create, unknown recipients instantly become one-hour inboxes. That is your disposable-mail machine, always on.
+The final and most important step: **Email Routing ← Routing rules ← Catch-all address ← Action: Send to Worker ← cmail**. From that moment **every** address on your domain lands in Cmail.
 
-## Sending mail (optional, but worth it)
+## Sending mail — optional, with a real test probe
 
-Cmail sends through **Brevo** (300 mails/day free) or **Resend** (100/day free): create an account on the provider, verify your sending domain, then in Cmail go to **Settings ← Outgoing mail**, pick the provider, paste the key, set the sender address, and press Test. The API key is stored only in your own D1 — it never leaves your Cloudflare.
+Sending is a bonus, not a gate: its row on the setup screen is tagged **Optional** and it never stands between you and your inbox. When you want it: connect **Brevo** (300 mails/day free) or **Resend** (100/day free) — create the account, verify your sending domain, then in Cmail pick the provider, paste the key, set the sender address. Then press **Test sending**: a real message goes to any address you type and proves the wiring on the spot. The API key is stored only in your own D1 — it never leaves your Cloudflare.
 
 ## Sign-in, access & your credentials
 
@@ -268,8 +282,10 @@ UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvV
 | Symptom | Meaning | Fix |
 |---|---|---|
 | Bilingual guide page titled "Database binding is missing" | The D1 binding named `DB` is not set | Installation step 3: Settings ← Bindings ← D1 ← variable `DB` |
-| Guide page titled "Tables are not created yet" | Binding works, tables don't exist | Open the home page and press "Create tables automatically" |
-| Mail never arrives | Usually the catch-all | Dashboard ← domain ← Email Routing ← Catch-all ← Send to Worker ← `cmail`; the domain's health chip in-app should turn green |
+| The D1 step marks a table "not built yet" | Binding works, that table doesn't exist | Press **Build** next to it — or **Build the missing tables** above the list |
+| Mail never arrives | Usually the catch-all | Dashboard ← domain ← Email Routing ← Catch-all ← Send to Worker ← `cmail`; the domain's chip in-app should turn green |
+| "This domain has not finished registration" when creating a mailbox | The domain's wizard is unfinished | Domains panel ← **Continue setup** — the wizard reopens at the saved stage |
+| The verification code never arrives | The mail route is still closed | Wizard step 2: check Email Routing and Catch-all in the dashboard, then grab a fresh code |
 | Outgoing mail fails | Key/sender | Settings ← Outgoing mail ← Test; the sender domain must be verified on the provider |
 | A raw Worker error (`1101`) | Should not happen | Every error is converted into the guide page; if you ever see a raw one, the text inside the page is enough to report it — `npx wrangler tail` gives live logs |
 | The page does not load at all | Dashboard/service issue | Check [cloudflarestatus.com](https://www.cloudflarestatus.com) |
@@ -279,13 +295,19 @@ UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvV
 <details>
 <summary><b>How do I update Cmail?</b></summary>
 
-Two paths. If you installed via **Route 2**, just paste the new `worker.js` into Edit Code and Deploy — the database structure is repaired by the "Create tables automatically" button on the setup screen (it only adds missing columns and indexes; it never touches your data). If you installed via **Route 1/3**: `git pull` and `npx wrangler deploy` (migrations apply with `npx wrangler d1 migrations apply cmail-db --remote`).
+Two paths. If you installed via **Route 2**, just paste the new `worker.js` into Edit Code and Deploy — the database structure is repaired by the D1 step on the setup screen (it only adds missing columns and indexes; it never touches your data). If you installed via **Route 1/3**: `git pull` and `npx wrangler deploy` (migrations apply with `npx wrangler d1 migrations apply cmail-db --remote`).
+</details>
+
+<details>
+<summary><b>I left a domain half-registered — what happens to it?</b></summary>
+
+Nothing is lost. It stays in the domains table wearing its Draft chip; **Continue setup** reopens the wizard at the exact stage. If you did not want the draft either, "Exit without saving" in the wizard removes it. Until it verifies, mailboxes stay locked on it.
 </details>
 
 <details>
 <summary><b>Can I use several domains?</b></summary>
 
-Yes — enable each domain on Cloudflare, add it under Domains, point its catch-all to the worker. Inboxes across all domains work instantly.
+Yes — enable each domain on Cloudflare, add it under Domains, and walk its wizard through verification. Inboxes across all verified domains work instantly.
 </details>
 
 <details>
@@ -318,7 +340,20 @@ No. It is ~1.1 MB because the entire interface (including logos and fonts) is em
                      └──────────────────────────────────────────┘
 ```
 
-One Worker serves the UI, the API, the incoming-mail handler and the hourly cleanup cron. One D1 database holds everything. And since 2.0 the UI itself is part of the Worker bundle, so deployments are atomic: paste one file, and interface and backend always match.
+One Worker serves the UI, the API, the incoming-mail handler and the hourly cleanup cron. One D1 database holds everything. The UI itself is part of the Worker bundle, so deployments are atomic: paste one file, and interface and backend always match.
+
+**The hourly cron — `17 * * * *`**
+
+Every hour at minute 17, four quiet sweeps:
+
+| What | Where | Rule |
+|---|---|---|
+| Expired temporary inboxes | their mail + the address itself | TTL passed → everything goes |
+| Retention | old messages | only when a retention window is set in Settings |
+| Sessions | expired tokens | stale sign-ins swept |
+| Rate limits | old windows | hour-old counters emptied |
+
+**Verification inside the mail path** — when the worker receives a message, it first asks the domain's state: if the domain is verifying and the recipient is exactly its one-of-a-kind code, the message is not stored — it *is* the confirmation, and the domain turns verified. All other mail to an unfinished domain is dropped silently, because no mailbox exists yet to catch it.
 
 **Database map** — what each table owns:
 
@@ -326,7 +361,7 @@ One Worker serves the UI, the API, the incoming-mail handler and the hourly clea
 |---|---|
 | `users` | The admin account, PBKDF2 password hash, optional TOTP secret (sealed) |
 | `sessions` | Login sessions (token, expiry, UA/IP for the session list) |
-| `domains` | Connected domains, catch-all switch, activity |
+| `domains` | Connected domains + the registration state machine (draft, verifying, verified, skipped) and the loop-verification code |
 | `addresses` | Inboxes — permanent or temporary (with TTL), optional forwarding, per-inbox notes |
 | `emails` | Full messages (text + HTML), read/star flags, retention |
 | `attachments` | Binary attachments stored base64 inside the mail row |
@@ -339,9 +374,9 @@ One Worker serves the UI, the API, the incoming-mail handler and the hourly clea
 **Request lifecycle highlights**
 
 - `GET /` and `/assets/*` — answered straight from the bundle with ETags; nothing external is fetched, ever (the CSP only allows `self`).
-- `POST /api/setup/init` — runs the embedded schema statements in order; refuses once an admin exists, safe to repeat otherwise.
-- `POST` to the Worker (Email Routing) — parses MIME, stores mail, auto-creates unknown catch-all inboxes as temporary ones.
-- `scheduled` (cron `17 * * * *`) — expires temporary inboxes, prunes old mail and stale sessions.
+- `GET /api/setup/tables` — the D1 inspector: expected tables with row counts, the missing, and the strays. Building one, building all, and dropping strays are all buttons, not commands.
+- `POST /api/addresses/domains/:id/wizard` — the registration state machine: connect, fresh code, save draft, resume, skip-with-responsibility.
+- `POST` to the Worker (Email Routing) — checks the verification code first, then parses MIME, stores mail, and auto-creates unknown catch-all inboxes as temporary ones.
 
 ## License
 
