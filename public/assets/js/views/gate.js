@@ -2,9 +2,9 @@
 // Shows live status, a progress ring, and a complete fix-guide for each missing piece.
 import { api, state, errText } from '../api.js';
 import { t, lang, setLang } from '../i18n.js';
-import { h, clear, icon, toast, copyText, vibrate } from '../ui.js';
+import { h, clear, icon, toast, confirmBox, copyText, vibrate } from '../ui.js';
 import { setTheme } from '../app.js';
-import { copyLine, dnsTable } from './auth.js';
+import { openDomainWizard } from './domwiz.js';
 
 const RECHECK_EVERY = 20; // seconds (auto re-check for members)
 
@@ -76,6 +76,7 @@ export async function renderGate(root) {
         st.textContent = '';
         toast(t('initDone'), 'ok', 2000);
         await recheck(true);
+        refreshInspector();
       } catch (err) {
         btn.disabled = false;
         btn.classList.remove('is-busy');
@@ -86,18 +87,91 @@ export async function renderGate(root) {
     return tutPanel(t('initTitle'), 'database',
       h('p', { class: 'tut__d' }, t('initDesc')),
       h('div', { class: 'tut__cta init-row' }, btn, st),
+      inspector(),
       h('details', { class: 'tut__manual' },
         h('summary', {}, t('initManual')),
         step(1, h('div', {}, t('initManualD'), term('npx wrangler d1 execute cmail-db --remote --file=schema.sql'))),
-        step(2, t('initManual2'))),
+        step(2, h('div', {}, t('initManual2')), h('p', { class: 'small muted' }, t('initManual3')))),
     );
+  }
+
+  // ---------- the D1 inspector ----------
+  // every expected table with its row count, one-button build for what is
+  // missing, and a clean exit for tables that were never ours
+  let inspWrap = null;
+  function inspector() {
+    inspWrap = h('div', { class: 'd1' }, h('div', { class: 'd1__load' }, t('loading')));
+    fillInspector(inspWrap);
+    return inspWrap;
+  }
+  function refreshInspector() { if (inspWrap) fillInspector(inspWrap); }
+
+  async function fillInspector(box) {
+    let r;
+    try { r = await api.get('/api/setup/tables'); }
+    catch { clear(box).append(h('p', { class: 'small muted' }, t('d1CantSee'))); return; }
+
+    const missing = r.tables.filter((x) => !x.exists);
+    const head = h('div', { class: 'd1__head' },
+      h('b', {}, t('d1Title')),
+      missing.length
+        ? h('button', {
+            class: 'btn btn--sm btn--primary', onclick: async (e) => {
+              const b = e.currentTarget; b.disabled = true; b.classList.add('is-busy');
+              try {
+                await api.post('/api/setup/tables/missing', {});
+                toast(t('d1Built'), 'ok', 1800);
+                await recheck(true); refreshInspector();
+              } catch (err) { toast(errText(err), 'err'); b.disabled = false; b.classList.remove('is-busy'); }
+            },
+          }, icon('zap'), t('d1CreateMissing'))
+        : h('span', { class: 'dom-st dom-st--ok' }, h('i'), icon('check'), h('span', {}, t('d1AllGood'))));
+
+    const grid = h('div', { class: 'd1__grid' });
+    for (const tb of r.tables) {
+      grid.append(h('div', { class: `d1__row ${tb.exists ? 'is-ok' : 'is-miss'}` },
+        h('span', { class: 'd1__icn' }, icon(tb.exists ? 'check' : 'plus')),
+        h('code', { class: 'd1__name' }, tb.name),
+        h('span', { class: 'd1__rows' }, tb.exists ? `${lang === 'fa' ? toFa(tb.rows ?? 0) : (tb.rows ?? 0)} ${t('d1Rows')}` : t('d1MissingShort')),
+        !tb.exists ? h('button', {
+          class: 'btn btn--sm', onclick: async (e) => {
+            const b = e.currentTarget; b.disabled = true; b.classList.add('is-busy');
+            try {
+              await api.post(`/api/setup/tables/${tb.name}/create`, {});
+              toast(t('d1Built'), 'ok', 1500);
+              await recheck(false); refreshInspector();
+            } catch (err) { toast(errText(err), 'err'); b.disabled = false; b.classList.remove('is-busy'); }
+          },
+        }, icon('plus'), t('d1CreateOne')) : null,
+      ));
+    }
+
+    const extras = r.extras ?? [];
+    const extraBox = extras.length ? h('div', { class: 'd1__extras' },
+      h('div', { class: 'd1__extra-t' }, t('d1ExtraT')),
+      ...extras.map((x) => h('div', { class: 'd1__row is-extra' },
+        h('span', { class: 'd1__icn' }, icon('help')),
+        h('code', { class: 'd1__name' }, x.name),
+        h('span', { class: 'd1__rows' }, t('d1NotOurs')),
+        h('button', {
+          class: 'btn btn--sm btn--danger-ghost', onclick: () => confirmBox(t('d1DropConfirm'), async () => {
+            try {
+              await api.del(`/api/setup/tables/${x.name}`);
+              toast(t('d1Dropped'), 'ok', 1600);
+              refreshInspector();
+            } catch (err) { toast(errText(err), 'err'); }
+          }),
+        }, icon('trash'), t('d1Drop'))))) : null;
+
+    clear(box).append(head, grid, ...(extraBox ? [extraBox] : []));
   }
 
   function tutDatabase() {
     const s = state.setup || {};
     if (!s.db_binding) return tutBinding();
-    if (!s.tables) return tutInit();
-    return tutPanel(t('tutDbTitle'), 'database', h('p', { class: 'tut__d' }, t('checkDatabaseD')));
+    return tutPanel(t('tutDbTitle'), 'database',
+      s.tables ? h('p', { class: 'tut__d' }, t('checkDatabaseD')) : h('p', { class: 'tut__d' }, t('initDesc')),
+      inspector());
   }
 
   function tutAdmin() {
@@ -117,24 +191,18 @@ export async function renderGate(root) {
       e.preventDefault();
       btn.disabled = true;
       try {
-        await api.post('/api/setup/domain', { name: inp.value.trim().toLowerCase() });
+        const r = await api.post('/api/setup/domain', { name: inp.value.trim().toLowerCase() });
         toast(t('saved'), 'ok', 1600);
-        await recheck();
+        inp.value = '';
+        // the connect wizard takes it from here — routing guide, loop code,
+        // live polling — and the gate re-checks when it closes
+        openDomainWizard({ id: r.id, name: r.name, status: 'draft', stage: 1 }, { onDone: () => recheck(true), onExit: () => recheck(true) });
+        btn.disabled = false;
       } catch (err) { toast(errText(err), 'err'); btn.disabled = false; }
     });
     return tutPanel(t('tutDomainTitle'), 'globe',
       form,
-      step(1, t('tutDomain1')),
-      step(2, t('tutDomain2')),
-      step(3, t('tutDomain3')),
-      step(4, t('tutDomain4')),
-      h('div', { class: 'tut__dns' },
-        dnsTable([
-          ['MX', '@', 'route1.mx.cloudflare.net', '10'],
-          ['MX', '@', 'route2.mx.cloudflare.net', '20'],
-          ['MX', '@', 'route3.mx.cloudflare.net', '30'],
-        ]),
-        copyLine('v=spf1 include:_spf.mx.cloudflare.net ~all')),
+      h('p', { class: 'tut__d' }, t('tutDomainLead')),
     );
   }
 
@@ -163,10 +231,27 @@ export async function renderGate(root) {
         await recheck();
       } catch (err) { toast(errText(err), 'err'); btn.disabled = false; }
     });
+
+    // the live probe: put a real test message on the wire and see it land
+    const testTo = h('input', { class: 'input ltr', placeholder: 'you@anywhere.com', type: 'email' });
+    const testBtn = h('button', { class: 'btn' }, icon('send'), t('sendTestBtn'));
+    const testRow = h('div', { class: 'gate__inline' },
+      h('div', { class: 'field grow' }, h('label', {}, t('sendTestT')), testTo), testBtn);
+    testBtn.addEventListener('click', async () => {
+      if (testBtn.disabled) return;
+      testBtn.disabled = true; testBtn.classList.add('is-busy');
+      try {
+        await api.post('/api/admin/test-send', { to: testTo.value.trim() });
+        toast(t('sendTestOk'), 'ok', 2600);
+      } catch (err) { toast(errText(err), 'err'); }
+      testBtn.disabled = false; testBtn.classList.remove('is-busy');
+    });
+
     return tutPanel(t('tutSendingTitle'), 'send',
+      h('div', { class: 'chip-opt' }, icon('info'), t('gateOptional')),
       step(1, t('tutSending1')),
       step(2, h('div', {}, t('tutSending2'), form)),
-      step(3, t('tutSending3')),
+      step(3, h('div', {}, t('tutSending3'), testRow)),
     );
   }
 
@@ -222,9 +307,10 @@ export async function renderGate(root) {
     const status = () => state.setup?.checks?.find((x) => x.id === def.id)?.ok;
     const pill = h('span', { class: 'check__pill' }, t('gateWaiting'));
     const icn = h('span', { class: 'check__icn' }, icon(def.icn));
+    const opt = def.id === 'sending' ? h('span', { class: 'chip-opt' }, t('gateOptional')) : null;
     const row = h('div', { class: 'check', style: { animationDelay: `${i * 90}ms` } },
       icn,
-      h('div', { class: 'check__txt' }, h('b', {}, def.name()), h('span', {}, def.desc())),
+      h('div', { class: 'check__txt' }, h('b', {}, def.name(), ' ', opt), h('span', {}, def.desc())),
       pill);
     const tutBox = h('div', { class: 'check__tut', style: { display: 'none' } });
     return { row, tutBox, def,
@@ -238,7 +324,10 @@ export async function renderGate(root) {
           icn.innerHTML = icon(def.icn).innerHTML;
           // the database step is public on purpose: a fresh deployment has no
           // session yet, and the one-click table setup must be reachable then.
-          const body = isAdmin() || def.id === 'database'
+          // same for the account step on a fresh install — someone has to be
+          // able to reach the "create access" form in the first place.
+          const freshAdmin = def.id === 'admin' && !state.setup?.admin_created;
+          const body = isAdmin() || def.id === 'database' || freshAdmin
             ? tutorials[def.id]?.() ?? memberNote()
             : memberNote();
           clear(tutBox).append(body);
@@ -264,11 +353,13 @@ export async function renderGate(root) {
   function drawCard() {
     clear(card);
     if (offline) { drawOffline(); return; }
+    // the ring counts required connections only — the optional one rides along
     const checks = state.setup?.checks ?? [];
-    const okN = checks.filter((x) => x.ok).length;
-    const total = CHECKS.length;
+    const req = checks.filter((x) => !x.optional);
+    const okN = req.filter((x) => x.ok).length;
+    const total = Math.max(req.length, 1);
     ring.set(okN / total, `${lang === 'fa' ? toFa(okN) : okN}`);
-    const allOk = okN === total;
+    const allOk = state.setup?.ready ?? okN === total;
 
     const top = h('div', { class: 'gate__top' },
       ring.el,
@@ -367,8 +458,7 @@ export async function renderGate(root) {
   // auto re-check loop
   timer = setInterval(async () => {
     if (offline) { count = RECHECK_EVERY; autoLbl.textContent = ''; return; }
-    const checks = state.setup?.checks ?? [];
-    if (checks.length && checks.every((x) => x.ok)) { autoLbl.textContent = ''; return; }
+    if (state.setup?.ready) { autoLbl.textContent = ''; return; }
     count -= 1;
     autoLbl.textContent = `${t('gateAutoIn')} ${lang === 'fa' ? toFa(Math.max(count, 0)) : Math.max(count, 0)}${t('gateSeconds')}`;
     if (count <= 0) {

@@ -14,8 +14,24 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
 
   const db = env.DB;
 
-  // find domain
-  const domain = await db.prepare('SELECT id, catch_all, active FROM domains WHERE name = ?').bind(domainName).first<{ id: string; catch_all: number; active: number }>();
+  // find domain (with its registration lifecycle)
+  const domain = await db.prepare('SELECT id, catch_all, active, status, verify_code, verify_expires FROM domains WHERE name = ?')
+    .bind(domainName).first<{ id: string; catch_all: number; active: number; status: string; verify_code: string | null; verify_expires: number | null }>();
+
+  // ---- connect-wizard loop verification ----
+  // while a domain is 'verifying', the only mail it expects is the code mail:
+  // any message to <verify_code>@<domain> proves the MX path works, flips the
+  // domain to 'verified' and never touches the mail store.
+  if (domain && domain.status === 'verifying' && domain.verify_code
+    && local === domain.verify_code
+    && (!domain.verify_expires || domain.verify_expires > now())) {
+    await db.prepare("UPDATE domains SET status = 'verified', stage = 3, verify_code = NULL, verify_expires = NULL WHERE id = ?")
+      .bind(domain.id).run();
+    return; // the confirmation itself — nothing to store
+  }
+
+  // a domain still inside its wizard holds no mailboxes yet: drop quietly
+  if (domain && (domain.status === 'draft' || domain.status === 'verifying')) return;
 
   // find address
   let addr = await db.prepare('SELECT id, user_id, expires_at, forward_to, kind FROM addresses WHERE address = ?').bind(to)

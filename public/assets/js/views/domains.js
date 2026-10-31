@@ -2,6 +2,7 @@
 import { api, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo } from '../ui.js';
+import { openDomainWizard } from './domwiz.js';
 
 export async function renderDomains(root) {
   const view = h('div', { class: 'view' });
@@ -29,13 +30,15 @@ export async function renderDomains(root) {
       h('th', {}, t('domain')), h('th', {}, t('domStatus')), h('th', {}, t('active')), h('th', {}, t('catchAll')), h('th', {}, t('addressesN')), h('th', {}, ''))));
     const tb = h('tbody', {});
     for (const d of domains) {
-      tb.append(h('tr', {},
+      const unfinished = d.status === 'draft' || d.status === 'verifying';
+      tb.append(h('tr', { class: unfinished ? 'dom-row--wip' : '' },
         h('td', {}, h('span', { class: 'mono', style: { fontWeight: 700 } }, d.name)),
-        h('td', {}, healthChip(d)),
+        h('td', {}, statusChip(d)),
         h('td', {}, h('div', { class: `switch ${d.active ? 'is-on' : ''}`, onclick: async () => { await api.patch(`/api/addresses/domains/${d.id}`, { active: !d.active }); load(); } })),
         h('td', {}, h('div', { class: `switch ${d.catch_all ? 'is-on' : ''}`, onclick: async () => { await api.patch(`/api/addresses/domains/${d.id}`, { catch_all: !d.catch_all }); load(); } })),
         h('td', {}, String(d.address_count ?? 0)),
         h('td', {}, h('div', { class: 'row', style: { gap: '2px', justifyContent: 'flex-end' } },
+          unfinished ? h('button', { class: 'btn btn--sm btn--primary', onclick: () => continueWizard(d) }, icon('zap'), t('domContinue')) : null,
           h('button', { class: 'icon-btn', title: t('dnsGuide'), onclick: () => dnsModal(d.name) }, icon('help')),
           h('button', { class: 'icon-btn', title: t('delete'), onclick: () => confirmBox(t('confirm'), async () => { await api.del(`/api/addresses/domains/${d.id}`); load(); }) }, icon('trash')),
         ))));
@@ -43,8 +46,12 @@ export async function renderDomains(root) {
     table.append(tb);
   }
 
-  // setup health: is this domain actually receiving mail, or is something missing?
-  function healthChip(d) {
+  // registration lifecycle first (draft → verifying → verified / skipped),
+  // then the running health of a live domain
+  function statusChip(d) {
+    if (d.status === 'draft') return chip('dom-st--draft', 'domDraft', 'edit');
+    if (d.status === 'verifying') return chip('dom-st--verify', 'domVerifying', 'clock');
+    if (d.status === 'unverified') return chip('dom-st--unv', 'domUnverified', 'shield');
     const st = !d.active ? ['dom-st--off', 'domOff']
       : !d.catch_all ? ['dom-st--warn', 'domNoCatch']
       : d.last_mail ? ['dom-st--ok', 'domHealthy']
@@ -54,6 +61,16 @@ export async function renderDomains(root) {
       kids.push(h('span', { class: 'faint', style: { fontWeight: 600 } }, `· ${timeAgo(d.last_mail, t)}`));
     }
     return h('span', { class: `dom-st ${st[0]}`, title: t(st[1]) }, ...kids);
+  }
+
+  function chip(cls, key, icn) {
+    return h('span', { class: `dom-st ${cls}`, title: t(key) }, h('i'), icon(icn), h('span', {}, t(key)));
+  }
+
+  // an unfinished domain reopens the wizard exactly where it stopped —
+  // the rail inside tells the owner what is still missing
+  function continueWizard(d) {
+    openDomainWizard(d, { onDone: () => load(), onExit: () => load() });
   }
 
   function addModal(onDone) {
@@ -74,8 +91,10 @@ export async function renderDomains(root) {
             const r = await api.post('/api/addresses/domains', { name: name.value.trim().toLowerCase(), label: label.value.trim(), catch_all: catchAll.classList.contains('is-on') });
             toast(t('saved'), 'ok', 1400);
             m.close();
-            dnsModal(r.domain.name);
             onDone();
+            // the moment it exists, the connect wizard takes over —
+            // that is where the real guide lives
+            openDomainWizard(r.domain, { onDone, onExit: onDone });
           } catch (e) { toast(errText(e), 'err'); }
         } }, t('save')),
       ],
@@ -121,8 +140,8 @@ export async function renderDomains(root) {
       h('summary', {}, icon('info'), lang === 'fa' ? 'چطور چند دامنه اضافه کنم؟' : 'How do I add multiple domains?'),
       h('p', { class: 'small muted' },
         lang === 'fa'
-          ? 'هر دامنه (یا ساب‌دامنه) را باید در Cloudflare ثبت کرده باشی. برای هر کدام: ۱) Email Routing را فعال کن ۲) دامنه را همین‌جا اضافه کن ۳) Catch-all را به Worker وصل کن. از این به بعد هر ایمیل به هر آدرس از آن دامنه به Cmail می‌آید.'
-          : 'Each domain (or subdomain) must be on your Cloudflare account. For each one: 1) enable Email Routing, 2) add the domain here, 3) point Catch-all to the worker. From then on, mail to any address on that domain lands in Cmail.'));
+          ? 'هر دامنه (یا ساب‌دامنه) را باید در Cloudflare ثبت کرده باشی. برای هر کدام: ۱) Email Routing را فعال کن ۲) دامنه را همین‌جا اضافه کن ۳) ویزاردِ وصل کردن را تا صحت‌سنجی جلو ببر. ثبتِ ناتمام در همین جدول می‌ماند و از همان‌جا ادامه پیدا می‌کند؛ تا وقتی کامل نشده، برایش صندوق ساخته نمی‌شود.'
+          : 'Each domain (or subdomain) must be on your Cloudflare account. For each one: 1) enable Email Routing, 2) add the domain here, 3) walk the connect wizard through verification. An unfinished registration stays right here in this table and resumes from where it stopped — mailboxes stay locked until it completes.'));
   }
 
   await load();

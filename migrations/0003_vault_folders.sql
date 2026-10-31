@@ -4,6 +4,13 @@
 --  Group 2FA keys into user-managed folders: create, rename, delete.
 --  Deleting a folder releases its keys (folder_id becomes NULL) —
 --  no key is ever lost with the folder.
+--  !! CLI ONLY — never paste this file into the Cloudflare D1 Console. !!
+--  SQLite has no ADD COLUMN IF NOT EXISTS, so on any database where these
+--  columns already exist the ALTER fails — and one failed statement aborts
+--  the whole console batch. The wrangler migration tracker runs each file
+--  exactly once, which is why this route never hits that wall.
+--  Manual install? Paste schema.sql (the merged, idempotent file) instead —
+--  or just press the setup button inside the app and skip SQL altogether.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS totp_folders (

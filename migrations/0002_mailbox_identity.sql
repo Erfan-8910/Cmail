@@ -11,6 +11,13 @@
 --  through the migration tracker. Fresh installs already get the final
 --  shape from schema.sql / the one-click button (which treats failures
 --  here as harmless "already there" signals).
+--  !! CLI ONLY — never paste this file into the Cloudflare D1 Console. !!
+--  SQLite has no ADD COLUMN IF NOT EXISTS, so on any database where these
+--  columns already exist the ALTER fails — and one failed statement aborts
+--  the whole console batch. The wrangler migration tracker runs each file
+--  exactly once, which is why this route never hits that wall.
+--  Manual install? Paste schema.sql (the merged, idempotent file) instead —
+--  or just press the setup button inside the app and skip SQL altogether.
 -- ============================================================================
 
 ALTER TABLE addresses ADD COLUMN notes TEXT NOT NULL DEFAULT '';
