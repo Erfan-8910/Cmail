@@ -12,6 +12,7 @@ import { renderDomains } from './views/domains.js';
 import { renderSettings } from './views/settings.js';
 import { renderAbout } from './views/about.js';
 import { renderHelp } from './views/help.js';
+import { renderInto as renderAlerts } from './health.js';
 
 const app = document.getElementById('app');
 const sidebar = document.getElementById('sidebar');
@@ -92,6 +93,14 @@ async function route() {
   renderShell(page, authView);
   clear(app);
   window.scrollTo({ top: 0 });
+
+  // serious system issues (D1 down, tables missing, schema old, mail stalled)
+  // show as banners above the content — admins only, cached for a minute
+  const alertHost = document.getElementById('sysalert');
+  if (alertHost) {
+    if (!authView && state.user?.role === 'admin') renderAlerts(alertHost);
+    else { alertHost.hidden = true; clear(alertHost); }
+  }
 
   if (authView) {
     app.className = 'view view--auth';

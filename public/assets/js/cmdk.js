@@ -144,7 +144,15 @@ function buildSources(q) {
 
   // --- inboxes ---
   if (state.user && state.addresses.length) {
-    const inb = state.addresses
+    const inb = [{
+      icn: 'inbox',
+      label: t('allMail'), sub: t('allMailSub'),
+      run: () => {
+        state.currentAddressId = null;
+        window.dispatchEvent(new CustomEvent('cmail:switch-inbox', { detail: null }));
+        location.hash = '#/mail';
+      },
+    }, ...state.addresses
       .filter((a) => rank(a.address) >= 0 || match(a.label))
       .sort((a, b) => rank(a.address) - rank(b.address))
       .map((a) => ({
@@ -155,7 +163,7 @@ function buildSources(q) {
           window.dispatchEvent(new CustomEvent('cmail:switch-inbox', { detail: a.id }));
           location.hash = '#/mail';
         },
-      }));
+      }))];
     if (inb.length) s.push({ title: t('cmdkInboxes'), items: inb });
   }
   return s;
