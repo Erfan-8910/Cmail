@@ -189,6 +189,7 @@ export const glyphs = {
   pick: G('<path d="M3.5 8.5C6 5 10 3 14.5 3c2.4 0 4.6.5 6.5 1.5-4.5 0-8 1.5-10.5 4"/><path d="m10 9 10 10"/><path d="m7.5 11.5 5 5L11 18a2.1 2.1 0 0 1-3-3z"/>'),
   seed: G('<circle cx="12" cy="12" r="9"/><path d="M12 17v-5.5"/><path d="M12 11.5c0-2.5-1.8-4-4.3-4 0 2.6 1.8 4 4.3 4z"/><path d="M12 11.5c0-2.5 1.8-4 4.3-4 0 2.6-1.8 4-4.3 4z"/>'),
   swap: G('<path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8H17a3.5 3.5 0 0 1 3.5 3.5"/><path d="m17 19.5 3.5-3.5L17 12.5"/><path d="M20.5 16H7a3.5 3.5 0 0 1-3.5-3.5"/>'),
+  flat: I('<path d="M4 12h16"/><path d="M4 16.5h10" opacity=".45"/>'),
 };
 
 // glyph tile: colored rounded square with the mark, or a letter fallback

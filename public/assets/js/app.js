@@ -20,10 +20,6 @@ const sbScrim = document.getElementById('sb-scrim');
 const sbNav = document.getElementById('sb-nav');
 const sbLabel = document.getElementById('sb-label');
 const sbTag = document.getElementById('sb-tag');
-const sbQuote = document.getElementById('sb-quote');
-const sbQuoteT = document.getElementById('sb-quote-t');
-const sbQuoteS = document.getElementById('sb-quote-s');
-const sbQuoteI = document.querySelector('[data-quote-icon]');
 const sbUser = document.getElementById('sb-user');
 const topbar = document.getElementById('topbar');
 const tbMenu = document.getElementById('tb-menu');
@@ -161,11 +157,6 @@ function renderShell(page, authView) {
       dataset: { nav: it.key },
     }, icon(it.icon), h('span', {}, it.label), it.key === 'mail' ? h('span', { class: 'badge', id: 'nav-unread', style: { display: state.unread > 0 ? '' : 'none' } }, state.unread > 99 ? '99+' : String(state.unread)) : ''));
   }
-  sbQuote.hidden = false;
-  sbQuoteT.textContent = t('quoteTitle');
-  sbQuoteS.textContent = t('quoteSub');
-  sbQuoteI.innerHTML = icon('leaf').innerHTML;
-
   clear(sbUser);
   sbUser.hidden = false;
   sbUser.append(
@@ -260,6 +251,12 @@ export function setAccent(accent) {
   localStorage.setItem('cmail_accent', accent);
 }
 
+// the ambient stage behind the whole app: aurora (alive) · halo (still) · pure (flat)
+export function setBg(mode) {
+  document.documentElement.dataset.bg = mode;
+  localStorage.setItem('cmail_bg', mode);
+}
+
 // ---------- session keepalive (refresh unread badge + new-mail notify) ----------
 setInterval(async () => {
   if (!state.user || topbar.hidden) return;
@@ -291,6 +288,7 @@ export function updateUnreadBadge() {
 (async function boot() {
   setTheme(localStorage.getItem('cmail_theme') ?? 'dark');
   setAccent(localStorage.getItem('cmail_accent') ?? 'sage');
+  document.documentElement.dataset.bg = localStorage.getItem('cmail_bg') ?? 'aurora';
 
   window.addEventListener('cmail:unauthorized', () => {
     state.user = null;
