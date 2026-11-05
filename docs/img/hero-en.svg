@@ -84,6 +84,6 @@
     <circle cx="88" cy="324" r="4.5" fill="#9be3b4">
       <animate attributeName="opacity" values="1;0.35;1" dur="2.6s" repeatCount="indefinite"/>
     </circle>
-    <text x="106" y="329" font-family="Segoe UI, system-ui, sans-serif" font-size="14.5" font-weight="600" fill="#cfe0d4" text-anchor="start">v2.4 — Living background · Smoother setup · The maker card</text>
+    <text x="106" y="329" font-family="Segoe UI, system-ui, sans-serif" font-size="14.5" font-weight="600" fill="#cfe0d4" text-anchor="start">v2.5 — Own page for every email · The account circle · Four moods</text>
   </g>
 </svg>
