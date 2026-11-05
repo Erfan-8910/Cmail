@@ -5,7 +5,7 @@
 import { api, state, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avatarColor, fmtBytes, vibrate, glyphTile, dropdown } from '../ui.js';
-import { entryModal } from './vault.js';
+import { entryModal, tempGuard } from './vault.js';
 
 let box = 'inbox';
 let search = '';
@@ -96,6 +96,7 @@ async function loadAddresses(quiet = false) {
   }
   drawSidebar();
   syncAvatarLetter();
+  drawListHead();
   if (!state.currentAddressId) {
     drawList();
     return;
@@ -265,10 +266,13 @@ async function accountModal(a) {
         h('div', { class: 'acct-2fa__head' }, icon('key'), h('b', {}, t('acct2fa')),
           h('button', {
             class: 'btn btn--sm btn--primary', onclick: async () => {
-              m.close();
-              await entryModal(null, { addressId: a.id, onDone: async () => { drawSidebar(); } });
+              // temporary mailboxes keep their vault locked — codes only go in
+              // after the owner accepts they die with the address
+              const add = () => { m.close(); entryModal(null, { addressId: a.id, onDone: async () => { drawSidebar(); } }); };
+              if (a.kind === 'temp') tempGuard(a, add);
+              else add();
             },
-          }, icon('plus'), h('span', { class: 'hide-sm' }, t('acct2faAdd')))),
+          }, icon(a.kind === 'temp' ? 'lock' : 'plus'), h('span', { class: 'hide-sm' }, t('acct2faAdd')))),
         totpWrap),
     ],
     footer: [
@@ -281,8 +285,19 @@ async function accountModal(a) {
 // ---------- list ----------
 function buildList() {
   const canSend = sendReady();
+  // the header carries the account itself: a rounded chip with the avatar,
+  // the address and a chevron — open it to jump between accounts right here,
+  // without ever leaving the inbox
+  const acctBtn = h('button', {
+    class: 'acct-switch', id: 'acct-switch', title: t('switchAcct'), 'aria-label': t('switchAcct'),
+    onclick: (e) => { e.stopPropagation(); vibrate(5); openInboxSwitcher(acctBtn); },
+  });
   const head = h('div', { class: 'mail__head' },
-    h('h3', {}, icon('inbox'), h('span', { id: 'list-title' }, t('inbox'))),
+    h('div', { class: 'mail__head-id' }, acctBtn,
+      h('button', { class: 'icon-btn icon-btn--xs', id: 'acct-copy', title: t('copy'), onclick: async () => {
+        const a = (state.addresses ?? []).find((x) => x.id === state.currentAddressId);
+        if (a) { await copyText(a.address); toast(t('copied'), 'ok', 1200); }
+      } }, icon('copy'))),
     h('div', { class: 'row', style: { gap: '4px' } },
       canSend ? h('button', { class: 'btn btn--sm btn--primary', onclick: () => openCompose() }, icon('send'), h('span', { class: 'hide-sm' }, t('compose'))) : '',
       h('button', { class: 'icon-btn', title: t('refresh'), onclick: (e) => { e.currentTarget.querySelector('svg')?.classList.add('spin'); loadEmails(true); loadAddresses(true); setTimeout(() => document.querySelector('.mail .icon-btn svg.spin')?.classList.remove('spin'), 700); } }, icon('refresh')),
@@ -309,19 +324,70 @@ function buildList() {
   return sec;
 }
 
-// the list header carries the active account — one glance, one copy-tap
+// paint the account chip in the list header from the live account
 function drawListHead() {
-  const el = document.getElementById('list-title');
+  const el = document.getElementById('acct-switch');
   if (!el) return;
   const a = (state.addresses ?? []).find((x) => x.id === state.currentAddressId);
   clear(el);
-  el.append(t('inbox'));
-  if (a) {
-    el.append(h('button', {
-      class: 'chip', style: { padding: '2px 9px', fontSize: '10.5px', gap: '4px' },
-      title: t('copy'), onclick: async (e) => { e.stopPropagation(); await copyText(a.address); toast(t('copied'), 'ok', 1200); },
-    }, a.address, icon('copy')));
+  if (!a) { el.append(h('span', { class: 'acct-switch__name muted' }, t('noAccountsYet'))); return; }
+  el.append(
+    h('span', { class: 'email-row__ava acct-switch__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
+    h('span', { class: 'acct-switch__txt' },
+      h('span', { class: 'acct-switch__name' }, a.label || a.address),
+      h('span', { class: 'acct-switch__meta' }, `${a.kind === 'temp' ? t('temporary') : t('permanent')} · ${a.total ?? 0} ${t('acctMails')}`)),
+    a.unread > 0 ? h('span', { class: 'acct-switch__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : '',
+    h('span', { class: 'icn acct-switch__chev' }, icon('chevron')));
+}
+
+// the inbox-level account switcher: a glass card listing every account with
+// its unread badge and live stats — tap one, the whole space follows.
+// it lives on <body> with fixed positioning so no column ever clips it
+function openInboxSwitcher(anchor) {
+  document.querySelectorAll('.acct-switch-pop').forEach((m) => m.remove());
+  const pop = h('div', { class: 'acct-switch-pop' });
+  const menu = h('div', { class: 'menu menu--accts', role: 'menu' });
+  const list = h('div', { class: 'acct-switch__list' });
+  menu.append(list);
+  for (const a of state.addresses) {
+    list.append(h('button', {
+      class: `acct-row ${a.id === state.currentAddressId ? 'is-on' : ''}`,
+      onclick: () => { pop.remove(); document.removeEventListener('click', off, true); switchInbox(a.id); },
+    },
+      h('span', { class: 'acct-row__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
+      h('span', { class: 'acct-row__body' },
+        h('span', { class: 'acct-row__addr' }, a.label || a.address),
+        h('span', { class: 'acct-row__meta' },
+          h('span', { class: `kind-tag kind-tag--${a.kind === 'temp' ? 'temp' : 'perm'}` }, a.kind === 'temp' ? t('temporary') : t('permanent')),
+          h('span', {}, h('b', {}, String(a.total ?? 0)), ' ' + t('acctMails')))),
+      h('span', { class: 'acct-row__end' },
+        a.unread > 0 ? h('span', { class: 'acct-row__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : '',
+        a.id === state.currentAddressId ? h('span', { class: 'acct-row__check' }, icon('check')) : '')));
   }
+  menu.append(h('button', {
+    class: 'acct-menu__add', onclick: () => { pop.remove(); document.removeEventListener('click', off, true); createAddressModal(() => loadAddresses()); },
+  }, icon('plus'), h('span', {}, t('acctNew'))));
+  pop.append(menu);
+  document.body.append(pop);
+
+  // place it just under the chip, hugging the chip's start edge
+  const place = () => {
+    const r = anchor.getBoundingClientRect();
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    const top = Math.min(r.bottom + 8, window.innerHeight - mh - 10);
+    menu.style.top = `${Math.max(10, top)}px`;
+    if (document.documentElement.dir === 'rtl') {
+      menu.style.right = `${Math.max(9, window.innerWidth - r.right)}px`;
+      menu.style.left = 'auto';
+    } else {
+      menu.style.left = `${Math.max(9, r.left)}px`;
+      menu.style.right = 'auto';
+    }
+  };
+  place();
+  const off = (e) => { if (!menu.contains(e.target) && !anchor.contains(e.target)) { pop.remove(); document.removeEventListener('click', off, true); } };
+  setTimeout(() => document.addEventListener('click', off, true), 0);
+  window.addEventListener('resize', () => pop.remove(), { once: true });
 }
 
 function drawBulkBar() {
