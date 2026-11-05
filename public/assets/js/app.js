@@ -43,17 +43,26 @@ function currentRoute() {
   return { page: page || '', arg: rest.join('/') };
 }
 
+// every navigation gets a token — when the user clicks two pages in quick
+// succession only the newest render may touch the screen; the stale one
+// bails at its next await instead of painting two sections at once
+let routeSeq = 0;
+
 async function route() {
+  const seq = ++routeSeq;
   const { page } = currentRoute();
+  const stale = () => seq !== routeSeq;
 
   // fetch system status (may be offline); always fresh on gate entry
   if (!state.setup || page === 'status' || page === 'login') {
     try { state.setup = await api.get('/api/setup/status'); }
     catch { if (!state.setup) state.setup = null; }
+    if (stale()) return;
     // the status endpoint self-heals the single user's admin role — pick up
     // the fresh role right away so admin surfaces unlock without a re-login
     if (state.setup && state.user) {
       try { const me = await api.get('/api/auth/me'); if (me?.user) state.user = me.user; } catch { /* */ }
+      if (stale()) return;
     }
   }
   const ready = !!state.setup?.ready;
@@ -76,6 +85,7 @@ async function route() {
 
   const authView = page === 'login' || page === 'status';
   renderShell(page, authView);
+  if (stale()) return;
   clear(app);
   window.scrollTo({ top: 0 });
 
@@ -85,6 +95,7 @@ async function route() {
   if (alertHost) {
     if (!authView && state.user?.role === 'admin') {
       await renderAlerts(alertHost);
+      if (stale()) return;
       document.body.classList.toggle('has-alert', !alertHost.hidden && alertHost.children.length > 0);
     } else {
       alertHost.hidden = true; clear(alertHost);
@@ -103,10 +114,12 @@ async function route() {
   try {
     await view(app, currentRoute().arg);
   } catch (e) {
+    if (stale()) return;
     if (e.code === 'unauthorized') return;
     toast(errText(e), 'err');
     app.append(h('div', { class: 'empty' }, h('div', { class: 'empty__t' }, t('error')), h('div', { class: 'empty__d' }, e.message ?? '')));
   }
+  if (!stale()) slideGlider();
 }
 
 // ---------- shell: floating pill navigation + mobile tabbar ----------
@@ -147,6 +160,9 @@ function renderShell(page, authView) {
       dataset: { nav: it.key },
     }, icon(it.icon), h('span', {}, it.label), it.key === 'mail' ? h('span', { class: 'badge', id: 'pill-unread', style: { display: state.unread > 0 ? '' : 'none' } }, state.unread > 99 ? '99+' : String(state.unread)) : ''));
   }
+  // the glass indicator that glides under the active pill
+  pbNav.append(h('span', { class: 'pill-glider', id: 'pill-glider', 'aria-hidden': 'true' }));
+  requestAnimationFrame(() => slideGlider(true));
 
   // ----- end controls: search · theme · language · account -----
   clear(pbEnd);
@@ -173,6 +189,28 @@ function renderShell(page, authView) {
 }
 
 function isMac() { return /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent); }
+
+// ---------- the gliding glass indicator ----------
+// one pill of frosted glass lives under the nav; picking a page makes it
+// slide across — soft, glassy, animated, exactly the feel of the big clients
+let gliderPlaced = false;
+export function slideGlider(instant = false) {
+  const g = document.getElementById('pill-glider');
+  if (!g) return;
+  const on = pbNav.querySelector('.pill-nav.is-on');
+  if (!on) { g.style.opacity = '0'; return; }
+  g.style.opacity = '1';
+  g.style.width = `${on.offsetWidth}px`;
+  g.style.transform = `translateX(${on.offsetLeft}px)`;
+  if (instant) {
+    g.style.transition = 'none';
+    void g.offsetWidth;
+    g.style.transition = '';
+  }
+  gliderPlaced = true;
+}
+window.addEventListener('resize', () => { if (gliderPlaced) slideGlider(true); });
+document.fonts?.ready?.then(() => slideGlider(true));
 
 // ---------- account switcher — every mailbox is its own account ----------
 // The circle at the top works exactly like the big clients: open it, glance
@@ -386,6 +424,8 @@ export function updateUnreadBadge() {
     el.style.display = show ? '' : 'none';
     if (show) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
   }
+  // the mail pill just grew/shrank — the glass indicator follows it
+  requestAnimationFrame(() => slideGlider());
 }
 
 // ---------- boot ----------

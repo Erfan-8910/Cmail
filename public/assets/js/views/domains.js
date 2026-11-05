@@ -1,4 +1,8 @@
 // Cmail — domains view (admin)
+// No more flat table: every domain gets a card of its own — big name, a live
+// status pill with a pulse, the lifecycle as a small progress trail, the two
+// switches right on the card, and the numbers underneath. The page opens with
+// a stat strip so the whole fleet is visible in one glance.
 import { api, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo } from '../ui.js';
@@ -11,10 +15,9 @@ export async function renderDomains(root) {
     h('button', { class: 'btn btn--primary', onclick: () => addModal(load) }, icon('plus'), t('addDomain')),
   ));
 
-  const wrap = h('div', { class: 'glass', style: { padding: '6px', overflowX: 'auto' } });
-  const table = h('table', { class: 'tbl' });
-  wrap.append(table);
-  view.append(wrap, h('div', { class: 'mt-2' }, routingHelp()));
+  const stats = h('div', { class: 'dom-stats' });
+  const grid = h('div', { class: 'dom-grid', id: 'dom-grid' });
+  view.append(stats, grid, h('div', { class: 'mt-2' }, routingHelp()));
   root.append(view);
 
   async function load() {
@@ -25,25 +28,89 @@ export async function renderDomains(root) {
   }
 
   function draw(domains) {
-    clear(table);
-    table.append(h('thead', {}, h('tr', {},
-      h('th', {}, t('domain')), h('th', {}, t('domStatus')), h('th', {}, t('active')), h('th', {}, t('catchAll')), h('th', {}, t('addressesN')), h('th', {}, ''))));
-    const tb = h('tbody', {});
-    for (const d of domains) {
-      const unfinished = d.status === 'draft' || d.status === 'verifying';
-      tb.append(h('tr', { class: unfinished ? 'dom-row--wip' : '' },
-        h('td', {}, h('span', { class: 'mono', style: { fontWeight: 700 } }, d.name)),
-        h('td', {}, statusChip(d)),
-        h('td', {}, h('div', { class: `switch ${d.active ? 'is-on' : ''}`, onclick: async () => { await api.patch(`/api/addresses/domains/${d.id}`, { active: !d.active }); load(); } })),
-        h('td', {}, h('div', { class: `switch ${d.catch_all ? 'is-on' : ''}`, onclick: async () => { await api.patch(`/api/addresses/domains/${d.id}`, { catch_all: !d.catch_all }); load(); } })),
-        h('td', {}, String(d.address_count ?? 0)),
-        h('td', {}, h('div', { class: 'row', style: { gap: '2px', justifyContent: 'flex-end' } },
-          unfinished ? h('button', { class: 'btn btn--sm btn--primary', onclick: () => continueWizard(d) }, icon('zap'), t('domContinue')) : null,
-          h('button', { class: 'icon-btn', title: t('dnsGuide'), onclick: () => dnsModal(d.name) }, icon('help')),
-          h('button', { class: 'icon-btn', title: t('delete'), onclick: () => confirmBox(t('confirm'), async () => { await api.del(`/api/addresses/domains/${d.id}`); load(); }) }, icon('trash')),
-        ))));
+    const verified = domains.filter((d) => d.status === 'verified' || d.status === 'unverified').length;
+    const pending = domains.filter((d) => d.status === 'draft' || d.status === 'verifying').length;
+    const boxes = domains.reduce((s, d) => s + (d.address_count ?? 0), 0);
+    clear(stats);
+    stats.append(
+      domStat('domStatTotal', domains.length, 'globe', ''),
+      domStat('domStatVerified', verified, 'shield', verified ? 'is-ok' : ''),
+      domStat('domStatPending', pending, 'clock', pending ? 'is-warm' : ''),
+      domStat('domStatBoxes', boxes, 'mail', ''),
+    );
+
+    const g = clear(document.getElementById('dom-grid') ?? grid);
+    if (!domains.length) {
+      g.append(h('div', { class: 'glass card', style: { gridColumn: '1/-1' } },
+        h('div', { class: 'empty' }, icon('globe'),
+          h('div', { class: 'empty__t' }, t('domEmptyT')),
+          h('div', { class: 'empty__d' }, t('domEmptyD')),
+          h('button', { class: 'btn btn--primary mt-2', onclick: () => addModal(load) }, icon('plus'), t('addDomain')))));
+      return;
     }
-    table.append(tb);
+    for (const d of domains) g.append(domainCard(d));
+  }
+
+  function domStat(key, n, icn, cls) {
+    return h('div', { class: `dom-stat glass ${cls}` },
+      h('span', { class: 'dom-stat__icn' }, icon(icn)),
+      h('div', {}, h('div', { class: 'dom-stat__n' }, String(n)), h('div', { class: 'dom-stat__l' }, t(key))));
+  }
+
+  // one card per domain — registration state first, live health after it
+  function domainCard(d) {
+    const unfinished = d.status === 'draft' || d.status === 'verifying';
+    const stage = d.status === 'draft' ? 1 : d.status === 'verifying' ? 2 : 3;
+
+    // the lifecycle trail: saved → code → live
+    const trail = h('div', { class: 'dom-card__trail' });
+    const stages = [['domTrailSaved', 1], ['domTrailCode', 2], ['domTrailLive', 3]];
+    stages.forEach(([key, n], idx) => {
+      if (idx > 0) trail.append(h('span', { class: 'dom-trail__sep' }));
+      trail.append(h('span', { class: `dom-trail ${n <= stage ? 'is-done' : ''} ${n === stage && unfinished ? 'is-now' : ''}` }, h('i'), h('span', {}, t(key))));
+    });
+
+    const head = h('div', { class: 'dom-card__head' },
+      h('span', { class: 'dom-card__globe' }, icon('globe')),
+      h('div', { class: 'dom-card__namebox' },
+        h('div', { class: 'dom-card__name mono', onclick: async () => { await copyText(d.name); toast(t('copied'), 'ok', 1300); }, title: t('copy') }, d.name, icon('copy')),
+        h('div', { class: 'dom-card__status' }, statusChip(d))),
+    );
+    if (unfinished) {
+      head.append(h('button', { class: 'btn btn--sm btn--primary', onclick: () => continueWizard(d) }, icon('zap'), t('domContinue')));
+    }
+
+    const swActive = h('div', { class: `switch ${d.active ? 'is-on' : ''}` });
+    swActive.onclick = async () => {
+      try { await api.patch(`/api/addresses/domains/${d.id}`, { active: !d.active }); load(); } catch (er) { toast(errText(er), 'err'); }
+    };
+    const swCatch = h('div', { class: `switch ${d.catch_all ? 'is-on' : ''}` });
+    swCatch.onclick = async () => {
+      try { await api.patch(`/api/addresses/domains/${d.id}`, { catch_all: !d.catch_all }); load(); } catch (er) { toast(errText(er), 'err'); }
+    };
+
+    const nums = h('div', { class: 'dom-card__nums' },
+      h('div', { class: 'dom-card__num' }, h('b', {}, String(d.address_count ?? 0)), h('span', {}, t('addressesN'))),
+      h('div', { class: 'dom-card__num' }, h('b', {}, d.last_mail ? timeAgo(d.last_mail, t) : '—'), h('span', {}, t('lastMail'))),
+    );
+
+    const actions = h('div', { class: 'dom-card__actions' },
+      h('button', { class: 'btn btn--sm', onclick: () => dnsModal(d.name) }, icon('help'), h('span', { class: 'hide-sm' }, t('dnsGuide'))),
+      h('span', { style: { flex: '1' } }),
+      h('button', { class: 'icon-btn', title: t('delete'), onclick: () => confirmBox(t('confirm'), async () => {
+        try { await api.del(`/api/addresses/domains/${d.id}`); load(); } catch (er) { toast(errText(er), 'err'); }
+      }) }, icon('trash')),
+    );
+
+    const card = h('div', { class: `dom-card glass ${unfinished ? 'dom-card--wip' : ''}` },
+      trail, head,
+      h('div', { class: 'dom-card__switches' },
+        h('div', { class: 'set-row set-row--card' },
+          h('div', {}, h('div', { class: 'set-row__t' }, t('active')), h('div', { class: 'set-row__d' }, t('domActiveD'))), swActive),
+        h('div', { class: 'set-row set-row--card' },
+          h('div', {}, h('div', { class: 'set-row__t' }, t('catchAll')), h('div', { class: 'set-row__d' }, t('domCatchD'))), swCatch)),
+      nums, actions);
+    return card;
   }
 
   // registration lifecycle first (draft → verifying → verified / skipped),
@@ -140,8 +207,8 @@ export async function renderDomains(root) {
       h('summary', {}, icon('info'), lang === 'fa' ? 'چطور چند دامنه اضافه کنم؟' : 'How do I add multiple domains?'),
       h('p', { class: 'small muted' },
         lang === 'fa'
-          ? 'هر دامنه (یا ساب‌دامنه) را باید در Cloudflare ثبت کرده باشی. برای هر کدام: ۱) Email Routing را فعال کن ۲) دامنه را همین‌جا اضافه کن ۳) ویزاردِ وصل کردن را تا صحت‌سنجی جلو ببر. ثبتِ ناتمام در همین جدول می‌ماند و از همان‌جا ادامه پیدا می‌کند؛ تا وقتی کامل نشده، برایش صندوق ساخته نمی‌شود.'
-          : 'Each domain (or subdomain) must be on your Cloudflare account. For each one: 1) enable Email Routing, 2) add the domain here, 3) walk the connect wizard through verification. An unfinished registration stays right here in this table and resumes from where it stopped — mailboxes stay locked until it completes.'));
+          ? 'هر دامنه (یا ساب‌دامنه) را باید در Cloudflare ثبت کرده باشی. برای هر کدام: ۱) Email Routing را فعال کن ۲) دامنه را همین‌جا اضافه کن ۳) ویزاردِ وصل کردن را تا صحت‌سنجی جلو ببر. ثبتِ ناتمام در همین صفحه می‌ماند و از همان‌جا ادامه پیدا می‌کند؛ تا وقتی کامل نشده، برایش صندوق ساخته نمی‌شود.'
+          : 'Each domain (or subdomain) must be on your Cloudflare account. For each one: 1) enable Email Routing, 2) add the domain here, 3) walk the connect wizard through verification. An unfinished registration stays right here on this page and resumes from where it stopped — mailboxes stay locked until it completes.'));
   }
 
   await load();

@@ -52,7 +52,7 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 <div align="center">
 
-| **The cockpit** — the active account's inbox, its accounts side-panel, a pick-a-message reading pane |
+| **The cockpit** — the active account's inbox, the account chip in its header, a pick-a-message reading pane |
 |---|
 | <img src="docs/img/en/inbox.png" width="620" alt="Inbox — three panels, account sidebar, unread badges"> |
 
@@ -68,15 +68,15 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 |---|
 | <img src="docs/img/en/health.png" width="620" alt="System health — D1 connection, tables and columns, cron heartbeat, mail flow"> |
 
-| **The vault** — live 6-digit codes, folders, a mark for every key |
+| **The account's own vault** — live codes scoped per account; temp addresses stay locked |
 |---|
 | <img src="docs/img/en/vault.png" width="620" alt="2FA vault — live codes, folders, glyph marks"> |
 
-| **Every domain, one glance** — honest registration states, health chips, catch-all switches |
+| **Every domain, one card** — lifecycle trail, stat strip, Active & Catch-all keys |
 |---|
 | <img src="docs/img/en/domains.png" width="620" alt="Domains — status chips, catch-all switches, inbox counts"> |
 
-| **The address book** — permanent and temporary spaces, TTL countdowns, forwarding |
+| **One account, one card** — stat strip, expiry countdown, one-click entry |
 |---|
 | <img src="docs/img/en/addresses.png" width="620" alt="Addresses — permanent and temporary inboxes with TTL and forwarding"> |
 
@@ -102,7 +102,19 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 2.5 — the release that works like the big clients
+## What's new in 2.6 — the release that gives every account its own room
+
+- **A tidy inbox with the account in its header.** The inbox header now carries the active account itself — colored avatar, address, kind and mail count in one chip. Open it and a glass card lists every account with its unread badge: switch accounts right there, without leaving the inbox; "Add another account" sits at the bottom of the same card.
+- **One account, one card.** The Inboxes page traded its flat table for real cards: a stat strip up top (accounts · mails · temporary · active account) and one card per account — avatar, kind tag, three numbers (mails, last mail, expiry countdown) and the actions (copy · forwarding · +1 day · open inbox · delete). The live account wears an accent ring and a "this one" badge.
+- **Domains got serious swagger.** The domains page now opens with a stat strip (domains · verified · in progress · mailboxes) and gives every domain a card of its own: the lifecycle trail (saved → verify code → live), the real status pill, **Active** and **Catch-all** switches with one-line explanations, and the numbers (mailboxes, last mail) — same glass softness, twice the information.
+- **The 2FA vault belongs to the account.** The vault opens scoped to the account you are in, not "all" — every account's codes stay separate, and the "Add code" button defaults to that same account.
+- **The vault locks itself for temporary addresses.** Adding a code to a temporary account shows a 🔒 on the button. The only way through is the responsibility dialog, which tells you exactly when the address — and every code linked to it — will be deleted. Accept, and the code goes in; decline, and it stays locked. Codes linked to a temp address wear a live deletion countdown on their card.
+- **The visual bugs are closed.** Dismissing notifications with × now removes exactly that toast and cancels its timer; closing dialogs with × no longer leaves the Escape listener behind (Escape can no longer re-run a dead dialog and scramble the page); and rapid-fire clicks on the menu can no longer open two sections at once — every navigation takes a token and the stale render steps aside at its next await.
+- **The menu indicator glides.** The active page pill is now a real glass indicator that springs from page to page — the tab-switch feel of the big clients.
+- **Fresh screenshots in both languages** from the 2.6 build — the inbox, the account cards, the domain cards and the locked vault.
+
+<details>
+<summary><b>What 2.5 changed — the release that works like the big clients</b></summary>
 
 - **The account circle.** The avatar at the top right now opens a real account switcher, the way you already know from the big mail clients: every mailbox listed with its tiny details — mails received, 2FA codes held, what's unread — plus **Add another account**, and the manage/settings/sign-out row underneath. Click an account and the whole app lands in its space; the circle itself wears that account's color and letter.
 - **Every email gets its own page.** Opening a message no longer floats a popup over the list — it navigates to a dedicated page with its own URL (`#/mail/m/:id`), a real **Back to inbox** button, older/newer arrows, the full action bar (reply, star, mark unread, delete) and the personal note panel. One mail, one page, zero popup bugs.
@@ -111,6 +123,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 - **Four moods, honestly named.** The palette settled on the four moods you actually use — **Sage · Serene · Violet · Amber** — and switching one now repaints the entire room: background, glass tints, accents, highlights, even the browser chrome color. Old picks fold into their nearest mood automatically.
 - **The health panel heals its own gate.** Installs migrated from old builds could silently lose admin rights (the role column's default), which hid System health, Domains and every admin surface. The app now notices and restores the single user's admin role on boot — the panel simply appears again, no SQL required.
 - **Fresh screenshots everywhere**, per language, from the 2.5 build — including two new ones: the account circle and the dedicated email page.
+
+</details>
 
 <details>
 <summary><b>What 2.4 changed</b></summary>
@@ -143,8 +157,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.5.0/worker.js)** — the entire application in one file (~1.2 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v2.5.0:** [`CMail-v2.5.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.5.0/CMail-v2.5.0.zip) — sources, `schema.sql`, migrations and scripts.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.6.0/worker.js)** — the entire application in one file (~1.2 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v2.6.0:** [`CMail-v2.6.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.6.0/CMail-v2.6.0.zip) — sources, `schema.sql`, migrations and scripts.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 
 ## The guides — per language

@@ -205,12 +205,25 @@ export function vibrate(ms = 8) {
 }
 
 // ---------- toast ----------
+// every toast carries its own × — closing it only ever touches this one node,
+// never the room around it (the old auto-dismiss timer is cancelled on tap)
 export function toast(msg, kind = 'info', ms = 2600) {
   const box = document.getElementById('toasts');
-  const el = h('div', { class: `toast toast--${kind}`, role: 'status' }, icon(kind === 'ok' ? 'check' : kind === 'err' ? 'x' : 'info'), h('span', {}, msg));
+  const el = h('div', { class: `toast toast--${kind}`, role: 'status' },
+    icon(kind === 'ok' ? 'check' : kind === 'err' ? 'x' : 'info'),
+    h('span', { class: 'toast__msg' }, msg));
+  let gone = false;
+  const close = () => {
+    if (gone || !el.isConnected) return;
+    gone = true;
+    clearTimeout(timer);
+    el.classList.add('leaving');
+    setTimeout(() => el.remove(), 300);
+  };
+  const timer = setTimeout(close, ms);
+  el.append(h('button', { class: 'toast__x', 'aria-label': t('close'), onclick: (e) => { e.stopPropagation(); close(); } }, icon('x')));
   box.append(el);
   vibrate(kind === 'err' ? [14, 60, 14] : 8);
-  setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 320); }, ms);
 }
 
 // ---------- modal (bottom-sheet on touch devices) ----------
@@ -220,10 +233,21 @@ export function modal({ title, iconName, body, footer, wide, onClose }) {
   const sheet = window.matchMedia?.('(max-width: 860px)').matches;
   const m = h('div', { class: `modal ${wide ? 'modal--wide' : ''} ${sheet ? 'modal--sheet' : ''}`, role: 'dialog', 'aria-modal': 'true' });
   if (sheet) m.append(h('span', { class: 'modal__grab', 'aria-hidden': 'true' }));
-  const close = () => { back.remove(); onClose?.(); };
+  // closing is idempotent and retires its own Escape listener — closing from
+  // the × (or a footer button) used to leave the key handler behind, so a later
+  // Escape re-ran the dead modal's onClose and scrambled the page
+  let open = true;
+  const esc2 = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => {
+    if (!open) return;
+    open = false;
+    document.removeEventListener('keydown', esc2);
+    back.remove();
+    onClose?.();
+  };
   vibrate(5);
   back.addEventListener('click', (e) => { if (e.target === back) close(); });
-  document.addEventListener('keydown', function esc2(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc2); } });
+  document.addEventListener('keydown', esc2);
 
   if (title) m.append(h('div', { class: 'modal__head' }, h('h3', { class: 'modal__title' }, iconName ? icon(iconName) : '', title),
     h('button', { class: 'icon-btn', onclick: close }, icon('x'))));

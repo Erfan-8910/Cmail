@@ -1,7 +1,7 @@
 // Cmail — 2FA vault: named TOTP entries with live codes, glyphs and account scoping
 import { api, state, errText } from '../api.js';
 import { t } from '../i18n.js';
-import { h, clear, icon, toast, modal, confirmBox, copyText, esc, glyphs, glyphCats, glyphTile, vibrate } from '../ui.js';
+import { h, clear, icon, toast, modal, confirmBox, copyText, esc, glyphs, glyphCats, glyphTile, vibrate, fmtCountdown } from '../ui.js';
 
 const COLORS = { violet: '#a78bfa', sky: '#38bdf8', mint: '#34d399', amber: '#fbbf24', rose: '#fb7185' };
 let entries = [];
@@ -10,11 +10,39 @@ let tick = null;
 let scope = 'all';    // 'all' | 'none' | address id
 let fscope = 'all';   // 'all' | 'none' | folder id
 
+const tempAddress = (id) => {
+  const a = (state.addresses ?? []).find((x) => x.id === id);
+  return a && a.kind === 'temp' ? a : null;
+};
+
+// ---------- the responsibility gate for temporary mailboxes ----------
+// a code linked to a temporary address dies together with that address —
+// by default the vault stays locked (a lock on the button) and the only
+// way through is this dialog, where the owner sees exactly when everything
+// will be deleted and accepts that responsibility
+export function tempGuard(address, onAccept) {
+  const left = address?.expires_at ? address.expires_at - Date.now() : 0;
+  const when = left > 0 ? fmtCountdown(left, t) : t('soon');
+  const m = modal({
+    title: t('tempGuardTitle'), iconName: 'lock',
+    body: [
+      h('div', { class: 'temp-guard' },
+        h('div', { class: 'temp-guard__addr mono' }, address?.address ?? ''),
+        h('p', { class: 'temp-guard__text' }, t('tempGuardBody').replace('{when}', when)),
+        h('div', { class: 'temp-guard__note' }, icon('alarm'), h('span', {}, t('tempGuardNote')))),
+    ],
+    footer: [
+      h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('cancel')),
+      h('button', { class: 'btn btn--danger', onclick: () => { m.close(); onAccept?.(); } }, icon('lock'), t('tempGuardYes')),
+    ],
+  });
+}
+
 export async function renderVault(root) {
   const view = h('div', { class: 'view' });
   view.append(h('div', { class: 'page-head' },
     h('div', {}, h('div', { class: 'eyebrow' }, t('eyebrowVault')), h('h2', { class: 'page-title' }, t('vaultTitle')), h('div', { class: 'page-sub' }, t('vaultSub'))),
-    h('button', { class: 'btn btn--primary', onclick: () => entryModal() }, icon('plus'), t('addCode')),
+    h('button', { class: 'btn btn--primary', onclick: () => entryModal(null, { addressId: scope !== 'all' && scope !== 'none' ? scope : null }) }, icon('plus'), t('addCode')),
   ));
 
   const chips = h('div', { class: 'vault-filters' });
@@ -26,8 +54,11 @@ export async function renderVault(root) {
   view.append(chips, fchips, searchIn, grid);
   root.append(view);
 
-  if (!state.addresses.length) {
-    await api.get('/api/addresses').then((r) => state.addresses = r.addresses ?? []).catch(() => {});
+  await api.get('/api/addresses').then((r) => state.addresses = r.addresses ?? []).catch(() => {});
+  // the vault opens on the account you are actually in — every section
+  // stays separate per account, exactly like the inbox
+  if (scope === 'all' && state.currentAddressId && state.addresses.some((a) => a.id === state.currentAddressId)) {
+    scope = state.currentAddressId;
   }
 
   await load();
@@ -222,6 +253,8 @@ export async function renderVault(root) {
       acc ? h('button', {
         class: 'totp-card__acc chip', onclick: () => { location.hash = '#/mail'; },
       }, h('span', { class: 'chip-dot', style: { background: acc.kind === 'temp' ? 'var(--warn)' : 'var(--acc)' } }, ''), `${t('acctLinked')} — ${acc.address}`) : '',
+      acc && acc.kind === 'temp' && acc.expires_at
+        ? h('span', { class: 'totp-temp', title: t('tempGuardTitle') }, icon('clock'), h('span', { class: 'mono' }, fmtCountdown(acc.expires_at - Date.now(), t))) : '',
       h('div', { class: 'totp-card__code-row' },
         codeEl, ring));
 
@@ -350,7 +383,16 @@ export function entryModal(entry = null, opts = {}) {
   const addrSel = h('select', { class: 'input' },
     h('option', { value: '', selected: !addressId || undefined }, t('acctUnlinked')),
     state.addresses.map((a) => h('option', { value: a.id, selected: a.id === addressId || undefined }, a.label || a.address)));
-  addrSel.addEventListener('change', () => { addressId = addrSel.value || null; });
+  // temporary accounts keep their vault locked — the button wears a lock and
+  // only the responsibility dialog opens it
+  const tempWarn = h('div', { class: 'temp-guard temp-guard--inline', style: { display: tempAddress(addressId) ? '' : 'none' } },
+    icon('lock'), h('span', {}, t('tempGuardInline')));
+  addrSel.addEventListener('change', () => {
+    addressId = addrSel.value || null;
+    const tmp = !!tempAddress(addressId);
+    tempWarn.style.display = tmp ? '' : 'none';
+    if (!entry) saveIc.replaceWith(saveIc = icon(tmp ? 'lock' : 'plus'));
+  });
 
   // folder link (user-managed groups)
   let folderId = entry?.folder_id ?? null;
@@ -386,25 +428,35 @@ export function entryModal(entry = null, opts = {}) {
 
   const refreshCard = () => { vibrate(6); if (opts.onDone) opts.onDone(); };
 
+  const doSave = async () => {
+    if (entry) {
+      try {
+        await api.patch(`/api/totp/${entry.id}`, { name: name.value.trim(), issuer: issuer.value.trim(), color, icon: glyph, address_id: addressId, folder_id: folderId });
+        toast(t('saved'), 'ok', 1400); m.close(); refreshCard();
+      } catch (e) { toast(errText(e), 'err'); }
+      return;
+    }
+    saveBtn.disabled = true;
+    try {
+      await api.post('/api/totp', {
+        name: name.value.trim(), issuer: issuer.value.trim(),
+        secret: secret.value.trim(), uri: uri.value.trim(),
+        algo: algo.value, digits: parseInt(digits.value, 10), period: parseInt(period.value, 10) || 30,
+        color, icon: glyph, address_id: addressId, folder_id: folderId,
+      });
+      toast(t('saved'), 'ok', 1400); m.close(); refreshCard();
+    } catch (e) { toast(errText(e), 'err'); saveBtn.disabled = false; }
+  };
+
+  let saveIc = icon(!entry && tempAddress(addressId) ? 'lock' : 'plus');
   const saveBtn = entry
-    ? h('button', { class: 'btn btn--primary', onclick: async () => {
-        try {
-          await api.patch(`/api/totp/${entry.id}`, { name: name.value.trim(), issuer: issuer.value.trim(), color, icon: glyph, address_id: addressId, folder_id: folderId });
-          toast(t('saved'), 'ok', 1400); m.close(); refreshCard();
-        } catch (e) { toast(errText(e), 'err'); }
-      } }, t('save'))
-    : h('button', { class: 'btn btn--primary', onclick: async () => {
-        saveBtn.disabled = true;
-        try {
-          await api.post('/api/totp', {
-            name: name.value.trim(), issuer: issuer.value.trim(),
-            secret: secret.value.trim(), uri: uri.value.trim(),
-            algo: algo.value, digits: parseInt(digits.value, 10), period: parseInt(period.value, 10) || 30,
-            color, icon: glyph, address_id: addressId, folder_id: folderId,
-          });
-          toast(t('saved'), 'ok', 1400); m.close(); refreshCard();
-        } catch (e) { toast(errText(e), 'err'); saveBtn.disabled = false; }
-      } }, icon('plus'), t('addCode'));
+    ? h('button', { class: 'btn btn--primary', onclick: doSave }, t('save'))
+    : h('button', { class: 'btn btn--primary', onclick: () => {
+        // locked until the owner accepts the countdown for temporary accounts
+        const tmp = tempAddress(addressId);
+        if (tmp) tempGuard(tmp, doSave);
+        else doSave();
+      } }, saveIc, t('addCode'));
 
   const extraRow = h('div', { class: 'row row--wrap' }, qrBtn, secretBtn);
 
@@ -420,6 +472,7 @@ export function entryModal(entry = null, opts = {}) {
       pickerWrap,
       ...secretFields,
       h('div', { class: 'field' }, h('label', {}, t('acct2fa')), addrSel),
+      tempWarn,
       h('div', { class: 'field' }, h('label', {}, t('folderField')), fldSel),
       h('div', { class: 'field' }, h('label', {}, t('color')), colorRow),
       extraRow,
