@@ -29,12 +29,13 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 | | |
 |---|---|
-| 📬 **All inboxes, one view** | The unified inbox streams every mailbox into a single live list — each row tags the mailbox it landed in. Switching spaces is one tap in the sidebar, exactly like the mail clients you already know. |
+| ⭕ **The account circle** | Every mailbox is its own account. Click the circle at the top right — exactly like the big mail clients — and each account shows its tiny details before you even enter: how many mails it received, how many 2FA codes it holds, what's unread. Add another account from the same panel; jump between accounts without ever leaving your page. |
+| 📄 **Every email gets its own page** | Opening a message navigates to a real page of its own — its own URL, its own back button, older/newer arrows — never a popup floating over your list. HTML mail renders sanitized inside a sandboxed frame; plain text has its own toggle. |
 | ⏱️ **The inbox breathes on its own** | Every 15 seconds the inbox quietly pulls for new mail, highlights what just landed and syncs the unread badges — no refresh button rituals. |
 | 🩺 **System health, on stage** | A full health report in Settings: D1 connection with live latency, every table with its row count and column state, the cron heartbeat, and the mail flow — each with its own fix button. |
 | 🚨 **Problems announce themselves** | When something serious breaks — D1 unreachable, tables missing, schema outdated, mail stalled — a banner appears above the app with the cause and the one-press fix. You hear it from your app first, never from a broken inbox. |
 | 🌐 **Domain connect wizard** | Add a domain and it takes your hand: a crisp connect guide, then a verification code you mail to your own domain. The screen re-checks itself every few seconds until the loop proves itself — and mailboxes unlock. Walked away mid-way? The draft waits in the setup screen and on the domains page with a **Continue** button — nobody ever retypes a domain. |
-| 🎨 **A room that matches your mood** | The whole environment breathes with the color you pick: 13 named moods (Sage, Serene, Violet, Amber…) tint the ambient glow behind the app. Three presence modes — **Aurora** (alive), **Halo** (still), **Pure** (flat) — pick how much life the background has. |
+| 🎨 **A room that matches your mood** | The whole environment repaints with the mood you pick — **Sage · Serene · Violet · Amber**, the same four names you know, each one re-tinting the background glow, the glass and every accent in one breath. Three presence modes — **Aurora** (alive), **Halo** (still), **Pure** (flat) — pick how much life the background has. |
 | 🔎 **D1 inspector** | The setup screen lists every expected table with its row count; build the missing ones with a button, drop the strays, keep your database honest. The health tab carries the same inspector, forever. |
 | 🗒️ **Notes on emails** | A colored personal note under any message — order numbers, tracking links, anything. Search finds it instantly. |
 | 👤 **Every inbox is an account** | Each mailbox behaves like a standalone account: its mail, its private notes and its own 2FA codes stay inside that space. |
@@ -51,9 +52,17 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 <div align="center">
 
-| **The cockpit** — all inboxes in one live stream, every row tagged with its mailbox |
+| **The cockpit** — the active account's inbox, its accounts side-panel, a pick-a-message reading pane |
 |---|
-| <img src="docs/img/en/inbox.png" width="620" alt="Unified inbox — every mailbox in one list, mailbox chips, unread badges"> |
+| <img src="docs/img/en/inbox.png" width="620" alt="Inbox — three panels, account sidebar, unread badges"> |
+
+| **The account circle** — every mailbox is an account, with its details before you even enter |
+|---|
+| <img src="docs/img/en/switcher.png" width="620" alt="Account switcher — per-account mails, 2FA codes, unread badge, add account"> |
+
+| **One email, one page** — its own URL, back button and action bar; never a popup |
+|---|
+| <img src="docs/img/en/reader.png" width="620" alt="Dedicated email page — back to inbox, older/newer, star, delete, note"> |
 
 | **Mission control for your database** — connection, tables, cron heartbeat, mail flow; every problem carries its own fix button |
 |---|
@@ -93,13 +102,25 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 2.4 — the release that polishes the edges
+## What's new in 2.5 — the release that works like the big clients
 
-- **A living background, yours to tune.** The ambient room behind the app now glows with the active mood — switch from Sage to Serene and the whole environment re-tints. Three presence modes in Settings → Appearance: **Aurora** (slow drifting light), **Halo** (still glow), **Pure** (flat). All named, all instant.
-- **The setup screen grew up.** Forms are truly centered on desktop at any window size. A domain you left mid-registration now sits in the setup screen with its status and a **Continue setup** button — and re-adding it is never an error: the wizard just opens. Skipped verification? Come back later and verify with a code whenever you like.
+- **The account circle.** The avatar at the top right now opens a real account switcher, the way you already know from the big mail clients: every mailbox listed with its tiny details — mails received, 2FA codes held, what's unread — plus **Add another account**, and the manage/settings/sign-out row underneath. Click an account and the whole app lands in its space; the circle itself wears that account's color and letter.
+- **Every email gets its own page.** Opening a message no longer floats a popup over the list — it navigates to a dedicated page with its own URL (`#/mail/m/:id`), a real **Back to inbox** button, older/newer arrows, the full action bar (reply, star, mark unread, delete) and the personal note panel. One mail, one page, zero popup bugs.
+- **One account at a time.** The mailbox list and the unified stream merged into one honest model: the app shows the active account's inbox, and switching — from the circle, the sidebar, or the command palette — changes the space entirely. No more “which mailbox did this land in?” labels.
+- **Navigation grew a pill.** The whole shell is now one floating glass pill: brand and version on one side, the four pages (Mail · Inboxes · 2FA Vault · Guide) in the middle, search/theme/language/account on the other — exactly the layout of the reference design.
+- **Four moods, honestly named.** The palette settled on the four moods you actually use — **Sage · Serene · Violet · Amber** — and switching one now repaints the entire room: background, glass tints, accents, highlights, even the browser chrome color. Old picks fold into their nearest mood automatically.
+- **The health panel heals its own gate.** Installs migrated from old builds could silently lose admin rights (the role column's default), which hid System health, Domains and every admin surface. The app now notices and restores the single user's admin role on boot — the panel simply appears again, no SQL required.
+- **Fresh screenshots everywhere**, per language, from the 2.5 build — including two new ones: the account circle and the dedicated email page.
+
+<details>
+<summary><b>What 2.4 changed</b></summary>
+
+- **A living background, yours to tune.** The ambient room behind the app glows with the active mood — switching moods re-tints the whole environment. Three presence modes in Settings → Appearance: **Aurora** (slow drifting light), **Halo** (still glow), **Pure** (flat).
+- **The setup screen grew up.** Forms are truly centered on desktop at any window size. A domain left mid-registration sits in the setup screen with its status and a **Continue setup** button — and re-adding it is never an error: the wizard just opens. Skipped verification? Come back later and verify with a code whenever you like.
 - **The sidebar lost the filler.** The quote card is gone; the space goes to your inboxes and your accounts.
-- **The maker card.** The About page now introduces the person behind the project with a proper gradient-ring card — and the background story stays in one honest paragraph.
-- **Fresh screenshots everywhere.** Every image in this README was retaken from the 2.4 build, per language.
+- **The maker card.** The About page introduces the person behind the project with a gradient-ring card.
+
+</details>
 
 <details>
 <summary><b>What 2.3 changed</b></summary>
@@ -122,8 +143,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.4.0/worker.js)** — the entire application in one file (~1.2 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v2.4.0:** [`CMail-v2.4.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.4.0/CMail-v2.4.0.zip) — sources, `schema.sql`, migrations and scripts.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.5.0/worker.js)** — the entire application in one file (~1.2 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v2.5.0:** [`CMail-v2.5.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.5.0/CMail-v2.5.0.zip) — sources, `schema.sql`, migrations and scripts.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 
 ## The guides — per language

@@ -64,6 +64,16 @@ app.get('/status', async (c) => {
 
   if (tables && env.DB) {
     try {
+      // self-heal: this panel belongs to a single user — the only account in
+      // the table IS the admin. Installs migrated from older builds may carry
+      // role='user' (the column default), which silently locked them out of
+      // the health panel, domains and every admin API. Promote without asking.
+      const first = await env.DB.prepare('SELECT id, role FROM users ORDER BY created_at LIMIT 1').first<{ id: string; role: string }>();
+      const total = await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>();
+      if (first && (total?.n ?? 0) === 1 && first.role !== 'admin') {
+        await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(first.id).run();
+      }
+
       const [adminCount, domainCount, s] = await Promise.all([
         env.DB.prepare("SELECT COUNT(*) AS n FROM users").first<{ n: number }>(),
         // only a domain that finished its registration proves the routing path

@@ -128,7 +128,7 @@ function buildSources(q) {
   if (actHits.length) s.push({ title: t('cmdkActions'), items: actHits });
 
   // --- accent palettes (only when typing "acc"/"pal"/palette names) ---
-  const accents = [['sage', 'paletteSage'], ['emerald', 'paletteEmerald'], ['ocean', 'paletteOcean'], ['blue', 'paletteBlue'], ['midnight', 'paletteMidnight'], ['violet', 'paletteViolet'], ['sakura', 'paletteSakura'], ['rose', 'paletteRose'], ['wine', 'paletteWine'], ['amber', 'paletteAmber'], ['gold', 'paletteGold'], ['coral', 'paletteCoral'], ['ice', 'paletteIce']];
+  const accents = [['sage', 'paletteSage'], ['serene', 'paletteSerene'], ['violet', 'paletteViolet'], ['amber', 'paletteAmber']];
   const accHits = accents
     .map(([key, lk]) => ({ key, label: t(lk), kw: 'accent color palette theme' }))
     .filter((a) => query && (rank(a.label) >= 0 || /acc|pal|رنگ|پالت/.test(query)));
@@ -142,17 +142,9 @@ function buildSources(q) {
     })),
   });
 
-  // --- inboxes ---
+  // --- inboxes — every mailbox is its own account space ---
   if (state.user && state.addresses.length) {
-    const inb = [{
-      icn: 'inbox',
-      label: t('allMail'), sub: t('allMailSub'),
-      run: () => {
-        state.currentAddressId = null;
-        window.dispatchEvent(new CustomEvent('cmail:switch-inbox', { detail: null }));
-        location.hash = '#/mail';
-      },
-    }, ...state.addresses
+    const inb = state.addresses
       .filter((a) => rank(a.address) >= 0 || match(a.label))
       .sort((a, b) => rank(a.address) - rank(b.address))
       .map((a) => ({
@@ -160,10 +152,11 @@ function buildSources(q) {
         label: a.address, sub: a.kind === 'temp' ? t('temporary') : t('permanent'),
         run: () => {
           state.currentAddressId = a.id;
+          localStorage.setItem('cmail_acct', a.id);
           window.dispatchEvent(new CustomEvent('cmail:switch-inbox', { detail: a.id }));
           location.hash = '#/mail';
         },
-      }))];
+      }));
     if (inb.length) s.push({ title: t('cmdkInboxes'), items: inb });
   }
   return s;

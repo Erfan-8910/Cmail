@@ -1,11 +1,11 @@
-// Cmail — app shell: boot, router, sidebar + topbar + mobile tabbar
+// Cmail — app shell: boot, router, floating pill navigation + account switcher
 import { api, state, errText } from './api.js';
 import { t, setLang, lang } from './i18n.js';
-import { h, clear, icon, toast, dropdown, timeAgo, vibrate } from './ui.js';
+import { h, clear, icon, toast, vibrate, avatarColor } from './ui.js';
 import { openCmdk, closeCmdk, cmdkIsOpen, cmdkKey } from './cmdk.js';
 import { renderLogin } from './views/auth.js';
 import { renderGate } from './views/gate.js';
-import { renderMail } from './views/mail.js';
+import { renderMail, createAddressModal } from './views/mail.js';
 import { renderAddresses } from './views/addresses.js';
 import { renderVault } from './views/vault.js';
 import { renderDomains } from './views/domains.js';
@@ -15,16 +15,10 @@ import { renderHelp } from './views/help.js';
 import { renderInto as renderAlerts } from './health.js';
 
 const app = document.getElementById('app');
-const sidebar = document.getElementById('sidebar');
-const sbScrim = document.getElementById('sb-scrim');
-const sbNav = document.getElementById('sb-nav');
-const sbLabel = document.getElementById('sb-label');
-const sbTag = document.getElementById('sb-tag');
-const sbUser = document.getElementById('sb-user');
-const topbar = document.getElementById('topbar');
-const tbMenu = document.getElementById('tb-menu');
-const tbTitle = document.getElementById('tb-title');
-const tbEnd = document.getElementById('tb-end');
+const pillbar = document.getElementById('pillbar');
+const pbNav = document.getElementById('pb-nav');
+const pbEnd = document.getElementById('pb-end');
+const pbVer = document.getElementById('pb-ver');
 const tabbar = document.getElementById('tabbar');
 const tabbarIn = document.getElementById('tabbar-in');
 
@@ -39,16 +33,6 @@ const routes = {
   help: renderHelp,
   login: renderLogin,
   status: renderGate,
-};
-
-const viewMeta = {
-  mail: { icon: 'inbox', title: () => t('navMail'), eyebrow: () => t('eyebrowMail') },
-  addresses: { icon: 'mail', title: () => t('navAddresses'), eyebrow: () => t('eyebrowAddresses') },
-  vault: { icon: 'key', title: () => t('navVault'), eyebrow: () => t('eyebrowVault') },
-  domains: { icon: 'globe', title: () => t('navDomains'), eyebrow: () => t('eyebrowDomains') },
-  settings: { icon: 'settings', title: () => t('navSettings'), eyebrow: () => t('eyebrowSettings') },
-  about: { icon: 'heart', title: () => t('navAbout'), eyebrow: () => t('eyebrowAbout') },
-  help: { icon: 'help', title: () => t('navHelp'), eyebrow: () => t('eyebrowHelp') },
 };
 
 export function nav(hash) { location.hash = hash; }
@@ -66,6 +50,11 @@ async function route() {
   if (!state.setup || page === 'status' || page === 'login') {
     try { state.setup = await api.get('/api/setup/status'); }
     catch { if (!state.setup) state.setup = null; }
+    // the status endpoint self-heals the single user's admin role — pick up
+    // the fresh role right away so admin surfaces unlock without a re-login
+    if (state.setup && state.user) {
+      try { const me = await api.get('/api/auth/me'); if (me?.user) state.user = me.user; } catch { /* */ }
+    }
   }
   const ready = !!state.setup?.ready;
 
@@ -94,8 +83,13 @@ async function route() {
   // show as banners above the content — admins only, cached for a minute
   const alertHost = document.getElementById('sysalert');
   if (alertHost) {
-    if (!authView && state.user?.role === 'admin') renderAlerts(alertHost);
-    else { alertHost.hidden = true; clear(alertHost); }
+    if (!authView && state.user?.role === 'admin') {
+      await renderAlerts(alertHost);
+      document.body.classList.toggle('has-alert', !alertHost.hidden && alertHost.children.length > 0);
+    } else {
+      alertHost.hidden = true; clear(alertHost);
+      document.body.classList.remove('has-alert');
+    }
   }
 
   if (authView) {
@@ -115,19 +109,14 @@ async function route() {
   }
 }
 
-// ---------- shell: sidebar + topbar + tabbar ----------
+// ---------- shell: floating pill navigation + mobile tabbar ----------
 function navItems() {
   const items = [
     { key: 'mail', icon: 'inbox', label: t('navMail'), href: '#/mail' },
     { key: 'addresses', icon: 'mail', label: t('navAddresses'), href: '#/addresses' },
     { key: 'vault', icon: 'key', label: t('navVault'), href: '#/vault' },
     { key: 'help', icon: 'help', label: t('navHelp'), href: '#/help' },
-    { key: 'about', icon: 'heart', label: t('navAbout'), href: '#/about' },
   ];
-  if (state.user?.role === 'admin') {
-    items.push({ key: 'domains', icon: 'globe', label: t('navDomains'), href: '#/domains', cls: 'nav-item--admin' });
-  }
-  items.push({ key: 'settings', icon: 'settings', label: t('navSettings'), href: '#/settings' });
   return items;
 }
 
@@ -142,55 +131,35 @@ function tabItems() {
 }
 
 function renderShell(page, authView) {
-  [sidebar, topbar, tabbar].forEach((el) => { el.hidden = authView; });
+  [pillbar, tabbar].forEach((el) => { el.hidden = authView; });
   document.body.classList.toggle('is-auth', authView);
-  if (authView) { closeSidebar(); return; }
+  if (authView) return;
 
-  // ----- sidebar -----
-  sbTag.textContent = t('sbTagline');
-  sbLabel.textContent = t('sbSection');
-  clear(sbNav);
+  // version chip lives on the brand — refresh it from the server status
+  if (pbVer && state.setup?.version) pbVer.textContent = state.setup.version.split('.').slice(0, 2).join('.');
+
+  // ----- page pills -----
+  clear(pbNav);
   for (const it of navItems()) {
-    sbNav.append(h('a', {
-      class: `nav-item ${it.cls ?? ''} ${page === it.key ? 'is-on' : ''}`,
+    pbNav.append(h('a', {
+      class: `pill-nav ${page === it.key ? 'is-on' : ''}`,
       href: it.href,
       dataset: { nav: it.key },
-    }, icon(it.icon), h('span', {}, it.label), it.key === 'mail' ? h('span', { class: 'badge', id: 'nav-unread', style: { display: state.unread > 0 ? '' : 'none' } }, state.unread > 99 ? '99+' : String(state.unread)) : ''));
+    }, icon(it.icon), h('span', {}, it.label), it.key === 'mail' ? h('span', { class: 'badge', id: 'pill-unread', style: { display: state.unread > 0 ? '' : 'none' } }, state.unread > 99 ? '99+' : String(state.unread)) : ''));
   }
-  clear(sbUser);
-  sbUser.hidden = false;
-  sbUser.append(
-    h('span', { class: 'avatar' }, (state.user?.username ?? '?').slice(0, 1).toUpperCase()),
-    h('span', { class: 'grow' },
-      h('span', { class: 'u-name' }, state.user?.display_name || state.user?.username || '—'),
-      h('span', { class: 'u-sub' }, state.user?.role === 'admin' ? t('roleAdmin') : t('roleMember'))),
-    h('span', { class: 'end icn' }, icon('settings')),
-  );
-  sbUser.onclick = (e) => {
-    if (e.target.closest('.end')) { dropdown(sbUser, userMenu()); return; }
-    location.hash = '#/settings';
-  };
 
-  // ----- topbar -----
-  const meta = viewMeta[page] ?? viewMeta.mail;
-  clear(tbTitle);
-  tbTitle.append(icon(meta.icon), h('span', {}, meta.title()));
-
-  tbMenu.hidden = false;
-  tbMenu.innerHTML = icon('menu').innerHTML;
-  tbMenu.onclick = openSidebar;
-
-  clear(tbEnd);
-  tbEnd.append(
+  // ----- end controls: search · theme · language · account -----
+  clear(pbEnd);
+  pbEnd.append(
     h('button', { class: 'spot-pill', title: t('searchMail'), 'aria-label': t('searchMail'), onclick: () => openCmdk() },
       icon('search'), h('span', { class: 't' }, t('searchMail')), h('kbd', { class: 'kbd' }, isMac() ? '⌘K' : 'Ctrl K')),
-    h('span', { class: 'topbar__date' }, dateLabel()),
+    h('span', { class: 'pillbar__sep' }),
     h('button', { class: 'icon-btn', title: t('theme'), 'aria-label': t('theme'), onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')),
     h('button', { class: 'icon-btn', title: t('language'), 'aria-label': t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); route(); } }, icon('globe')),
   );
   const userWrap = h('div', { style: { position: 'relative', display: 'inline-flex' } });
-  userWrap.append(h('button', { class: 'avatar', 'aria-label': t('account'), onclick: () => dropdown(userWrap, userMenu()) }, (state.user?.username ?? '?').slice(0, 1).toUpperCase()));
-  tbEnd.append(userWrap);
+  userWrap.append(h('button', { class: 'avatar', id: 'acct-avatar', 'aria-label': t('account'), title: t('account'), onclick: (e) => { e.stopPropagation(); openSwitcher(userWrap); } }, activeAvatarLetter()));
+  pbEnd.append(userWrap);
 
   // ----- mobile tabbar -----
   clear(tabbarIn);
@@ -203,45 +172,178 @@ function renderShell(page, authView) {
   }
 }
 
-function dateLabel() {
-  try {
-    return new Date().toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-  } catch { return ''; }
-}
-
 function isMac() { return /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent); }
 
-function openSidebar() {
-  sidebar.classList.add('open');
-  sbScrim.hidden = false;
-  sbScrim.onclick = closeSidebar;
-}
-function closeSidebar() {
-  sidebar.classList.remove('open');
-  if (sbScrim) sbScrim.hidden = true;
+// ---------- account switcher — every mailbox is its own account ----------
+// The circle at the top works exactly like the big clients: open it, glance
+// at the tiny details of every account (mail count, unread, 2FA codes),
+// jump into one, add another — never leaving the page you were on.
+let acctCache = null;
+let acctCacheAt = 0;
+let acctMenuEl = null;
+
+function activeAccount() {
+  const list = state.addresses ?? [];
+  return list.find((a) => a.id === state.currentAddressId) ?? null;
 }
 
-function userMenu() {
-  const items = [];
-  if (state.user) {
-    items.push({ label: `${t('account')} — ${state.user.username}`, icon: 'user', fn: () => nav('/settings') });
-    if (state.user.role === 'admin') items.push({ label: t('navDomains'), icon: 'globe', fn: () => nav('/domains') });
-    items.push('-');
-    if (state.user.role === 'admin') items.push({ label: t('navStatus'), icon: 'spark', fn: () => nav('/status?stay') });
-    items.push({ label: t('navAbout'), icon: 'heart', fn: () => nav('/about') });
-    items.push({ label: t('logout'), icon: 'logout', fn: async () => { await api.post('/api/auth/logout').catch(() => {}); state.user = null; nav('/login'); } });
+function activeAvatarLetter() {
+  const a = activeAccount();
+  return (a ? (a.label || a.address) : (state.user?.username ?? '?')).slice(0, 1).toUpperCase();
+}
+
+export async function switchAccount(id) {
+  closeSwitcher();
+  const changed = state.currentAddressId !== id;
+  state.currentAddressId = id;
+  localStorage.setItem('cmail_acct', id ?? '');
+  vibrate(6);
+  if (changed) {
+    state.unread = (state.addresses ?? []).find((a) => a.id === id)?.unread ?? state.unread;
+    updateUnreadBadge();
   }
-  return items;
+  // repaint the avatar letter, then land on the mail space of that account
+  const av = document.getElementById('acct-avatar');
+  if (av) av.textContent = activeAvatarLetter();
+  const { page } = currentRoute();
+  if (page === 'mail') route();
+  else location.hash = '#/mail';
+}
+
+async function accountsData() {
+  if (acctCache && Date.now() - acctCacheAt < 30_000) return acctCache;
+  try {
+    const [ar, tr] = await Promise.all([
+      api.get('/api/addresses'),
+      api.get('/api/totp').catch(() => ({ entries: [] })),
+    ]);
+    state.addresses = ar.addresses ?? [];
+    const codes = {};
+    for (const e of (tr.entries ?? [])) {
+      if (!e.address_id) continue;
+      codes[e.address_id] = (codes[e.address_id] ?? 0) + 1;
+    }
+    acctCache = { list: state.addresses, codes };
+    acctCacheAt = Date.now();
+  } catch { return { list: state.addresses ?? [], codes: {} }; }
+  return acctCache;
+}
+
+export function invalidateAccounts() { acctCache = null; acctCacheAt = 0; }
+
+async function openSwitcher(anchor) {
+  if (acctMenuEl) { closeSwitcher(); return; }
+  vibrate(5);
+  const menu = h('div', { class: 'acct-menu', role: 'menu', 'aria-label': t('account') });
+  acctMenuEl = menu;
+
+  // ----- header: who is signed in + which account is live -----
+  const active = activeAccount();
+  const head = h('div', { class: 'acct-menu__head' },
+    h('span', { class: 'avatar', style: { background: active ? avatarColor(active.address) : 'var(--acc)' } }, activeAvatarLetter()),
+    h('div', { class: 'acct-menu__id' },
+      h('div', { class: 'acct-menu__name' }, state.user?.display_name || state.user?.username || '—'),
+      h('div', { class: 'acct-menu__sub' },
+        h('span', {}, state.user?.role === 'admin' ? t('roleAdmin') : t('roleMember')),
+        active ? h('span', { class: 'mono', style: { fontSize: '10.5px' } }, active.address) : '')));
+  menu.append(head);
+
+  // ----- account rows (filled once the stats land) -----
+  const label = h('div', { class: 'acct-menu__label' }, t('yourAccounts'));
+  const listBox = h('div', { class: 'acct-menu__list' });
+  menu.append(label, listBox);
+
+  // ----- add another account -----
+  menu.append(h('button', { class: 'acct-menu__add', onclick: async () => { closeSwitcher(); await createAddressModal(() => { invalidateAccounts(); route(); }); } },
+    icon('plus'), h('span', {}, t('acctNew'))));
+
+  // ----- footer: manage / settings / about / sign out -----
+  const foot = h('div', { class: 'acct-menu__foot' });
+  const footBtn = (icn, lbl, fn, cls = '') => {
+    const b = h('button', { class: cls, onclick: () => { closeSwitcher(); fn(); } }, icon(icn), h('span', {}, lbl));
+    return b;
+  };
+  foot.append(
+    footBtn('inbox', t('navAddresses'), () => nav('/addresses')),
+    state.user?.role === 'admin' ? footBtn('globe', t('navDomains'), () => nav('/domains')) : '',
+    footBtn('settings', t('navSettings'), () => nav('/settings')),
+    footBtn('heart', t('navAbout'), () => nav('/about')),
+    footBtn('logout', t('logout'), async () => { await api.post('/api/auth/logout').catch(() => {}); state.user = null; nav('/login'); }, 'is-danger'),
+  );
+  menu.append(foot);
+
+  document.body.append(menu);
+
+  // ----- position under the avatar circle, clamped to the viewport -----
+  const place = () => {
+    const r = anchor.getBoundingClientRect();
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    const top = Math.min(r.bottom + 10, window.innerHeight - mh - 10);
+    menu.style.top = `${Math.max(10, top)}px`;
+    if (document.documentElement.dir === 'rtl') {
+      menu.style.left = `${Math.max(9, Math.min(r.left, window.innerWidth - mw - 9))}px`;
+      menu.style.right = 'auto';
+    } else {
+      menu.style.right = `${Math.max(9, Math.min(window.innerWidth - r.right, window.innerWidth - mw - 9))}px`;
+      menu.style.left = 'auto';
+    }
+  };
+  place();
+  const off = (e) => { if (!menu.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) closeSwitcher(); };
+  setTimeout(() => document.addEventListener('click', off), 0);
+  window.addEventListener('resize', closeSwitcher, { once: true });
+
+  // ----- fill the rows with the live per-account details -----
+  const { list, codes } = await accountsData();
+  if (acctMenuEl !== menu) return; // closed while loading
+  clear(listBox);
+  if (!list.length) {
+    listBox.append(h('div', { class: 'small muted', style: { padding: '10px 12px 14px', textAlign: 'center' } }, t('noAccountsYet')));
+    label.style.display = 'none';
+  } else {
+    label.style.display = '';
+    for (const a of list) {
+      const isActive = a.id === state.currentAddressId;
+      const nCodes = codes[a.id] ?? 0;
+      const row = h('button', {
+        class: `acct-row ${isActive ? 'is-on' : ''}`,
+        onclick: () => switchAccount(a.id),
+      },
+        h('span', { class: 'acct-row__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
+        h('span', { class: 'acct-row__body' },
+          h('span', { class: 'acct-row__addr' }, a.address),
+          h('span', { class: 'acct-row__meta' },
+            h('span', {}, icon('mail'), h('b', {}, String(a.total ?? 0)), ' ' + t('acctMails')),
+            h('span', {}, icon('key'), h('b', {}, String(nCodes)), ' ' + t('acctCodes')))),
+        h('span', { class: 'acct-row__end' },
+          a.unread > 0 ? h('span', { class: 'acct-row__badge' }, a.unread > 99 ? '99+' : String(a.unread)) : '',
+          isActive ? h('span', { class: 'acct-row__check' }, icon('check')) : ''));
+      listBox.append(row);
+    }
+  }
+  place();
+}
+
+function closeSwitcher() {
+  if (acctMenuEl) { acctMenuEl.remove(); acctMenuEl = null; }
 }
 
 // ---------- theme & accent ----------
+const MOOD_META = {
+  sage: { dark: '#161c17', light: '#f3f6ef' },
+  serene: { dark: '#131b21', light: '#eff4f6' },
+  violet: { dark: '#181522', light: '#f4f1f7' },
+  amber: { dark: '#1d1812', light: '#f7f3ea' },
+};
+
 export function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem('cmail_theme', theme);
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'dark' ? '#141a15' : '#f5f7f2');
+  const mood = document.documentElement.dataset.accent || 'sage';
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', (MOOD_META[mood] ?? MOOD_META.sage)[theme === 'dark' ? 'dark' : 'light']);
   // refresh icons that depend on theme
-  if (!topbar.hidden) {
-    const btn = tbEnd?.querySelector('.icon-btn');
+  if (!pillbar.hidden) {
+    const btn = pbEnd?.querySelector('.icon-btn');
     if (btn) btn.innerHTML = icon(theme === 'dark' ? 'sun' : 'moon').innerHTML;
   }
 }
@@ -249,6 +351,8 @@ export function setTheme(theme) {
 export function setAccent(accent) {
   document.documentElement.dataset.accent = accent;
   localStorage.setItem('cmail_accent', accent);
+  const theme = document.documentElement.dataset.theme || 'dark';
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', (MOOD_META[accent] ?? MOOD_META.sage)[theme === 'dark' ? 'dark' : 'light']);
 }
 
 // the ambient stage behind the whole app: aurora (alive) · halo (still) · pure (flat)
@@ -259,7 +363,7 @@ export function setBg(mode) {
 
 // ---------- session keepalive (refresh unread badge + new-mail notify) ----------
 setInterval(async () => {
-  if (!state.user || topbar.hidden) return;
+  if (!state.user || pillbar.hidden) return;
   try {
     const r = await api.get('/api/auth/me');
     state.user = r.user;
@@ -275,7 +379,7 @@ setInterval(async () => {
 export function updateUnreadBadge() {
   const show = state.unread > 0;
   const txt = state.unread > 99 ? '99+' : String(state.unread);
-  for (const id of ['nav-unread', 'tab-unread']) {
+  for (const id of ['pill-unread', 'tab-unread']) {
     const el = document.getElementById(id);
     if (!el) continue;
     el.textContent = txt;
@@ -287,7 +391,10 @@ export function updateUnreadBadge() {
 // ---------- boot ----------
 (async function boot() {
   setTheme(localStorage.getItem('cmail_theme') ?? 'dark');
-  setAccent(localStorage.getItem('cmail_accent') ?? 'sage');
+  // old builds shipped other accent names — fold them into the four moods
+  const LEGACY = { emerald: 'serene', ocean: 'serene', blue: 'serene', midnight: 'serene', ice: 'serene', sakura: 'violet', rose: 'violet', wine: 'violet', coral: 'violet', gold: 'amber' };
+  const savedAccent = localStorage.getItem('cmail_accent') ?? 'sage';
+  setAccent(LEGACY[savedAccent] ?? savedAccent);
   document.documentElement.dataset.bg = localStorage.getItem('cmail_bg') ?? 'aurora';
 
   window.addEventListener('cmail:unauthorized', () => {
@@ -295,10 +402,12 @@ export function updateUnreadBadge() {
     if (!location.hash.startsWith('#/login')) { toast(t('invalidCredentials'), 'err'); location.hash = '#/login'; }
   });
   window.addEventListener('cmail:rerender', () => { if (!location.hash.includes('/status')) route(); });
-  window.addEventListener('hashchange', route);
+  window.addEventListener('cmail:unread-changed', (e) => { state.unread = e.detail ?? 0; updateUnreadBadge(); });
+  window.addEventListener('hashchange', () => { closeSwitcher(); route(); });
 
   // ⌘K / Ctrl+K — command palette · “/” focus mail search
   const kbdHandler = (e) => {
+    if (e.key === 'Escape' && acctMenuEl) { closeSwitcher(); return; }
     const t = e.target;
     const typing = t && (/^(input|textarea|select)$/i.test(t.tagName) || t.isContentEditable);
     const fromOuterDoc = t?.ownerDocument && t.ownerDocument !== document;

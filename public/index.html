@@ -16,33 +16,21 @@
   <!-- the ambient stage behind everything (mood-tinted, three presence modes) -->
   <div class="bg-stage" aria-hidden="true"><i></i><div class="grain"></div></div>
 
-  <!-- sidebar (desktop) -->
-  <aside class="sidebar" id="sidebar" hidden>
-    <div class="sidebar__brand">
-      <img class="sidebar__logo" src="assets/img/icon-white.png" alt="Cmail" />
-      <span class="sidebar__name">Cmail</span>
-      <span class="sidebar__ver">2.4</span>
-    </div>
-    <div class="sidebar__tag" id="sb-tag"></div>
+  <!-- floating pill navigation — brand · pages · search / theme / language / account -->
+  <header class="pillbar" id="pillbar" hidden>
+    <a class="pillbar__brand" href="#/mail">
+      <img class="pillbar__logo" src="assets/img/icon-white.png" alt="Cmail" />
+      <span class="pillbar__name">Cmail</span>
+      <span class="pillbar__ver" id="pb-ver">2.5</span>
+    </a>
+    <nav class="pillbar__nav" id="pb-nav" aria-label="main"></nav>
+    <div class="pillbar__end" id="pb-end"></div>
+  </header>
 
-    <div class="sidebar__label" id="sb-label"></div>
-    <nav class="sidebar__nav" id="sb-nav"></nav>
+  <!-- serious system issues surface here, right under the navigation (admin only) -->
+  <div class="sysalert-wrap" id="sysalert" hidden></div>
 
-    <button class="sidebar__user" id="sb-user" hidden></button>
-  </aside>
-  <div class="sidebar-scrim" id="sb-scrim" hidden></div>
-
-  <!-- main column -->
-  <div class="main" id="main">
-    <header class="topbar" id="topbar" hidden>
-      <button class="icon-btn" data-mobile="menu" id="tb-menu" aria-label="menu" hidden></button>
-      <div class="topbar__title" id="tb-title"></div>
-      <div class="topbar__end" id="tb-end"></div>
-    </header>
-    <!-- serious system issues surface here, above everything (admin only) -->
-    <div class="sysalert" id="sysalert" hidden></div>
-    <main class="view" id="app" aria-live="polite"></main>
-  </div>
+  <main class="view" id="app" aria-live="polite"></main>
 
   <!-- mobile tabbar -->
   <nav class="tabbar" id="tabbar" hidden><div class="tabbar__in" id="tabbar-in"></div></nav>

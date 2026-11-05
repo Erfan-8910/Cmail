@@ -5,6 +5,9 @@ import { h, clear, icon, toast, modal, confirmBox, copyText, fmtBytes, fmtDate }
 import { setTheme, setAccent, setBg } from '../app.js';
 import { healthPane } from '../health.js';
 
+// the active settings tab survives re-renders (mood switching redraws the pane)
+let settingsTab = '';
+
 export async function renderSettings(root) {
   clear(root);
   const view = h('div', { class: 'view' });
@@ -22,12 +25,13 @@ export async function renderSettings(root) {
 
   const tabBar = h('div', { class: 'filters', style: { padding: 0, marginBottom: '14px' } });
   const body = h('div', {});
-  let current = isAdmin ? 'health' : 'appearance';
+  // the active tab survives re-renders (mood switching redraws the pane)
+  let current = (isAdmin && settingsTab === 'health') || tabs.find(([k]) => k === settingsTab) ? settingsTab : (isAdmin ? 'health' : 'appearance');
 
   function drawTabs() {
     clear(tabBar);
     for (const [key, label, ic] of tabs) {
-      tabBar.append(h('button', { class: `chip ${current === key ? 'is-on' : ''}`, onclick: () => { current = key; drawTabs(); drawBody(); } }, icon(ic), label));
+      tabBar.append(h('button', { class: `chip ${current === key ? 'is-on' : ''}`, onclick: () => { current = key; settingsTab = key; drawTabs(); drawBody(); } }, icon(ic), label));
     }
   }
 
@@ -84,25 +88,16 @@ async function appearancePane() {
   return pane;
 }
 
-// ---------- accent palette picker ----------
+// ---------- mood picker — the four named moods ----------
 function paletteCard() {
   const palettes = [
-    { key: 'sage', name: () => t('paletteSage'), light: '#aed890', deep: '#4f8f60' },
-    { key: 'emerald', name: () => t('paletteEmerald'), light: '#86dcab', deep: '#2f9e63' },
-    { key: 'ocean', name: () => t('paletteOcean'), light: '#82c8ea', deep: '#2f7fb0' },
-    { key: 'blue', name: () => t('paletteBlue'), light: '#8cc8de', deep: '#3f89a6' },
-    { key: 'midnight', name: () => t('paletteMidnight'), light: '#9fadea', deep: '#5765c9' },
+    { key: 'sage', name: () => t('paletteSage'), light: '#b4cda3', deep: '#4f8f60' },
+    { key: 'serene', name: () => t('paletteSerene'), light: '#9ec8dd', deep: '#3f7f9e' },
     { key: 'violet', name: () => t('paletteViolet'), light: '#c2a7e2', deep: '#7e5fa6' },
-    { key: 'sakura', name: () => t('paletteSakura'), light: '#f2bcd9', deep: '#c25f95' },
-    { key: 'rose', name: () => t('paletteRose'), light: '#f2a6ba', deep: '#b45370' },
-    { key: 'wine', name: () => t('paletteWine'), light: '#e2a3b2', deep: '#a34a63' },
     { key: 'amber', name: () => t('paletteAmber'), light: '#eec27e', deep: '#a06a24' },
-    { key: 'gold', name: () => t('paletteGold'), light: '#ecd27e', deep: '#ab8a2e' },
-    { key: 'coral', name: () => t('paletteCoral'), light: '#f2a58f', deep: '#c05f43' },
-    { key: 'ice', name: () => t('paletteIce'), light: '#bce2ea', deep: '#5f9aa8' },
   ];
   const cur = document.documentElement.dataset.accent || 'sage';
-  const grid = h('div', { class: 'palette-grid' });
+  const grid = h('div', { class: 'palette-grid palette-grid--4' });
   for (const p of palettes) {
     grid.append(h('button', {
       class: `palette-card ${cur === p.key ? 'is-on' : ''}`,
