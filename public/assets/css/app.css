@@ -52,8 +52,9 @@ html[data-accent='wine']    { --acc-l: #e2a3b2; --acc-d: #a34a63; --acc-ink: #2f
 /* ---------- moods ---------- */
 html[data-theme='dark'] {
   --bg: #141a15;
-  --bg-glow-1: color-mix(in srgb, var(--acc-l) 13%, transparent);
-  --bg-glow-2: color-mix(in srgb, var(--acc-l) 7%, transparent);
+  --bg-glow-1: color-mix(in srgb, var(--acc-l) 21%, transparent);
+  --bg-glow-2: color-mix(in srgb, var(--acc-l) 12%, transparent);
+  --bg-glow-3: color-mix(in srgb, var(--acc-d) 15%, transparent);
 
   --fg: #edf1ea;
   --muted: #94a091;
@@ -85,8 +86,9 @@ html[data-theme='dark'] {
 
 html[data-theme='light'] {
   --bg: #f5f7f2;
-  --bg-glow-1: color-mix(in srgb, var(--acc-d) 9%, transparent);
-  --bg-glow-2: color-mix(in srgb, var(--acc-d) 5%, transparent);
+  --bg-glow-1: color-mix(in srgb, var(--acc-d) 15%, transparent);
+  --bg-glow-2: color-mix(in srgb, var(--acc-d) 9%, transparent);
+  --bg-glow-3: color-mix(in srgb, var(--acc-l) 22%, transparent);
 
   --fg: #1e251f;
   --muted: #6e796c;
@@ -145,30 +147,41 @@ img { max-width: 100%; }
 *::-webkit-scrollbar-thumb { background: var(--stroke-2); border-radius: 99px; }
 *::-webkit-scrollbar-track { background: transparent; }
 
-/* ---------- calm background (soft glows + grain) — slowly alive ---------- */
-.bg-calm { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
-.bg-calm::before, .bg-calm::after {
+/* ---------- the stage (ambient environment behind the whole app) ----------
+   the room the app lives in: big soft glows tinted by the active mood, a
+   slow drift, film grain. Three presence modes via html[data-bg]:
+   aurora = alive · halo = still glow · pure = flat */
+.bg-stage { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.bg-stage::before, .bg-stage::after, .bg-stage i {
   content: ''; position: absolute; border-radius: 50%; filter: blur(110px);
   animation: bgDrift 26s ease-in-out infinite alternate;
 }
-.bg-calm::before {
+.bg-stage::before {
   width: 58vmax; height: 58vmax; top: -24vmax; inset-inline-start: -14vmax;
   background: radial-gradient(circle at 50% 50%, var(--bg-glow-1), transparent 65%);
 }
-.bg-calm::after {
+.bg-stage::after {
   width: 52vmax; height: 52vmax; bottom: -22vmax; inset-inline-end: -12vmax;
   background: radial-gradient(circle at 50% 50%, var(--bg-glow-2), transparent 62%);
   animation-duration: 34s;
   animation-delay: -12s;
 }
+.bg-stage i {
+  width: 40vmax; height: 40vmax; bottom: -18vmax; inset-inline-start: 22vw;
+  background: radial-gradient(circle at 50% 50%, var(--bg-glow-3), transparent 60%);
+  animation-duration: 40s; animation-delay: -20s;
+}
 @keyframes bgDrift {
   from { transform: translate3d(0, 0, 0) scale(1); }
   to   { transform: translate3d(3.5vmax, 2.5vmax, 0) scale(1.07); }
 }
+/* presence modes */
+html[data-bg='halo'] .bg-stage::before, html[data-bg='halo'] .bg-stage::after, html[data-bg='halo'] .bg-stage i { animation: none; }
+html[data-bg='pure'] .bg-stage::before, html[data-bg='pure'] .bg-stage::after, html[data-bg='pure'] .bg-stage i { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .bg-calm::before, .bg-calm::after { animation: none; }
+  .bg-stage::before, .bg-stage::after, .bg-stage i { animation: none; }
 }
-.bg-calm .grain {
+.bg-stage .grain {
   position: absolute; inset: 0; opacity: .45;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.035'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
@@ -328,22 +341,14 @@ html[data-theme='light'] .sidebar__logo { content: url('../img/icon-black.png');
 }
 .nav-item--admin { margin-top: 2px; }
 
-.sidebar__quote {
+.sidebar__user {
   margin-top: auto;
   border-radius: var(--radius);
   background: var(--panel);
   border: 1px solid var(--stroke);
   box-shadow: var(--inset);
-  padding: 11px 12px;
-}
-.sidebar__quote .icn { color: var(--acc); width: 18px; height: 18px; margin-bottom: 5px; }
-.sidebar__quote b { display: block; font-size: 12.5px; font-weight: 700; line-height: 1.5; }
-.sidebar__quote span { font-size: 11px; color: var(--muted); line-height: 1.55; display: block; margin-top: 2px; }
-
-.sidebar__user {
-  margin-top: 10px; display: flex; align-items: center; gap: 10px;
-  padding: 8px 9px; border-radius: 13px; border: 1px solid var(--stroke);
-  background: var(--panel);
+  padding: 8px 9px;
+  display: flex; align-items: center; gap: 10px;
   cursor: pointer; transition: background .2s; width: 100%; text-align: start;
 }
 .sidebar__user:hover { background: var(--panel-2); }
@@ -525,6 +530,9 @@ html[data-theme='light'] .sidebar__logo { content: url('../img/icon-black.png');
 /* the login stage owns the whole viewport — the app shell margin must never leak in */
 body.is-auth .main { margin-inline-start: 0; }
 .view--auth { display: flex; overflow-y: auto; overflow-x: hidden; padding: max(20px, env(safe-area-inset-top)) 16px 28px; min-height: 100dvh; position: relative; }
+/* same specificity war, settled: the auth stage beats the generic .main .view
+   padding/max-width so the card can truly center on any screen */
+.main .view.view--auth { padding: max(20px, env(safe-area-inset-top)) 16px 28px; max-width: none; }
 .auth-wrap { width: min(440px, 100%); text-align: center; margin: auto; padding: 12px 0; }
 
 /* live aurora behind the sign-in card — the stage breathes */
@@ -805,7 +813,11 @@ html[data-theme='dark'] .mail-frame { background: #fbfcfa; }
 .tbl tbody tr:hover { background: var(--hover); }
 
 /* ---------- setup gate (پیش‌نیازها) ---------- */
-.gate { width: min(680px, 100%); }
+/* the gate column centers itself on the auth stage, like the sign-in card —
+   horizontally always; vertically only from the top, because the open
+   tutorials make the page taller than the viewport and flex auto-margins
+   would clip the header */
+.gate { width: min(680px, 100%); margin-inline: auto; margin-block: max(20px, env(safe-area-inset-top)) 28px; }
 .gate__head { text-align: center; margin-bottom: 16px; }
 .gate__logo { width: 72px; animation: floaty 6s ease-in-out infinite; margin-bottom: 8px; }
 html[data-theme='dark'] .gate__logo { content: url('../img/logo-light.png'); }
@@ -963,13 +975,34 @@ html[data-theme='light'] .ab-logo { content: url('../img/logo-dark.png'); }
 .ab-stack__chips { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
 .chip--link { text-decoration: none; color: var(--fg); }
 .chip--link:hover { color: var(--acc); border-color: var(--acc-line); }
-.ab-creator { margin-top: 12px; padding: 16px; display: flex; gap: 14px; align-items: flex-start; }
-.ab-creator__txt { flex: 1; min-width: 0; }
-.ab-creator__links { justify-content: center; }
-.ab-creator__txt h3 { margin: 2px 0 4px; font-size: 14px; display: flex; align-items: center; gap: 7px; }
-.ab-creator__txt h3 svg { width: 15px; height: 15px; color: #e08888; fill: #e08888; }
-html[data-theme='light'] .ab-creator__txt h3 svg { color: #b3474c; fill: #b3474c; }
-.ab-creator__txt p { margin: 0 0 10px; color: var(--muted); font-size: 12.5px; line-height: 1.8; }
+/* ---------- the maker card — gradient ring, glow, real buttons ---------- */
+.ab-creator {
+  margin-top: 12px; padding: 20px; display: flex; gap: 16px; align-items: center;
+  position: relative; overflow: hidden; border-radius: var(--radius-lg);
+}
+.ab-creator::before {
+  content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--acc) 55%, transparent), transparent 38%, color-mix(in srgb, var(--acc-d) 42%, transparent));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  pointer-events: none;
+}
+.ab-creator__glow {
+  position: absolute; inset: -40%; pointer-events: none;
+  background: radial-gradient(circle at 18% 50%, color-mix(in srgb, var(--acc) 16%, transparent), transparent 52%);
+}
+.ab-creator > * { position: relative; }
+.ab-creator__ava {
+  width: 64px; height: 64px; border-radius: 20px; font-size: 26px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--acc-l), var(--acc-d)); color: var(--acc-ink);
+  font-weight: 800; font-family: var(--font-en);
+  box-shadow: 0 16px 44px -10px color-mix(in srgb, var(--acc) 60%, transparent), var(--inset);
+  animation: floaty 7s ease-in-out infinite;
+}
+.ab-creator__id { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ab-creator__txt h3 { margin: 0; font-size: 17px; letter-spacing: -.3px; font-family: var(--font-en); }
+.ab-creator__txt p { margin: 7px 0 12px; color: var(--muted); font-size: 12.5px; line-height: 1.85; max-width: 62ch; }
 .ab-creator__links { display: flex; gap: 8px; flex-wrap: wrap; }
 .ab-made { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--faint); font-size: 12px; margin: 18px 0 6px; flex-wrap: wrap; }
 .version-pill { display: inline-flex; padding: 4px 14px; border-radius: 99px; background: var(--field); border: 1px solid var(--field-line); font-size: 11.5px; font-weight: 700; color: var(--muted); font-family: var(--font-mono); }
@@ -1393,7 +1426,7 @@ html[dir='rtl'] .cmdk__enter svg { transform: scaleX(-1); }
 @media (max-width: 1024px) {
   :root { --sidebar-w: 214px; }
   .sidebar { padding: 12px 9px 10px; }
-  .sidebar__quote { display: none; }
+
   .main .view { padding: 14px 16px 36px; }
 }
 
@@ -1755,10 +1788,10 @@ button.note-panel__head { cursor: pointer; }
 .ab-stat__txt { min-width: 0; display: flex; flex-direction: column; }
 .ab-stat b.ab-stat__v { direction: auto; unicode-bidi: plaintext; text-align: start; font-size: 16.5px; }
 .ab-stat .ab-stat__l { font-size: 10.5px; color: var(--muted); display: block; }
-.ab-creator { align-items: center; }
-.ab-creator__ava {
-  width: 56px; height: 56px; border-radius: 18px; font-size: 22px; flex: none;
-  box-shadow: 0 14px 40px -10px color-mix(in srgb, var(--acc) 55%, transparent);
+@media (max-width: 860px) {
+  .ab-creator { flex-direction: column; text-align: center; align-items: center; }
+  .ab-creator__id { justify-content: center; }
+  .ab-creator__links { justify-content: center; }
 }
 @media (max-width: 640px) {
   .ab-grid__in { grid-template-columns: 1fr 1fr; }
@@ -1838,6 +1871,20 @@ button.note-panel__head { cursor: pointer; }
 .dom-st--draft { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 32%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
 .dom-st--verify { color: #7aa7d8; border-color: color-mix(in srgb, #7aa7d8 32%, transparent); background: color-mix(in srgb, #7aa7d8 10%, transparent); }
 .dom-st--unv { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 32%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.dom-st--wait { color: #7aa7d8; border-color: color-mix(in srgb, #7aa7d8 32%, transparent); background: color-mix(in srgb, #7aa7d8 10%, transparent); }
+
+/* the gate's own domain list: every saved domain keeps its seat here —
+   drafts and verifying ones with a continue button, so no one retypes a
+   domain just to reach its wizard again */
+.gate__doms { display: none; margin-top: 10px; }
+.gate__doms.has-rows { display: block; }
+.gate__dom {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 12px; border: 1px solid var(--stroke); border-radius: 12px;
+  background: var(--panel); margin-bottom: 7px;
+}
+.gate__dom code { font-size: 12.5px; font-weight: 600; }
+.gate__dom .btn { margin-inline-start: auto; }
 .dom-st--draft svg, .dom-st--verify svg, .dom-st--unv svg { width: 12px; height: 12px; }
 .dom-row--wip td { background: color-mix(in srgb, var(--warn) 4%, transparent); }
 .dom-row--wip .mono { position: relative; }

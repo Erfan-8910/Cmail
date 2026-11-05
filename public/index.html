@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Cmail — صندوق ایمیل آرام شما</title>
+  <title>Cmail — ایمیل روی Cloudflare خودت</title>
   <meta name="description" content="Cmail — پلتفرم ایمیل روی Cloudflare: ایمیل موقت و دائمی، یادداشت‌گذاری روی ایمیل‌ها، گاوصندوق کدهای 2FA و پشتیبانی چند دامنه." />
   <meta name="theme-color" content="#141a15" />
   <link rel="manifest" href="manifest.json" />
@@ -13,26 +13,20 @@
   <link rel="stylesheet" href="assets/css/app.css" />
 </head>
 <body>
-  <!-- calm background -->
-  <div class="bg-calm" aria-hidden="true"><div class="grain"></div></div>
+  <!-- the ambient stage behind everything (mood-tinted, three presence modes) -->
+  <div class="bg-stage" aria-hidden="true"><i></i><div class="grain"></div></div>
 
   <!-- sidebar (desktop) -->
   <aside class="sidebar" id="sidebar" hidden>
     <div class="sidebar__brand">
       <img class="sidebar__logo" src="assets/img/icon-white.png" alt="Cmail" />
       <span class="sidebar__name">Cmail</span>
-      <span class="sidebar__ver">2.3</span>
+      <span class="sidebar__ver">2.4</span>
     </div>
     <div class="sidebar__tag" id="sb-tag"></div>
 
     <div class="sidebar__label" id="sb-label"></div>
     <nav class="sidebar__nav" id="sb-nav"></nav>
-
-    <div class="sidebar__quote" id="sb-quote" hidden>
-      <span class="icn" data-quote-icon></span>
-      <b id="sb-quote-t"></b>
-      <span id="sb-quote-s"></span>
-    </div>
 
     <button class="sidebar__user" id="sb-user" hidden></button>
   </aside>

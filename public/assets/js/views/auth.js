@@ -31,19 +31,20 @@ export function recoveryPanel({ open = false } = {}) {
 }
 
 export function renderLogin(root) {
-  const view = h('div', { class: 'view view--auth' });
+  // root IS the auth stage (route() already gave it .view--auth) — no extra
+  // wrapper, or the double padding shoves the card off-center on desktop
+  clear(root);
   // living aurora backdrop — the sign-in stage breathes with the accent color
-  view.append(h('div', { class: 'auth-aurora', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')));
+  root.append(h('div', { class: 'auth-aurora', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')));
   const wrap = h('div', { class: 'auth-wrap' });
-  view.append(wrap);
-  root.append(view);
+  root.append(wrap);
 
   // header controls
   const ctrls = h('div', { class: 'auth-ctrls' },
     h('button', { class: 'glass-btn', title: t('theme'), onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon('sun')),
     h('button', { class: 'glass-btn', title: t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); clear(root); renderLogin(root); } }, icon('globe')),
   );
-  view.append(ctrls);
+  root.append(ctrls);
 
   const logo = h('img', { class: 'auth-logo', src: 'assets/img/logo-dark.png', alt: 'Cmail' });
   wrap.append(logo);

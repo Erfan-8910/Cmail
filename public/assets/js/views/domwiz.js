@@ -223,12 +223,22 @@ export function openDomainWizard(domain, { onDone, onExit } = {}) {
         stageVerify(rr);
         clear(body).prepend(h('div', { class: 'wiz__resume' }, icon('info'), t('wizResumeD')));
       } else if (d.status === 'unverified') {
+        // skipped verification earlier — coming back later must still offer
+        // the real code loop, not just a dead end
         clear(body).append(
           h('div', { class: 'wiz__done' },
             h('div', { class: 'wiz__done-icn is-warn' }, icon('shield')),
             h('h3', {}, t('domUnverified')),
             h('p', {}, t('wizUnverifiedDone')),
             h('div', { class: 'wiz__foot wiz__foot--c' },
+              h('button', {
+                class: 'btn', onclick: async () => {
+                  try {
+                    const r = await api.post(`/api/addresses/domains/${domain.id}/wizard`, { action: 'connect' });
+                    stageVerify(r);
+                  } catch (e) { toast(errText(e), 'err'); }
+                },
+              }, icon('refresh'), t('gateDomVerifyNow')),
               h('button', { class: 'btn btn--primary', onclick: () => { m.close(); onDone?.({ ...domain, status: 'unverified', stage: 3 }); } }, t('wizFinish')))));
       } else stageConnect();
     } catch {

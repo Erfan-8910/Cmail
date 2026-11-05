@@ -2,7 +2,7 @@
 import { api, state, errText } from '../api.js';
 import { t, lang, setLang } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, fmtBytes, fmtDate } from '../ui.js';
-import { setTheme, setAccent } from '../app.js';
+import { setTheme, setAccent, setBg } from '../app.js';
 import { healthPane } from '../health.js';
 
 export async function renderSettings(root) {
@@ -50,6 +50,14 @@ export async function renderSettings(root) {
 async function appearancePane() {
   const pane = h('div', { class: 'settings-grid' });
 
+  // the stage behind everything: aurora / halo / pure
+  const bgMode = document.documentElement.dataset.bg || 'aurora';
+  const bgRow = h('div', { class: 'set-row' },
+    h('div', {}, h('div', { class: 'set-row__t' }, t('bgTitle')), h('div', { class: 'set-row__d' }, t('bgSub'))),
+    h('div', { class: 'row' },
+      ...[['aurora', 'bgAurora', 'spark'], ['halo', 'bgHalo', 'sun'], ['pure', 'bgPure', 'flat']].map(([m, key, ic]) =>
+        h('button', { class: `chip ${bgMode === m ? 'is-on' : ''}`, onclick: () => { setBg(m); redraw(); } }, icon(ic), t(key)))));
+
   // theme
   const themeRow = h('div', { class: 'set-row' },
     h('div', {}, h('div', { class: 'set-row__t' }, t('theme'))),
@@ -69,6 +77,7 @@ async function appearancePane() {
   pane.append(
     h('div', { class: 'glass card' }, h('h3', { style: { margin: '0 0 6px', fontSize: '15px' } }, t('appearance')),
       themeRow,
+      bgRow,
       langRow),
     paletteCard(),
   );

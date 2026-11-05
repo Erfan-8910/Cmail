@@ -58,7 +58,7 @@ export function renderMail(root, arg) {
     if (arg) openEmail(arg);
   });
 
-  // auto-refresh: the inbox breathes on its own — every 15s it quietly pulls
+  // auto-refresh: every 15s the inbox pulls
   // the list and the unread badges, highlights whatever just landed, and
   // stays out of the way while an overlay is open
   clearInterval(autoT);

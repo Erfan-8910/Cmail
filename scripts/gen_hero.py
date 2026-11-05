@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Cmail — generate animated hero banners + badges for the READMEs (v2.3)
+# Cmail — generate animated hero banners + badges for the READMEs
 # Output: docs/img/hero-en.svg, docs/img/hero-fa.svg, docs/img/badge-*.svg
 # Persian text elements carry direction="rtl" so the bidi algorithm keeps
 # the word order honest (a plain LTR base scrambles lines starting with
@@ -18,7 +18,7 @@ HERO_EN = {
         ('L', '#7fa5d9', 'Linux Mag', 'Weekly digest: kernel 6.12 is out'),
         ('P', '#b98fd4', 'Payment Gateway', 'Receipt #8842 — paid successfully'),
     ],
-    'chip': 'v2.3 — System health · Domain wizard · Live inbox',
+    'chip': 'v2.4 — Living background · Smoother setup · The maker card',
     'font': 'Segoe UI, system-ui, sans-serif',
 }
 HERO_FA = {
@@ -31,7 +31,7 @@ HERO_FA = {
         ('ل', '#7fa5d9', 'لینوکس‌مگ', 'خلاصهٔ هفته: هستهٔ ۶٫۱۲ منتشر شد'),
         ('پ', '#b98fd4', 'درگاه پرداخت', 'رسید #۸۸۴۲ — پرداخت موفق'),
     ],
-    'chip': 'نسخهٔ ۲.۳ — سلامت سامانه · ویزارد دامنه · صندوق زنده',
+    'chip': 'نسخهٔ ۲.۴ — پس‌زمینهٔ زنده · راه‌اندازی لطیف‌تر · کارت سازنده',
     'font': 'Vazirmatn, Tahoma, sans-serif',
 }
 
@@ -131,7 +131,7 @@ def hero(d):
 </svg>'''
 
 BADGES = [
-    ('badge-version.svg',  'version',            'v2.3.0',             '#2f9e63', '#0b0f14', '#e8f5ec'),
+    ('badge-version.svg',  'version',            'v2.4.0',             '#2f9e63', '#0b0f14', '#e8f5ec'),
     ('badge-platform.svg', 'runs on',            'Cloudflare Workers', '#c05f2a', '#0b0f14', '#fdeee4'),
     ('badge-storage.svg',  'storage',            'one D1 database',    '#2f7fb0', '#0b0f14', '#e6f2fa'),
     ('badge-license.svg',  'license',            'MIT',                '#7e5fa6', '#0b0f14', '#f1ecf9'),

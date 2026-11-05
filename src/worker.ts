@@ -120,7 +120,7 @@ export default {
   // async rejections — both layers matter.)
   fetch: (req: Request, env: Env, ctx: ExecutionContext) => {
     try {
-      return app.fetch(req, env, ctx).catch((e: unknown) => diagnosticResponse(req, env, e));
+      return (app.fetch(req, env, ctx) as Promise<Response>).catch((e: unknown) => diagnosticResponse(req, env, e));
     } catch (e) {
       return diagnosticResponse(req, env, e);
     }

@@ -1,5 +1,5 @@
 // Cmail — About view: the story, the features, the numbers, the maker.
-// Liquid-glass polish: calm counters, gentle tilt, aurora glow.
+// Liquid-glass polish: count-up numbers, pointer tilt, mood-tinted glow.
 import { t, lang } from '../i18n.js';
 import { h, icon } from '../ui.js';
 
@@ -8,7 +8,7 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 export function renderAbout(root) {
   const app = root;
   const FA = (n) => lang === 'fa' ? String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : String(n);
-  const VERSION = '2.3.0';
+  const VERSION = '2.4.0';
 
   // ---------- hero ----------
   const hero = h('section', { class: 'ab-hero glass' },
@@ -34,7 +34,7 @@ export function renderAbout(root) {
     { icn: 'globe', tt: 'f4T', dd: 'f4D' },
     { icn: 'zap', tt: 'f7T', dd: 'f7D' },
     { icn: 'code', tt: 'f5T', dd: 'f5D' },
-    { icn: 'leaf', tt: 'f6T', dd: 'f6D' },
+    { icn: 'database', tt: 'f6T', dd: 'f6D' },
   ];
   const grid = h('section', { class: 'ab-grid' },
     h('h2', { class: 'ab-h2' }, icon('spark'), t('aboutFeatures')),
@@ -45,7 +45,7 @@ export function renderAbout(root) {
           h('h3', {}, t(f.tt))),
         h('p', {}, t(f.dd))))));
 
-  // ---------- stats strip (calm count-up, RTL-safe) ----------
+  // ---------- stats strip (count-up, RTL-safe) ----------
   const stats = h('section', { class: 'ab-stats' },
     stat(icon('user'), 2, lang === 'fa' ? 'حالت حساب' : 'account modes'),
     stat(icon('globe'), '∞', lang === 'fa' ? 'دامنه' : 'domains'),
@@ -68,15 +68,18 @@ export function renderAbout(root) {
     h('b', { class: 'ab-stack__t' }, t('aboutStack')),
     h('div', { class: 'ab-stack__chips' }, stack.map((s) => h('span', { class: 'chip' }, h('span', { class: 'chip-dot' }, ''), s))));
 
-  // ---------- creator ----------
+  // ---------- creator — the maker card, front and center ----------
   const creator = h('section', { class: 'ab-creator glass' },
-    h('span', { class: 'avatar ab-creator__ava' }, 'E'),
+    h('div', { class: 'ab-creator__glow', 'aria-hidden': 'true' }),
+    h('span', { class: 'ab-creator__ava' }, 'E'),
     h('div', { class: 'ab-creator__txt' },
-      h('h3', {}, icon('heart'), t('aboutCreatorT')),
+      h('div', { class: 'ab-creator__id' },
+        h('h3', {}, 'Erfan'),
+        h('span', { class: 'chip' }, icon('spark'), t('aboutMakerRole'))),
       h('p', {}, t('aboutCreatorD')),
       h('div', { class: 'ab-creator__links' },
-        h('a', { class: 'chip chip--link', href: 'https://github.com/Erfan-8910', target: '_blank', rel: 'noopener' }, icon('code'), 'Erfan — ' + t('viewGithub')),
-        h('a', { class: 'chip chip--link', href: 'https://github.com/Erfan-8910/CMail', target: '_blank', rel: 'noopener' }, icon('heart'), t('viewProject')),
+        h('a', { class: 'btn btn--sm', href: 'https://github.com/Erfan-8910', target: '_blank', rel: 'noopener' }, icon('code'), t('viewGithub')),
+        h('a', { class: 'btn btn--sm btn--primary', href: 'https://github.com/Erfan-8910/CMail', target: '_blank', rel: 'noopener' }, icon('heart'), t('viewProject')),
       )),
   );
 

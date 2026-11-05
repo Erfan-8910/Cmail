@@ -13,16 +13,16 @@ export async function renderGate(root) {
   let timer = null;
   let count = RECHECK_EVERY;
 
+  // root IS the auth stage (route() already gave it .view--auth) —
+  // wrapping it again would double-pad the page and shove the card aside
   clear(root);
-  const view = h('div', { class: 'view view--auth' });
   const ctrls = h('div', { class: 'auth-ctrls' },
     h('button', { class: 'glass-btn', title: t('theme'), onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon('sun')),
     h('button', { class: 'glass-btn', title: t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); renderGate(root); } }, icon('globe')),
   );
-  view.append(ctrls);
+  root.append(ctrls);
   const gate = h('div', { class: 'gate' });
-  view.append(gate);
-  root.append(view);
+  root.append(gate);
 
   // ---------- pieces ----------
   const ring = buildRing();
@@ -187,21 +187,78 @@ export async function renderGate(root) {
     const btn = h('button', { class: 'btn btn--primary' }, icon('plus'), t('addDomain'));
     const form = h('form', { class: 'gate__inline' },
       h('div', { class: 'field grow' }, h('label', {}, t('domainName')), inp), btn);
+    const listBox = h('div', { class: 'gate__doms' });
+
+    // every domain already in the system gets its own row: drafts and
+    // verifying ones offer "continue" (the wizard resumes from the saved
+    // stage), unverified ones can still be verified from here — nobody ever
+    // has to retype a domain to reach its wizard again
+    async function drawList() {
+      clear(listBox);
+      let list = [];
+      try { list = (await api.get('/api/addresses/domains')).domains ?? []; } catch { return; }
+      const chip = (st) => {
+        const map = {
+          verified: ['dom-st dom-st--ok', 'check', t('gateDomVerified')],
+          unverified: ['dom-st dom-st--warn', 'shield', t('gateDomUnverified')],
+          verifying: ['dom-st dom-st--wait', 'refresh', t('gateDomVerifying')],
+          draft: ['dom-st dom-st--wait', 'edit', t('gateDomDraft')],
+        };
+        const [cls, icn, label] = map[st] ?? map.draft;
+        return h('span', { class: cls }, h('i'), icon(icn), h('span', {}, label));
+      };
+      for (const d of list) {
+        const resumable = d.status === 'draft' || d.status === 'verifying';
+        const row = h('div', { class: 'gate__dom' },
+          h('code', { class: 'ltr' }, d.name),
+          chip(d.status),
+          (resumable || d.status === 'unverified')
+            ? h('button', {
+                class: `btn btn--sm ${resumable ? 'btn--primary' : ''}`,
+                onclick: async (e) => {
+                  e.currentTarget.disabled = true;
+                  openDomainWizard({ ...d, stage: d.stage ?? 1 }, { onDone: () => recheck(true), onExit: () => { recheck(true); drawList(); } });
+                },
+              }, icon(resumable ? 'arrow' : 'shield'), resumable ? t('gateDomContinue') : t('gateDomVerifyNow'))
+            : null,
+        );
+        listBox.append(row);
+      }
+      if (list.length) listBox.classList.add('has-rows'); else listBox.classList.remove('has-rows');
+    }
+    drawList();
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const name = inp.value.trim().toLowerCase();
+      if (!name) return;
       btn.disabled = true;
       try {
-        const r = await api.post('/api/setup/domain', { name: inp.value.trim().toLowerCase() });
+        const r = await api.post('/api/setup/domain', { name });
         toast(t('saved'), 'ok', 1600);
         inp.value = '';
         // the connect wizard takes it from here — routing guide, loop code,
         // live polling — and the gate re-checks when it closes
-        openDomainWizard({ id: r.id, name: r.name, status: 'draft', stage: 1 }, { onDone: () => recheck(true), onExit: () => recheck(true) });
+        openDomainWizard({ id: r.id, name: r.name, status: 'draft', stage: 1 }, { onDone: () => recheck(true), onExit: () => { recheck(true); drawList(); } });
         btn.disabled = false;
-      } catch (err) { toast(errText(err), 'err'); btn.disabled = false; }
+      } catch (err) {
+        btn.disabled = false;
+        // the one that used to look like a dead "error happened": a domain
+        // that already exists is not a failure — its wizard just opens
+        if (err.code === 'domain_exists') {
+          inp.value = '';
+          toast(t('gateDomExists'), 'info', 2400);
+          let list = [];
+          try { list = (await api.get('/api/addresses/domains')).domains ?? []; } catch { }
+          const d = list.find((x) => x.name === name);
+          if (d) openDomainWizard({ ...d, stage: d.stage ?? 1 }, { onDone: () => recheck(true), onExit: () => { recheck(true); drawList(); } });
+          else drawList();
+        } else toast(errText(err), 'err');
+      }
     });
     return tutPanel(t('tutDomainTitle'), 'globe',
       form,
+      listBox,
       h('p', { class: 'tut__d' }, t('tutDomainLead')),
     );
   }
@@ -364,7 +421,7 @@ export async function renderGate(root) {
     const top = h('div', { class: 'gate__top' },
       ring.el,
       h('div', { class: 'gate__top-txt' },
-        h('h2', {}, allOk ? t('gateAllOk') : `${okN ? (lang === 'fa' ? toFa(okN) : okN) : '—'} ${t('gateOf')} ${lang === 'fa' ? toFa(total) : total} ${lang === 'fa' ? 'اتصال برقرار است' : 'connections up'}`),
+        h('h2', {}, allOk ? t('gateAllOk') : `${lang === 'fa' ? toFa(okN) : okN} ${t('gateOf')} ${lang === 'fa' ? toFa(total) : total} ${lang === 'fa' ? 'اتصال برقرار است' : 'connections up'}`),
         h('p', {}, allOk ? t('gateAllOkSub') : (state.user ? t('gateHintFix') : t('gateAdminNote'))),
         h('div', { class: 'row', style: { gap: '8px', marginTop: '10px' } }, reBtn, autoLbl)));
     card.append(top, checksBox);
