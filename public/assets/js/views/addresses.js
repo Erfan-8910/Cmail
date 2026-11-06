@@ -32,6 +32,7 @@ export async function renderAddresses(root) {
   }
 
   function draw() {
+    if (!grid?.isConnected) return;   // stale render — touch nothing
     const totalMail = addresses.reduce((s, a) => s + (a.total ?? 0), 0);
     const tempN = addresses.filter((a) => a.kind === 'temp').length;
     clear(stats);
@@ -42,7 +43,7 @@ export async function renderAddresses(root) {
       statTile(t('statActive'), state.currentAddressId && addresses.some((a) => a.id === state.currentAddressId) ? (addresses.find((a) => a.id === state.currentAddressId)?.label || t('statActiveT')) : '—', 'zap', 'is-warm'),
     );
 
-    const g = clear(document.getElementById('addr-grid') ?? grid);
+    const g = clear(grid);
     if (!addresses.length) {
       g.append(h('div', { class: 'glass card', style: { gridColumn: '1/-1' } },
         h('div', { class: 'empty' }, icon('mail'),

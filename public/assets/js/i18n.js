@@ -286,6 +286,12 @@ export const dict = {
     aboutGuide: 'راهنمای راه‌اندازی',
     aboutMakerRole: 'سازنده و طراح',
     aboutCreatorD: 'Cmail از یک ذهن بیرون آمده است — ساخته‌شده با وسواس روی جزئیات: سریع، زیبا و کاملاً مال خودت.',
+    // the sibling-project ribbon (About)
+    ribbonClimindDesc: 'اپ آب‌وهوای مدرن وب — از همان سازندهٔ Cmail',
+    ribbonClimindTag: 'پروژهٔ دیگرِ سازنده',
+    ribbonClimindCta: 'دیدن Climind-W',
+    // per-account vault folders
+    folderScopeHint: 'پوشه‌ها مالِ هر حساب‌اند — اینجا فقط پوشه‌های همین حساب دیده می‌شود و کدهای بقیهٔ حساب‌ها هرگز با آن‌ها قاطی نمی‌شوند.',
     aboutOpen: 'کدباز · مجوز MIT · بدون تبلیغ',
     madeBy: 'ساخته‌شده با ❤️ و کمی وسواس',
     byName: 'Erfan',
@@ -875,6 +881,12 @@ export const dict = {
     aboutGuide: 'Setup guide',
     aboutMakerRole: 'Maker & designer',
     aboutCreatorD: 'Cmail comes from a single mind — built with obsession over every detail.',
+    // the sibling-project ribbon (About)
+    ribbonClimindDesc: 'A modern weather web app — from the maker of Cmail',
+    ribbonClimindTag: 'Another project by the maker',
+    ribbonClimindCta: 'Open Climind-W',
+    // per-account vault folders
+    folderScopeHint: 'Folders belong to their account — this room only ever shows this account\'s folders, and no other account\'s keys can mix in.',
     aboutOpen: 'Open source · MIT · No ads',
     madeBy: 'Made with ❤️ and a bit of obsession',
     byName: 'Erfan',

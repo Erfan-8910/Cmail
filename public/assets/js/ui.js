@@ -247,6 +247,17 @@ export function toast(msg, kind = 'info', ms = 2600) {
 }
 
 // ---------- modal (bottom-sheet on touch devices) ----------
+// every open modal registers its closer here — one sweep on navigation
+// retires the dialog AND its Escape listener together
+const liveClosers = new Set();
+
+export function closeAllOverlays() {
+  for (const fn of [...liveClosers]) { try { fn(); } catch { /* already gone */ } }
+  // floating menus + account popovers die with the page too
+  document.querySelectorAll('.menu--float, .acct-menu, .glyph-picker-wrap.is-open')
+    .forEach((m) => m.remove());
+}
+
 export function modal({ title, iconName, body, footer, wide, onClose, cls = '' }) {
   const root = document.getElementById('modals');
   const back = h('div', { class: 'modal-back' });
@@ -261,10 +272,12 @@ export function modal({ title, iconName, body, footer, wide, onClose, cls = '' }
   const close = () => {
     if (!open) return;
     open = false;
+    liveClosers.delete(close);
     document.removeEventListener('keydown', esc2);
     back.remove();
     onClose?.();
   };
+  liveClosers.add(close);
   vibrate(5);
   back.addEventListener('click', (e) => { if (e.target === back) close(); });
   document.addEventListener('keydown', esc2);

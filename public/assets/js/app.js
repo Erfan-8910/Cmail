@@ -1,7 +1,7 @@
 // Cmail — app shell: boot, router, floating pill navigation + account switcher
 import { api, state, errText } from './api.js';
 import { t, setLang, lang } from './i18n.js';
-import { h, clear, icon, toast, vibrate, avatarColor } from './ui.js';
+import { h, clear, icon, toast, vibrate, avatarColor, closeAllOverlays } from './ui.js';
 import { openCmdk, closeCmdk, cmdkIsOpen, cmdkKey } from './cmdk.js';
 import { renderLogin } from './views/auth.js';
 import { renderGate } from './views/gate.js';
@@ -52,6 +52,12 @@ async function route() {
   const seq = ++routeSeq;
   const { page } = currentRoute();
   const stale = () => seq !== routeSeq;
+
+  // a new page never inherits the old page's floating layers: open dialogs
+  // (and their Escape handlers), menus and popovers all retire here — an
+  // open dialog used to survive navigation and haunt the next page
+  closeAllOverlays();
+  if (cmdkIsOpen()) closeCmdk();
 
   // fetch system status (may be offline); always fresh on gate entry
   if (!state.setup || page === 'status' || page === 'login') {

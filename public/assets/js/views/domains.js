@@ -28,6 +28,7 @@ export async function renderDomains(root) {
   }
 
   function draw(domains) {
+    if (!grid?.isConnected) return;   // stale render — touch nothing
     const verified = domains.filter((d) => d.status === 'verified' || d.status === 'unverified').length;
     const pending = domains.filter((d) => d.status === 'draft' || d.status === 'verifying').length;
     const boxes = domains.reduce((s, d) => s + (d.address_count ?? 0), 0);
@@ -39,7 +40,7 @@ export async function renderDomains(root) {
       domStat('domStatBoxes', boxes, 'mail', ''),
     );
 
-    const g = clear(document.getElementById('dom-grid') ?? grid);
+    const g = clear(grid);
     if (!domains.length) {
       g.append(h('div', { class: 'glass card', style: { gridColumn: '1/-1' } },
         h('div', { class: 'empty' }, icon('globe'),
@@ -102,7 +103,7 @@ export async function renderDomains(root) {
       }) }, icon('trash')),
     );
 
-    const card = h('div', { class: `dom-card glass ${unfinished ? 'dom-card--wip' : ''}` },
+    const card = h('div', { class: `dom-card glass ${unfinished ? 'dom-card--wip' : ''} ${!unfinished && d.last_mail ? 'is-alive' : ''}` },
       trail, head,
       h('div', { class: 'dom-card__switches' },
         h('div', { class: 'set-row set-row--card' },
