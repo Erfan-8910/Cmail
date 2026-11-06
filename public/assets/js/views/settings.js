@@ -4,6 +4,7 @@ import { t, lang, setLang } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, fmtBytes, fmtDate } from '../ui.js';
 import { setTheme, setAccent, setBg } from '../app.js';
 import { healthPane } from '../health.js';
+import { vibrate } from '../ui.js';
 
 // the active settings tab survives re-renders (mood switching redraws the pane)
 let settingsTab = '';
@@ -28,20 +29,31 @@ export async function renderSettings(root) {
   // the active tab survives re-renders (mood switching redraws the pane)
   let current = (isAdmin && settingsTab === 'health') || tabs.find(([k]) => k === settingsTab) ? settingsTab : (isAdmin ? 'health' : 'appearance');
 
+  // every pane fetches data before it paints — a token makes sure that when
+  // the user races across the tabs, only the newest pane is allowed to land;
+  // the stale ones bail silently instead of painting two sections at once
+  let paneSeq = 0;
+
   function drawTabs() {
     clear(tabBar);
     for (const [key, label, ic] of tabs) {
-      tabBar.append(h('button', { class: `chip ${current === key ? 'is-on' : ''}`, onclick: () => { current = key; settingsTab = key; drawTabs(); drawBody(); } }, icon(ic), label));
+      tabBar.append(h('button', { class: `chip ${current === key ? 'is-on' : ''}`, onclick: () => { vibrate(5); current = key; settingsTab = key; drawTabs(); drawBody(); } }, icon(ic), label));
     }
   }
 
   async function drawBody() {
+    const seq = ++paneSeq;
+    const want = current;
     clear(body);
-    if (current === 'appearance') body.append(await appearancePane());
-    if (current === 'security') body.append(await securityPane());
-    if (isAdmin && current === 'health') body.append(await healthPane());
-    if (isAdmin && current === 'general') body.append(await generalPane());
-    if (isAdmin && current === 'sending') body.append(await sendingPane());
+    let pane = null;
+    if (current === 'appearance') pane = await appearancePane();
+    else if (current === 'security') pane = await securityPane();
+    else if (isAdmin && current === 'health') pane = await healthPane();
+    else if (isAdmin && current === 'general') pane = await generalPane();
+    else if (isAdmin && current === 'sending') pane = await sendingPane();
+    if (seq !== paneSeq || current !== want) return; // a newer tab already won
+    clear(body);
+    if (pane) body.append(pane);
   }
 
   view.append(tabBar, body);
@@ -54,13 +66,13 @@ export async function renderSettings(root) {
 async function appearancePane() {
   const pane = h('div', { class: 'settings-grid' });
 
-  // the stage behind everything: aurora / halo / pure
+  // the stage behind everything: three presence modes, named by what they do
   const bgMode = document.documentElement.dataset.bg || 'aurora';
   const bgRow = h('div', { class: 'set-row' },
     h('div', {}, h('div', { class: 'set-row__t' }, t('bgTitle')), h('div', { class: 'set-row__d' }, t('bgSub'))),
     h('div', { class: 'row' },
       ...[['aurora', 'bgAurora', 'spark'], ['halo', 'bgHalo', 'sun'], ['pure', 'bgPure', 'flat']].map(([m, key, ic]) =>
-        h('button', { class: `chip ${bgMode === m ? 'is-on' : ''}`, onclick: () => { setBg(m); redraw(); } }, icon(ic), t(key)))));
+        h('button', { class: `chip ${bgMode === m ? 'is-on' : ''}`, onclick: () => { vibrate(5); setBg(m); redraw(); } }, icon(ic), t(key)))));
 
   // theme
   const themeRow = h('div', { class: 'set-row' },
@@ -88,25 +100,28 @@ async function appearancePane() {
   return pane;
 }
 
-// ---------- mood picker — the four named moods ----------
+// ---------- mood picker — the four palettes, named by their color ----------
 function paletteCard() {
   const palettes = [
-    { key: 'sage', name: () => t('paletteSage'), light: '#b4cda3', deep: '#4f8f60' },
-    { key: 'serene', name: () => t('paletteSerene'), light: '#9ec8dd', deep: '#3f7f9e' },
-    { key: 'violet', name: () => t('paletteViolet'), light: '#c2a7e2', deep: '#7e5fa6' },
+    { key: 'green', name: () => t('paletteGreen'), light: '#b4cda3', deep: '#4f8f60' },
+    { key: 'blue', name: () => t('paletteBlue'), light: '#9ec8dd', deep: '#3f7f9e' },
+    { key: 'purple', name: () => t('palettePurple'), light: '#c2a7e2', deep: '#7e5fa6' },
     { key: 'amber', name: () => t('paletteAmber'), light: '#eec27e', deep: '#a06a24' },
   ];
-  const cur = document.documentElement.dataset.accent || 'sage';
+  const cur = document.documentElement.dataset.accent || 'green';
   const grid = h('div', { class: 'palette-grid palette-grid--4' });
   for (const p of palettes) {
-    grid.append(h('button', {
-      class: `palette-card ${cur === p.key ? 'is-on' : ''}`,
-      onclick: () => { setAccent(p.key); renderSettings(document.getElementById('app')); },
-    },
+    grid.append(h('button', { class: `palette-card ${cur === p.key ? 'is-on' : ''}` },
       h('span', { class: 'palette-card__swatch', style: { background: `linear-gradient(125deg, ${p.light}, ${p.deep})` } },
         h('i', { style: { background: p.light } }), h('i', { style: { background: p.deep } })),
       h('span', { class: 'palette-card__name' }, p.name(), icon('check'))));
   }
+  // the accent repaints the room live through CSS variables — no full
+  // re-render needed, just move the selection ring (rapid clicks stay safe)
+  const cards = grid.querySelectorAll('.palette-card');
+  palettes.forEach((p, i) => {
+    cards[i].onclick = () => { setAccent(p.key); cards.forEach((c) => c.classList.remove('is-on')); cards[i].classList.add('is-on'); vibrate(5); };
+  });
   return h('div', { class: 'glass card' },
     h('h3', { style: { margin: '0 0 4px', fontSize: '15px' } }, t('palette')),
     h('p', { class: 'small muted', style: { margin: '0 0 14px' } }, t('paletteSub')),
@@ -291,8 +306,16 @@ async function sendingPane() {
   const fromName = h('input', { class: 'input', value: s.sending_from_name });
   const testTo = h('input', { class: 'input ltr', placeholder: t('testTo') });
 
+  // the live state of outgoing mail, visible before reading a single field:
+  // a warm open-shackle chip once a provider is configured, an icy frozen
+  // lock while the compose button stays locked everywhere else
+  const connected = s.sending_provider && s.sending_provider !== 'none';
+  const stateChip = connected
+    ? h('span', { class: 'chip is-on' }, icon('lockOpen'), t('sendOpenTitle'))
+    : h('span', { class: 'chip' }, icon('lock'), t('sendLockedTitle'));
+
   return h('div', { class: 'glass card' },
-    h('h3', { style: { margin: '0 0 12px', fontSize: '15px' } }, t('sending')),
+    h('h3', { style: { margin: '0 0 10px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } }, t('sending'), stateChip),
     h('p', { class: 'small muted', style: { marginTop: 0 } },
       lang === 'fa'
         ? 'برای ارسال ایمیل از Cmail، یک سرویس ارسال تراکنشی (مثل Brevo یا Resend) وصل کن؛ کلید API آن‌ها را وارد کن و فرستنده را تنظیم کن. دامنه‌ی فرستنده باید در آن سرویس تأیید شده باشد.'

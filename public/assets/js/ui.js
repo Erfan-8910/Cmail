@@ -76,8 +76,28 @@ export const icons = {
   database: I('<ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5V12c0 1.66 3.58 3 8 3s8-1.34 8-3V5.5"/><path d="M4 12v6.5c0 1.66 3.58 3 8 3s8-1.34 8-3V12"/>'),
   spark: I('<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/>'),
   lock: I('<rect x="4.5" y="10.5" width="15" height="10" rx="3"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>'),
+  lockOpen: I('<rect x="4.5" y="10.5" width="15" height="10" rx="3"/><path d="M8 10.5V7a4 4 0 0 1 7.7-1.5"/>'),
+  snow: I('<path d="M12 2.5v19"/><path d="m4.9 6.2 14.2 11.6"/><path d="M19.1 6.2 4.9 17.8"/><path d="m12 2.5-2.2 2.2M12 2.5l2.2 2.2"/><path d="m12 21.5-2.2-2.2M12 21.5l2.2-2.2"/><path d="M6.7 8.7 4 9.4M17.3 15.3 20 14.6M17.3 8.7 20 9.4M6.7 15.3 4 14.6"/>'),
+  flame: I('<path d="M12 21.5c-4.1 0-6.5-2.6-6.5-6 0-2.7 1.7-4.6 3.1-6.4C9.9 7.4 11 5.5 11 3c3 1.5 4.6 3.7 4.2 6.5 1-.4 1.7-1.2 2-2.3 1.5 1.7 2.3 3.9 2.3 6.3 0 4.4-3.4 8-7.5 8z"/>'),
   palette2: I('<circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="14.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="13.5" r="1.2" fill="currentColor" stroke="none"/>'),
 };
+
+// ---------- responsibility badge ----------
+// the little sign that rides beside a feature's own logo:
+//  · frozen  — snowflake + padlock, icy glass: this is locked on purpose
+//              until its authorization or configuration is granted
+//  · open    — an opened shackle: the responsibility was accepted
+//  · flame   — the same acceptance, with a bit of fire: this entry lives
+//              fast and will burn out together with its temporary address
+export function lockBadge(kind = 'frozen', title = '') {
+  if (kind === 'frozen') {
+    return h('span', { class: 'lockbadge lockbadge--frozen', title }, icon('snow'), icon('lock'));
+  }
+  if (kind === 'flame') {
+    return h('span', { class: 'lockbadge lockbadge--open lockbadge--flame', title }, icon('flame'));
+  }
+  return h('span', { class: 'lockbadge lockbadge--open', title }, icon('lockOpen'));
+}
 
 export function icon(name, cls = '') {
   const span = h('span', { class: `icn ${cls}`, 'aria-hidden': 'true' });
@@ -227,11 +247,11 @@ export function toast(msg, kind = 'info', ms = 2600) {
 }
 
 // ---------- modal (bottom-sheet on touch devices) ----------
-export function modal({ title, iconName, body, footer, wide, onClose }) {
+export function modal({ title, iconName, body, footer, wide, onClose, cls = '' }) {
   const root = document.getElementById('modals');
   const back = h('div', { class: 'modal-back' });
   const sheet = window.matchMedia?.('(max-width: 860px)').matches;
-  const m = h('div', { class: `modal ${wide ? 'modal--wide' : ''} ${sheet ? 'modal--sheet' : ''}`, role: 'dialog', 'aria-modal': 'true' });
+  const m = h('div', { class: `modal ${wide ? 'modal--wide' : ''} ${sheet ? 'modal--sheet' : ''} ${cls}`.trim(), role: 'dialog', 'aria-modal': 'true' });
   if (sheet) m.append(h('span', { class: 'modal__grab', 'aria-hidden': 'true' }));
   // closing is idempotent and retires its own Escape listener — closing from
   // the × (or a footer button) used to leave the key handler behind, so a later
@@ -271,19 +291,39 @@ export function confirmBox(text, onYes, danger = true) {
 }
 
 // ---------- dropdown menu ----------
+// the menu lives on <body> with fixed viewport coordinates, hugging its
+// anchor — a background list redraw can never yank it away mid-tap, and its
+// clicks never bubble back into the button that spawned it
 export function dropdown(anchor, items) {
   vibrate(5);
   document.querySelectorAll('.menu').forEach((m) => m.remove());
-  const menu = h('div', { class: 'menu', role: 'menu' });
+  const menu = h('div', { class: 'menu menu--float', role: 'menu' });
   for (const it of items) {
     if (it === '-') { menu.append(h('div', { class: 'menu__sep' })); continue; }
     menu.append(h('a', { class: 'menu__item', href: it.href ?? '#', onclick: (e) => { if (it.fn) { e.preventDefault(); it.fn(); } menu.remove(); e.stopPropagation(); } },
       it.icon ? icon(it.icon) : '', it.label, it.badge ? h('span', { class: 'addr-item__badge', style: { marginLeft: 'auto' } }, it.badge) : ''));
   }
-  const wrap = h('div', { style: { position: 'relative' } }, menu);
-  anchor.append(wrap);
-  const off = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', off); } };
+  document.body.append(menu);
+  const place = () => {
+    const r = anchor.getBoundingClientRect();
+    const mh = menu.offsetHeight, mw = menu.offsetWidth;
+    menu.style.position = 'fixed';
+    menu.style.top = `${Math.max(10, Math.min(r.bottom + 8, window.innerHeight - mh - 10))}px`;
+    menu.style.insetInlineEnd = 'auto';
+    menu.style.insetInlineStart = 'auto';
+    if (document.documentElement.dir === 'rtl') {
+      menu.style.right = `${Math.max(9, window.innerWidth - r.right)}px`;
+      menu.style.left = 'auto';
+    } else {
+      menu.style.left = `${Math.max(9, Math.min(r.left, window.innerWidth - mw - 9))}px`;
+      menu.style.right = 'auto';
+    }
+  };
+  place();
+  const close = () => { menu.remove(); document.removeEventListener('click', off); window.removeEventListener('resize', close); };
+  const off = (e) => { if (!menu.contains(e.target) && !anchor.contains(e.target)) close(); };
   setTimeout(() => document.addEventListener('click', off), 0);
+  window.addEventListener('resize', close);
   return menu;
 }
 

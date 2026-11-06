@@ -84,6 +84,6 @@
     <circle cx="1112" cy="324" r="4.5" fill="#9be3b4">
       <animate attributeName="opacity" values="1;0.35;1" dur="2.6s" repeatCount="indefinite"/>
     </circle>
-    <text x="1096" y="329" font-family="Vazirmatn, Tahoma, sans-serif" font-size="14.5" font-weight="600" fill="#cfe0d4" text-anchor="start" direction="rtl">نسخهٔ ۲.۵ — صفحهٔ مستقل برای هر ایمیل · دایرهٔ حساب‌ها · چهار حال‌وهوا</text>
+    <text x="1096" y="329" font-family="Vazirmatn, Tahoma, sans-serif" font-size="14.5" font-weight="600" fill="#cfe0d4" text-anchor="start" direction="rtl">نسخهٔ ۲.۷ — قفلِ یخ‌زده و شعلهٔ باز · رنگ‌ها با نام خود رنگ · صندوق جمع‌وجورتر</text>
   </g>
 </svg>

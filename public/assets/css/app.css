@@ -36,16 +36,19 @@
   /* accent palettes (switch via html[data-accent]) */
   --acc-l: #aed890;  --acc-d: #4f8f60;  --acc-ink: #172b1b;
 }
-/* four named moods — switching one repaints the whole room:
-   background stage, glass tints, accents and highlights all follow */
-html[data-accent='sage']   { --acc-l: #b4cda3; --acc-d: #4f8f60; --acc-ink: #172b1b; --mood-bg: #161c17; --mood-bg-l: #f3f6ef; }
-html[data-accent='serene'] { --acc-l: #9ec8dd; --acc-d: #3f7f9e; --acc-ink: #0c2430; --mood-bg: #131b21; --mood-bg-l: #eff4f6; }
-html[data-accent='violet'] { --acc-l: #c2a7e2; --acc-d: #7e5fa6; --acc-ink: #221635; --mood-bg: #181522; --mood-bg-l: #f4f1f7; }
+/* four palettes named after their actual color — nothing poetic, just the
+   color itself; switching one repaints the whole room: background stage,
+   glass tints, accents and highlights all follow */
+html[data-accent='green']  { --acc-l: #b4cda3; --acc-d: #4f8f60; --acc-ink: #172b1b; --mood-bg: #161c17; --mood-bg-l: #f3f6ef; }
+html[data-accent='blue']   { --acc-l: #9ec8dd; --acc-d: #3f7f9e; --acc-ink: #0c2430; --mood-bg: #131b21; --mood-bg-l: #eff4f6; }
+html[data-accent='purple'] { --acc-l: #c2a7e2; --acc-d: #7e5fa6; --acc-ink: #221635; --mood-bg: #181522; --mood-bg-l: #f4f1f7; }
 html[data-accent='amber']  { --acc-l: #eec27e; --acc-d: #a06a24; --acc-ink: #2d1f0c; --mood-bg: #1d1812; --mood-bg-l: #f7f3ea; }
-/* legacy accents from older builds fall back gracefully */
-html[data-accent='emerald'], html[data-accent='ocean'] { --acc-l: #9ec8dd; --acc-d: #3f7f9e; --acc-ink: #0c2430; --mood-bg: #131b21; --mood-bg-l: #eff4f6; }
-html[data-accent='blue'], html[data-accent='midnight'], html[data-accent='ice'] { --acc-l: #9ec8dd; --acc-d: #3f7f9e; --acc-ink: #0c2430; --mood-bg: #131b21; --mood-bg-l: #eff4f6; }
-html[data-accent='sakura'], html[data-accent='rose'], html[data-accent='wine'], html[data-accent='coral'] { --acc-l: #c2a7e2; --acc-d: #7e5fa6; --acc-ink: #221635; --mood-bg: #181522; --mood-bg-l: #f4f1f7; }
+/* accents older builds remember fall back to their real color */
+html[data-accent='sage'], html[data-accent='emerald'], html[data-accent='ocean'],
+html[data-accent='midnight'], html[data-accent='ice'] { --acc-l: #9ec8dd; --acc-d: #3f7f9e; --acc-ink: #0c2430; --mood-bg: #131b21; --mood-bg-l: #eff4f6; }
+html[data-accent='serene'] { --acc-l: #9ec8dd; --acc-d: #3f7f9e; --acc-ink: #0c2430; --mood-bg: #131b21; --mood-bg-l: #eff4f6; }
+html[data-accent='violet'], html[data-accent='sakura'], html[data-accent='rose'],
+html[data-accent='wine'], html[data-accent='coral'] { --acc-l: #c2a7e2; --acc-d: #7e5fa6; --acc-ink: #221635; --mood-bg: #181522; --mood-bg-l: #f4f1f7; }
 html[data-accent='gold'] { --acc-l: #eec27e; --acc-d: #a06a24; --acc-ink: #2d1f0c; --mood-bg: #1d1812; --mood-bg-l: #f7f3ea; }
 
 /* ---------- moods ---------- */
@@ -712,7 +715,7 @@ html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
   min-height: 0;
 }
 .mail__col { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.mail__head { padding: 14px 16px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mail__head { padding: 14px 16px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .mail__head h3 { margin: 0; font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
 .mail__head h3 svg { width: 15px; height: 15px; color: var(--acc); }
 .mail__head .row { gap: 2px; }
@@ -764,9 +767,9 @@ html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
 .acct-pill__badge { background: var(--acc); color: var(--acc-text); font-size: 9.5px; font-weight: 800; border-radius: 99px; padding: 1px 6px; flex: none; }
 
 .email-row {
-  display: flex; gap: 11px; align-items: flex-start;
-  width: 100%; padding: 11px 11px; margin-bottom: 5px;
-  border-radius: 13px;
+  display: flex; gap: 10px; align-items: flex-start;
+  width: 100%; padding: 8.5px 10px; margin-bottom: 3px;
+  border-radius: 12px;
   transition: background .2s, box-shadow .2s, border-color .2s;
   text-align: start; position: relative;
   border: 1px solid transparent;
@@ -777,7 +780,7 @@ html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
   content: ''; position: absolute; inset-inline-start: 3px; top: 50%; transform: translateY(-50%);
   width: 3.5px; height: 30px; border-radius: 99px; background: var(--acc);
 }
-.email-row__ava { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-weight: 800; font-size: 14px; color: var(--acc-text); flex: none; margin-top: 2px; opacity: .92; cursor: pointer; transition: transform .15s var(--ease), box-shadow .2s var(--ease); }
+.email-row__ava { width: 31px; height: 31px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 12.5px; color: var(--acc-text); flex: none; margin-top: 1px; opacity: .92; cursor: pointer; transition: transform .15s var(--ease), box-shadow .2s var(--ease); }
 .email-row__ava:hover { transform: scale(1.06); }
 .email-row.is-selected .email-row__ava { box-shadow: 0 0 0 2.5px var(--acc); opacity: 1; }
 @media (hover: none) { .email-row__ava:hover { transform: none; } }
@@ -786,8 +789,8 @@ html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
 .email-row__from { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .email-row.is-unread .email-row__from { font-weight: 800; }
 .email-row__time { font-size: 10.5px; color: var(--muted); flex: none; }
-.email-row__subj { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
-.email-row__prev { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+.email-row__subj { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: .5px; }
+.email-row__prev { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: .5px; }
 .email-row__flags { display: flex; gap: 5px; margin-top: 4px; }
 .email-row__flags svg { width: 12px; height: 12px; }
 .flag-star { color: var(--warn); } .flag-note { color: var(--acc); } .flag-clip { color: var(--muted); }
@@ -865,7 +868,47 @@ html[data-theme='dark'] .mail-frame { background: #fbfcfa; }
 }
 .compose-fab:hover { transform: scale(1.07); }
 .compose-fab svg { width: 22px; height: 22px; }
+.compose-fab .lockbadge { position: absolute; top: -4px; inset-inline-end: -2px; }
+.compose-fab.is-locked { filter: saturate(.55) brightness(.92); box-shadow: 0 12px 32px -10px rgba(140, 190, 225, .5), inset 0 1px 0 rgba(255, 255, 255, .2); }
 @media (min-width: 861px) { .compose-fab { bottom: 26px; } }
+
+/* ---------- responsibility badges (frozen lock / open lock / flame) ----------
+   a tiny sign that rides beside a feature's own logo: icy snowflake-glass
+   while an authorization or configuration is missing, a warm open shackle
+   or flame once the owner accepts the responsibility */
+.lockbadge {
+  display: inline-flex; align-items: center; justify-content: center; gap: 1px;
+  border-radius: 999px; flex: none; line-height: 0; vertical-align: middle;
+}
+.lockbadge svg { width: 9px; height: 9px; }
+.lockbadge--frozen {
+  padding: 3px;
+  background: linear-gradient(135deg, #cfe9f8, #93c6e8);
+  color: #0f3350;
+  box-shadow: 0 0 0 1.5px rgba(170, 215, 242, .38), 0 1px 5px rgba(120, 185, 225, .45);
+  animation: frostBreath 2.8s ease-in-out infinite;
+}
+@keyframes frostBreath {
+  0%, 100% { box-shadow: 0 0 0 1.5px rgba(170, 215, 242, .35), 0 0 6px rgba(140, 200, 235, .25); }
+  50%      { box-shadow: 0 0 0 1.5px rgba(170, 215, 242, .62), 0 0 13px rgba(140, 200, 235, .6); }
+}
+.lockbadge--open {
+  padding: 3px;
+  background: linear-gradient(135deg, #f8cf83, #e89a3c);
+  color: #3c2407;
+  box-shadow: 0 0 0 1.5px rgba(242, 199, 126, .4), 0 1px 5px rgba(230, 170, 80, .4);
+}
+.lockbadge--flame {
+  background: linear-gradient(135deg, #ffb27a, #ef6a35);
+  color: #43140a;
+  animation: flameBreath 2.1s ease-in-out infinite;
+}
+@keyframes flameBreath {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 0 1.5px rgba(250, 170, 110, .4), 0 0 6px rgba(240, 130, 70, .3); }
+  50%      { transform: scale(1.1);  box-shadow: 0 0 0 1.5px rgba(250, 170, 110, .62), 0 0 12px rgba(240, 130, 70, .55); }
+}
+/* a feature wearing its frozen badge reads slightly chilled */
+.is-frozen { filter: saturate(.72) brightness(.96); }
 /* ---------- vault ---------- */
 .vault-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 13px; }
 .totp-card { padding: 15px 17px; position: relative; overflow: hidden; transition: transform .3s var(--spring), box-shadow .3s; cursor: pointer; }
@@ -1371,8 +1414,9 @@ html[dir='rtl'] .cmdk__enter svg { transform: scaleX(-1); }
 .cmdk__none { display: grid; place-items: center; gap: 8px; padding: 38px 16px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .cmdk__none svg { width: 30px; height: 30px; opacity: .5; }
 .cmdk__sw { width: 17px; height: 17px; border-radius: 50%; flex: none; border: 1px solid rgba(255, 255, 255, .25); }
-.cmdk__sw--sage { background: #aed890; } .cmdk__sw--blue { background: #8cc8de; }
-.cmdk__sw--violet { background: #c2a7e2; } .cmdk__sw--amber { background: #eec27e; }
+.cmdk__sw--green { background: #aed890; } .cmdk__sw--blue { background: #8cc8de; }
+.cmdk__sw--purple { background: #c2a7e2; } .cmdk__sw--amber { background: #eec27e; }
+.cmdk__sw--sage { background: #aed890; } .cmdk__sw--violet { background: #c2a7e2; }
 .cmdk__sw--rose { background: #f2a6ba; }
 .cmdk__sw--emerald { background: #86dcab; } .cmdk__sw--ocean { background: #82c8ea; }
 .cmdk__sw--midnight { background: #9fadea; } .cmdk__sw--sakura { background: #f2bcd9; }
@@ -2233,7 +2277,7 @@ button.note-panel__head { cursor: pointer; }
 .acct-switch__ava { width: 28px !important; height: 28px !important; border-radius: 9px !important; font-size: 12px !important; margin-top: 0 !important; }
 .acct-switch__txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .acct-switch__name { font-size: 12.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: ltr; max-width: 132px; }
-.acct-switch__meta { font-size: 9.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.acct-switch__meta { font-size: 9.5px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 132px; }
 .acct-switch__badge {
   min-width: 17px; height: 17px; padding: 0 5px; border-radius: 99px;
   background: var(--acc); color: var(--acc-text);

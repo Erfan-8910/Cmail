@@ -367,18 +367,19 @@ function closeSwitcher() {
 }
 
 // ---------- theme & accent ----------
+// four palettes, each named after its actual color
 const MOOD_META = {
-  sage: { dark: '#161c17', light: '#f3f6ef' },
-  serene: { dark: '#131b21', light: '#eff4f6' },
-  violet: { dark: '#181522', light: '#f4f1f7' },
+  green: { dark: '#161c17', light: '#f3f6ef' },
+  blue: { dark: '#131b21', light: '#eff4f6' },
+  purple: { dark: '#181522', light: '#f4f1f7' },
   amber: { dark: '#1d1812', light: '#f7f3ea' },
 };
 
 export function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem('cmail_theme', theme);
-  const mood = document.documentElement.dataset.accent || 'sage';
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', (MOOD_META[mood] ?? MOOD_META.sage)[theme === 'dark' ? 'dark' : 'light']);
+  const mood = document.documentElement.dataset.accent || 'green';
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', (MOOD_META[mood] ?? MOOD_META.green)[theme === 'dark' ? 'dark' : 'light']);
   // refresh icons that depend on theme
   if (!pillbar.hidden) {
     const btn = pbEnd?.querySelector('.icon-btn');
@@ -390,7 +391,7 @@ export function setAccent(accent) {
   document.documentElement.dataset.accent = accent;
   localStorage.setItem('cmail_accent', accent);
   const theme = document.documentElement.dataset.theme || 'dark';
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', (MOOD_META[accent] ?? MOOD_META.sage)[theme === 'dark' ? 'dark' : 'light']);
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', (MOOD_META[accent] ?? MOOD_META.green)[theme === 'dark' ? 'dark' : 'light']);
 }
 
 // the ambient stage behind the whole app: aurora (alive) · halo (still) · pure (flat)
@@ -431,9 +432,14 @@ export function updateUnreadBadge() {
 // ---------- boot ----------
 (async function boot() {
   setTheme(localStorage.getItem('cmail_theme') ?? 'dark');
-  // old builds shipped other accent names — fold them into the four moods
-  const LEGACY = { emerald: 'serene', ocean: 'serene', blue: 'serene', midnight: 'serene', ice: 'serene', sakura: 'violet', rose: 'violet', wine: 'violet', coral: 'violet', gold: 'amber' };
-  const savedAccent = localStorage.getItem('cmail_accent') ?? 'sage';
+  // older builds shipped other accent names — fold everything into the four
+  // palettes that carry their color's own name
+  const LEGACY = {
+    sage: 'green', serene: 'blue', violet: 'purple',
+    emerald: 'green', ocean: 'blue', midnight: 'blue', ice: 'blue',
+    sakura: 'purple', rose: 'purple', wine: 'purple', coral: 'purple', gold: 'amber',
+  };
+  const savedAccent = localStorage.getItem('cmail_accent') ?? 'green';
   setAccent(LEGACY[savedAccent] ?? savedAccent);
   document.documentElement.dataset.bg = localStorage.getItem('cmail_bg') ?? 'aurora';
 

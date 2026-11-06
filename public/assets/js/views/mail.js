@@ -4,8 +4,8 @@
 // HTML emails are sanitized and rendered in a height-adaptive sandboxed frame.
 import { api, state, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
-import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avatarColor, fmtBytes, vibrate, glyphTile, dropdown } from '../ui.js';
-import { entryModal, tempGuard } from './vault.js';
+import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avatarColor, fmtBytes, vibrate, glyphTile, dropdown, lockBadge } from '../ui.js';
+import { entryModal, tempGuard, tempAuthorized, grantTempAuth } from './vault.js';
 
 let box = 'inbox';
 let search = '';
@@ -19,6 +19,7 @@ let autoT = null;        // inbox auto-refresh timer
 let emails = [];
 let listScroll = null;
 let sidebarScroll = null;
+let listSeq = 0;         // racing list loads — newest wins
 
 const sendReady = () => state.setup?.sending_ready !== false && !!state.setup?.admin_created;
 
@@ -56,14 +57,17 @@ export async function renderMail(root, arg) {
   view.append(grid);
   root.append(view);
 
-  // the compose option exists only when a sending provider is actually connected
-  if (sendReady()) {
-    view.append(h('button', { class: 'compose-fab', title: t('compose'), 'aria-label': t('compose'), onclick: () => openCompose() }, icon('send')));
-  }
+  // the compose option is always on stage: a frozen lock rides beside the
+  // paper plane while no sending provider is connected, and it opens into
+  // the real composer the moment sending is configured (or just refuses
+  // politely, explaining what is missing)
+  const fab = h('button', { class: `compose-fab ${sendReady() ? '' : 'is-locked'}`, title: sendReady() ? t('compose') : t('sendLockedTitle'), 'aria-label': sendReady() ? t('compose') : t('sendLockedTitle'), onclick: () => sendReady() ? openCompose() : toast(t('sendLockedToast'), 'err') }, icon('send'));
+  if (!sendReady()) fab.append(lockBadge('frozen', t('sendLockedTitle')));
+  view.append(fab);
 
   await loadAddresses();
 
-  // auto-refresh: every 15s the inbox pulls
+  // auto-refresh: every 10 seconds the inbox pulls
   // the list and the unread badges, highlights whatever just landed, and
   // stays out of the way while an overlay is open
   clearInterval(autoT);
@@ -72,7 +76,7 @@ export async function renderMail(root, arg) {
     if (document.hidden || document.querySelector('.modal-back, .cmdk-back')) return;
     loadEmails(true);
     loadAddresses(true);
-  }, 15_000);
+  }, 10_000);
 }
 
 function emptyViewer() {
@@ -80,6 +84,7 @@ function emptyViewer() {
 }
 
 // ---------- accounts ----------
+let addrSig = '';  // last painted sidebar signature — skip repaints when nothing changed
 async function loadAddresses(quiet = false) {
   try {
     const r = await api.get('/api/addresses');
@@ -94,6 +99,17 @@ async function loadAddresses(quiet = false) {
     state.currentAddressId = state.addresses[0]?.id ?? null;
     localStorage.setItem('cmail_acct', state.currentAddressId ?? '');
   }
+
+  // repaint the rails only when something actually changed — the auto-refresh
+  // must never yank an open dropdown, a focused row or the scroll position
+  // out from under the user
+  const sig = JSON.stringify([
+    state.addresses.map((a) => [a.id, a.kind, a.label, a.unread, a.total, a.expires_at]),
+    state.currentAddressId,
+  ]);
+  if (quiet && sig === addrSig) return;
+  addrSig = sig;
+
   drawSidebar();
   syncAvatarLetter();
   drawListHead();
@@ -264,15 +280,27 @@ async function accountModal(a) {
       h('div', { class: 'field' }, h('label', {}, t('acctNotes')), notesIn),
       h('div', { class: 'acct-2fa' },
         h('div', { class: 'acct-2fa__head' }, icon('key'), h('b', {}, t('acct2fa')),
-          h('button', {
-            class: 'btn btn--sm btn--primary', onclick: async () => {
-              // temporary mailboxes keep their vault locked — codes only go in
-              // after the owner accepts they die with the address
-              const add = () => { m.close(); entryModal(null, { addressId: a.id, onDone: async () => { drawSidebar(); } }); };
-              if (a.kind === 'temp') tempGuard(a, add);
-              else add();
-            },
-          }, icon(a.kind === 'temp' ? 'lock' : 'plus'), h('span', { class: 'hide-sm' }, t('acct2faAdd')))),
+          (() => {
+            // temporary mailboxes keep their vault frozen — codes only go in
+            // after the owner accepts they die with the address; once granted,
+            // the badge flips to the flame and the dialog never asks again
+            const b = h('button', { class: 'btn btn--sm btn--primary' });
+            const openEntry = () => { m.close(); entryModal(null, { addressId: a.id, onDone: async () => { drawSidebar(); } }); };
+            const draw = () => {
+              clear(b);
+              const locked = a.kind === 'temp' && !tempAuthorized(a.id);
+              b.className = `btn btn--sm btn--primary ${locked ? 'is-frozen' : ''}`;
+              if (locked) {
+                b.append(icon('plus'), lockBadge('frozen', t('vaultFrozen')), h('span', { class: 'hide-sm' }, t('acct2faAdd')));
+                b.onclick = () => tempGuard(a, () => { draw(); openEntry(); });
+              } else {
+                b.append(icon('plus'), a.kind === 'temp' ? lockBadge('flame', t('vaultFlame')) : '', h('span', { class: 'hide-sm' }, t('acct2faAdd')));
+                b.onclick = openEntry;
+              }
+            };
+            draw();
+            return b;
+          })()),
         totpWrap),
     ],
     footer: [
@@ -283,8 +311,20 @@ async function accountModal(a) {
 }
 
 // ---------- list ----------
+// the compose button in the list header shares the FAB's lock behavior:
+// always visible, frozen until a provider is connected
+function composeBtn() {
+  const ready = sendReady();
+  const b = h('button', {
+    class: `btn btn--sm btn--primary ${ready ? '' : 'is-locked'}`,
+    title: ready ? t('compose') : t('sendLockedTitle'),
+    onclick: () => ready ? openCompose() : toast(t('sendLockedToast'), 'err'),
+  }, icon('send'), h('span', { class: 'hide-sm' }, t('compose')));
+  if (!ready) b.append(lockBadge('frozen', t('sendLockedTitle')));
+  return b;
+}
+
 function buildList() {
-  const canSend = sendReady();
   // the header carries the account itself: a rounded chip with the avatar,
   // the address and a chevron — open it to jump between accounts right here,
   // without ever leaving the inbox
@@ -299,7 +339,7 @@ function buildList() {
         if (a) { await copyText(a.address); toast(t('copied'), 'ok', 1200); }
       } }, icon('copy'))),
     h('div', { class: 'row', style: { gap: '4px' } },
-      canSend ? h('button', { class: 'btn btn--sm btn--primary', onclick: () => openCompose() }, icon('send'), h('span', { class: 'hide-sm' }, t('compose'))) : '',
+      composeBtn(),
       h('button', { class: 'icon-btn', title: t('refresh'), onclick: (e) => { e.currentTarget.querySelector('svg')?.classList.add('spin'); loadEmails(true); loadAddresses(true); setTimeout(() => document.querySelector('.mail .icon-btn svg.spin')?.classList.remove('spin'), 700); } }, icon('refresh')),
       h('button', { class: 'icon-btn', title: t('navAddresses'), onclick: () => document.querySelector('.mail')?.classList.toggle('show-sidebar'), dataset: { mobile: 'menu' } }, icon('menu')),
     ));
@@ -427,6 +467,10 @@ async function bulkAction(action) {
 
 async function loadEmails(silent) {
   if (!state.currentAddressId) { emails = []; drawList(); return; }
+  // racing loads (fast clicks, auto-refresh, account switches) — only the
+  // newest request may paint the list; older responses bail out silently
+  const seq = ++listSeq;
+  if (!document.body.contains(listScroll ?? document.body)) return;
   if (!silent) listScroll.append(h('div', { class: 'skel', style: { height: '70px', marginBottom: '8px' } }));
   try {
     const params = new URLSearchParams({ limit: '80' });
@@ -434,6 +478,7 @@ async function loadEmails(silent) {
     if (box !== 'inbox') params.set('box', box);
     if (search) params.set('q', search);
     const r = await api.get(`/api/emails?${params}`);
+    if (seq !== listSeq || !document.body.contains(listScroll ?? document.body)) return;
     const fresh = r.emails ?? [];
     // auto-refresh detection: the newest id changed without any user action
     if (silent && fresh.length && !search && box === 'inbox') {
@@ -443,7 +488,7 @@ async function loadEmails(silent) {
     emails = fresh;
     if (cursorIdx >= emails.length) cursorIdx = emails.length - 1;
     drawList();
-  } catch (e) { toast(errText(e), 'err'); }
+  } catch (e) { if (seq === listSeq) toast(errText(e), 'err'); }
 }
 
 function drawList() {
@@ -707,10 +752,15 @@ async function drawReader(wrap, r) {
   wrap.append(card);
 
   const actions = h('div', { class: 'viewer__actions' });
-  if (sendReady()) {
-    actions.append(
-      h('button', { class: 'btn btn--sm btn--ghost', title: t('reply'), onclick: () => openCompose({ to: em.from_addr, subject: `Re: ${em.subject ?? ''}` }) }, icon('arrow'), h('span', { class: 'hide-sm' }, t('reply'))));
-  }
+  // reply obeys the same sending lock as the compose button
+  actions.append(
+    h('button', {
+      class: `btn btn--sm btn--ghost ${sendReady() ? '' : 'is-frozen'}`,
+      title: sendReady() ? t('reply') : t('sendLockedTitle'),
+      onclick: () => sendReady()
+        ? openCompose({ to: em.from_addr, subject: `Re: ${em.subject ?? ''}` })
+        : toast(t('sendLockedToast'), 'err'),
+    }, icon('arrow'), h('span', { class: 'hide-sm' }, t('reply')), sendReady() ? '' : lockBadge('frozen', t('sendLockedTitle'))));
   actions.append(
     h('button', { class: 'btn btn--sm btn--ghost', title: t('markUnread'), onclick: async () => {
       try {
@@ -893,6 +943,8 @@ function mailFrameCss() {
 
 // ---------- compose ----------
 export async function openCompose(prefill = {}) {
+  // a double-click used to stack two composers — one is enough
+  if (document.querySelector('.modal--compose')) return;
   if (!state.addresses.length) await api.get('/api/addresses').then((r) => state.addresses = r.addresses ?? []).catch(() => {});
   const fromSel = h('select', { class: 'input' },
     state.addresses.map((a) => h('option', { value: a.id, selected: a.id === state.currentAddressId || undefined }, a.address)));
@@ -902,7 +954,7 @@ export async function openCompose(prefill = {}) {
   const btn = h('button', { class: 'btn btn--primary', type: 'submit' }, icon('send'), t('send'));
 
   const m = modal({
-    title: t('composeTitle'), iconName: 'send',
+    title: t('composeTitle'), iconName: 'send', wide: false, cls: 'modal--compose',
     body: [
       h('div', { class: 'field' }, h('label', {}, t('from')), fromSel),
       h('div', { class: 'field' }, h('label', {}, t('to_')), to),
