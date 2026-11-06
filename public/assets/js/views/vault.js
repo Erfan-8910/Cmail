@@ -1,7 +1,7 @@
 // Cmail — 2FA vault: named TOTP entries with live codes, glyphs and account scoping
 import { api, state, errText } from '../api.js';
 import { t } from '../i18n.js';
-import { h, clear, icon, toast, modal, confirmBox, copyText, esc, glyphs, glyphCats, glyphTile, vibrate, fmtCountdown } from '../ui.js';
+import { h, clear, icon, toast, modal, confirmBox, copyText, esc, glyphs, glyphCats, glyphTile, vibrate, fmtCountdown, lockBadge } from '../ui.js';
 
 const COLORS = { violet: '#a78bfa', sky: '#38bdf8', mint: '#34d399', amber: '#fbbf24', rose: '#fb7185' };
 let entries = [];
@@ -14,6 +14,30 @@ const tempAddress = (id) => {
   const a = (state.addresses ?? []).find((x) => x.id === id);
   return a && a.kind === 'temp' ? a : null;
 };
+
+// ---------- responsibility memory ----------
+// a temporary address's vault is born frozen — snowflake and padlock beside
+// the usual plus. The moment the owner accepts the deletion countdown, the
+// grant is remembered for that address: the badge flips to the open shackle
+// (or the flame) and the dialog never asks again for it.
+const TEMP_AUTH_KEY = 'cmail_tempauth';
+let tempAuth = {};
+try { tempAuth = JSON.parse(localStorage.getItem(TEMP_AUTH_KEY) ?? '{}') ?? {}; } catch { tempAuth = {}; }
+
+export function tempAuthorized(id) { return !!id && !!tempAuth[id]; }
+
+export function grantTempAuth(id) {
+  if (!id) return;
+  tempAuth[id] = true;
+  try { localStorage.setItem(TEMP_AUTH_KEY, JSON.stringify(tempAuth)); } catch { /* storage full — session-only then */ }
+}
+
+function pruneTempAuth() {
+  const ids = new Set((state.addresses ?? []).map((a) => a.id));
+  let changed = false;
+  for (const k of Object.keys(tempAuth)) if (!ids.has(k)) { delete tempAuth[k]; changed = true; }
+  if (changed) { try { localStorage.setItem(TEMP_AUTH_KEY, JSON.stringify(tempAuth)); } catch { /* */ } }
+}
 
 // ---------- the responsibility gate for temporary mailboxes ----------
 // a code linked to a temporary address dies together with that address —
@@ -33,16 +57,35 @@ export function tempGuard(address, onAccept) {
     ],
     footer: [
       h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('cancel')),
-      h('button', { class: 'btn btn--danger', onclick: () => { m.close(); onAccept?.(); } }, icon('lock'), t('tempGuardYes')),
+      h('button', { class: 'btn btn--danger', onclick: () => { m.close(); grantTempAuth(address?.id); onAccept?.(); } }, icon('lockOpen'), t('tempGuardYes')),
     ],
   });
 }
 
 export async function renderVault(root) {
+  // the add button lives in the page head but its state follows the scope:
+  // frozen (snowflake + lock) while the selected account is a temporary one
+  // still under responsibility, flame once it was granted, plain otherwise
+  const addBtn = h('button', { class: 'btn btn--primary' });
+  function refreshAddBtn() {
+    clear(addBtn);
+    const sid = scope !== 'all' && scope !== 'none' ? scope : null;
+    const tmp = tempAddress(sid);
+    if (tmp && !tempAuthorized(tmp.id)) {
+      addBtn.className = 'btn btn--primary is-frozen';
+      addBtn.append(icon('plus'), lockBadge('frozen', t('vaultFrozen')), t('addCode'));
+      addBtn.onclick = () => tempGuard(tmp, () => { refreshAddBtn(); entryModal(null, { addressId: sid, onDone: load }); });
+    } else {
+      addBtn.className = 'btn btn--primary';
+      addBtn.append(icon('plus'), tmp ? lockBadge('flame', t('vaultFlame')) : '', t('addCode'));
+      addBtn.onclick = () => entryModal(null, { addressId: sid, onDone: load });
+    }
+  }
+
   const view = h('div', { class: 'view' });
   view.append(h('div', { class: 'page-head' },
     h('div', {}, h('div', { class: 'eyebrow' }, t('eyebrowVault')), h('h2', { class: 'page-title' }, t('vaultTitle')), h('div', { class: 'page-sub' }, t('vaultSub'))),
-    h('button', { class: 'btn btn--primary', onclick: () => entryModal(null, { addressId: scope !== 'all' && scope !== 'none' ? scope : null }) }, icon('plus'), t('addCode')),
+    addBtn,
   ));
 
   const chips = h('div', { class: 'vault-filters' });
@@ -55,6 +98,8 @@ export async function renderVault(root) {
   root.append(view);
 
   await api.get('/api/addresses').then((r) => state.addresses = r.addresses ?? []).catch(() => {});
+  // grants for addresses that no longer exist are quietly retired
+  pruneTempAuth();
   // the vault opens on the account you are actually in — every section
   // stays separate per account, exactly like the inbox
   if (scope === 'all' && state.currentAddressId && state.addresses.some((a) => a.id === state.currentAddressId)) {
@@ -216,6 +261,7 @@ export async function renderVault(root) {
 
   function draw(q = '') {
     drawChips();
+    refreshAddBtn();
     const g = clear(document.getElementById('vault-grid') ?? grid);
     let list = entries.filter((e) => !q || (e.name + ' ' + (e.issuer ?? '')).toLowerCase().includes(q));
     if (scope === 'none') list = list.filter((e) => !e.address_id);
@@ -391,7 +437,7 @@ export function entryModal(entry = null, opts = {}) {
     addressId = addrSel.value || null;
     const tmp = !!tempAddress(addressId);
     tempWarn.style.display = tmp ? '' : 'none';
-    if (!entry) saveIc.replaceWith(saveIc = icon(tmp ? 'lock' : 'plus'));
+    if (!entry) drawSaveBtn();
   });
 
   // folder link (user-managed groups)
@@ -448,15 +494,32 @@ export function entryModal(entry = null, opts = {}) {
     } catch (e) { toast(errText(e), 'err'); saveBtn.disabled = false; }
   };
 
-  let saveIc = icon(!entry && tempAddress(addressId) ? 'lock' : 'plus');
+  // the save button mirrors the lock state of the chosen account: frozen
+  // (snowflake + padlock) until the responsibility is granted, then the
+  // flame — the code is accepted and will burn with the address
   const saveBtn = entry
     ? h('button', { class: 'btn btn--primary', onclick: doSave }, t('save'))
-    : h('button', { class: 'btn btn--primary', onclick: () => {
-        // locked until the owner accepts the countdown for temporary accounts
-        const tmp = tempAddress(addressId);
-        if (tmp) tempGuard(tmp, doSave);
-        else doSave();
-      } }, saveIc, t('addCode'));
+    : h('button', { class: 'btn btn--primary' });
+  function drawSaveBtn() {
+    if (entry) return;
+    clear(saveBtn);
+    const tmp = tempAddress(addressId);
+    if (tmp && !tempAuthorized(tmp.id)) {
+      saveBtn.className = 'btn btn--primary is-frozen';
+      saveBtn.append(icon('plus'), lockBadge('frozen', t('vaultFrozen')), t('addCode'));
+    } else {
+      saveBtn.className = 'btn btn--primary';
+      saveBtn.append(icon('plus'), tmp ? lockBadge('flame', t('vaultFlame')) : '', t('addCode'));
+    }
+  }
+  if (!entry) {
+    drawSaveBtn();
+    saveBtn.onclick = () => {
+      const tmp = tempAddress(addressId);
+      if (tmp && !tempAuthorized(tmp.id)) tempGuard(tmp, () => { drawSaveBtn(); doSave(); });
+      else doSave();
+    };
+  }
 
   const extraRow = h('div', { class: 'row row--wrap' }, qrBtn, secretBtn);
 
