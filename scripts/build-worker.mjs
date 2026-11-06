@@ -46,6 +46,7 @@ function walk(dir, out = []) {
 }
 
 // ---------- 1) embedded assets ----------
+const APP_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version ?? '0.0.0';
 const files = walk(PUB);
 const entries = [];
 for (const p of files) {
@@ -53,7 +54,13 @@ for (const p of files) {
   const ext = extname(p).toLowerCase();
   const type = MIME[ext];
   if (!type) throw new Error(`no mime for ${key}`);
-  const buf = readFileSync(p);
+  let buf = readFileSync(p);
+  // every release gets a fresh asset URL: the __CM_VER__ stamp in index.html
+  // becomes the package version, so no browser can ever serve an old
+  // app.js/app.css from its cache after an update
+  if (key === 'index.html') {
+    buf = Buffer.from(buf.toString('utf8').replaceAll('__CM_VER__', APP_VERSION), 'utf8');
+  }
   const tag = djb2(buf.toString('latin1'));
   if (TEXT_EXT.has(ext)) {
     entries.push({ key, text: buf.toString('utf8'), type, tag });
@@ -159,6 +166,7 @@ for (const m of [
   'migrations/0002_mailbox_identity.sql',
   'migrations/0003_vault_folders.sql',
   'migrations/0005_domain_lifecycle.sql',
+  'migrations/0006_vault_folder_scope.sql',
 ]) {
   let sql;
   try { sql = readFileSync(join(ROOT, m), 'utf8'); } catch { continue; }

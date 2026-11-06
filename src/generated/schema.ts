@@ -13,7 +13,7 @@ export const SCHEMA: SchemaStatement[] = [
   { name: "stmt_07", optional: false, sql: "CREATE TABLE IF NOT EXISTS attachments (\n  id           TEXT PRIMARY KEY,\n  email_id     TEXT NOT NULL REFERENCES emails(id) ON DELETE CASCADE,\n  filename     TEXT,\n  content_type TEXT,\n  size         INTEGER NOT NULL DEFAULT 0,\n  content_b64  TEXT\n)" },
   { name: "stmt_08", optional: false, sql: "CREATE TABLE IF NOT EXISTS email_notes (\n  email_id   TEXT PRIMARY KEY REFERENCES emails(id) ON DELETE CASCADE,\n  user_id    TEXT NOT NULL,\n  body       TEXT NOT NULL DEFAULT '',\n  color      TEXT NOT NULL DEFAULT 'amber',          \n  pinned     INTEGER NOT NULL DEFAULT 0,\n  updated_at INTEGER\n)" },
   { name: "stmt_09", optional: false, sql: "CREATE TABLE IF NOT EXISTS totp_entries (\n  id          TEXT PRIMARY KEY,\n  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  name        TEXT NOT NULL,\n  issuer      TEXT,\n  secret_enc  TEXT NOT NULL,                         \n  algo        TEXT NOT NULL DEFAULT 'SHA1',          \n  digits      INTEGER NOT NULL DEFAULT 6,\n  period      INTEGER NOT NULL DEFAULT 30,\n  color       TEXT,\n  icon        TEXT,                                  \n  address_id  TEXT REFERENCES addresses(id) ON DELETE SET NULL,  \n  folder_id   TEXT REFERENCES totp_folders(id) ON DELETE SET NULL,\n  sort        INTEGER NOT NULL DEFAULT 0,\n  created_at  INTEGER NOT NULL\n)" },
-  { name: "stmt_10", optional: false, sql: "CREATE TABLE IF NOT EXISTS totp_folders (\n  id         TEXT PRIMARY KEY,\n  user_id    TEXT NOT NULL,\n  name       TEXT NOT NULL,\n  icon       TEXT,\n  color      TEXT,\n  created_at INTEGER NOT NULL\n)" },
+  { name: "stmt_10", optional: false, sql: "CREATE TABLE IF NOT EXISTS totp_folders (\n  id         TEXT PRIMARY KEY,\n  user_id    TEXT NOT NULL,\n  address_id TEXT,                                  \n  name       TEXT NOT NULL,\n  icon       TEXT,\n  color      TEXT,\n  created_at INTEGER NOT NULL\n)" },
   { name: "stmt_11", optional: false, sql: "CREATE TABLE IF NOT EXISTS settings (\n  key   TEXT PRIMARY KEY,\n  value TEXT\n)" },
   { name: "stmt_12", optional: false, sql: "CREATE INDEX IF NOT EXISTS idx_sessions_user    ON sessions(user_id)" },
   { name: "stmt_13", optional: false, sql: "CREATE INDEX IF NOT EXISTS idx_sessions_exp     ON sessions(expires_at)" },
@@ -30,6 +30,7 @@ export const SCHEMA: SchemaStatement[] = [
   { name: "stmt_24", optional: false, sql: "CREATE INDEX IF NOT EXISTS idx_totp_addr        ON totp_entries(address_id)" },
   { name: "stmt_25", optional: false, sql: "CREATE INDEX IF NOT EXISTS idx_totp_folder      ON totp_entries(folder_id)" },
   { name: "stmt_26", optional: false, sql: "CREATE INDEX IF NOT EXISTS idx_folders_user     ON totp_folders(user_id)" },
+  { name: "stmt_27", optional: false, sql: "CREATE INDEX IF NOT EXISTS idx_folders_addr     ON totp_folders(address_id)" },
   { name: "heal_1", optional: true, sql: "ALTER TABLE addresses ADD COLUMN notes TEXT NOT NULL DEFAULT ''" },
   { name: "heal_2", optional: true, sql: "ALTER TABLE totp_entries ADD COLUMN address_id TEXT REFERENCES addresses(id) ON DELETE SET NULL" },
   { name: "heal_3", optional: true, sql: "ALTER TABLE totp_entries ADD COLUMN icon TEXT" },
@@ -38,4 +39,5 @@ export const SCHEMA: SchemaStatement[] = [
   { name: "heal_6", optional: true, sql: "ALTER TABLE domains ADD COLUMN stage          INTEGER NOT NULL DEFAULT 3" },
   { name: "heal_7", optional: true, sql: "ALTER TABLE domains ADD COLUMN verify_code    TEXT" },
   { name: "heal_8", optional: true, sql: "ALTER TABLE domains ADD COLUMN verify_expires INTEGER" },
+  { name: "heal_9", optional: true, sql: "ALTER TABLE totp_folders ADD COLUMN address_id TEXT" },
 ];

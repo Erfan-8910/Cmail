@@ -3,7 +3,7 @@
 import { api, state } from './api.js';
 import { t, setLang, lang } from './i18n.js';
 import { h, clear, icon, toast, vibrate } from './ui.js';
-import { setTheme } from './app.js';
+import { setTheme, setAccent, switchAccount } from './app.js';
 import { openCompose, createAddressModal } from './views/mail.js';
 
 let back = null;
@@ -135,8 +135,7 @@ function buildSources(q) {
   if (accHits.length) s.push({
     title: t('palette'), items: accHits.map((a) => ({
       icn: 'palette2', label: a.label, swatch: a.key, run: () => {
-        document.documentElement.dataset.accent = a.key;
-        localStorage.setItem('cmail_accent', a.key);
+        setAccent(a.key);
         toast(t('saved'), 'ok', 1100);
       },
     })),
@@ -150,12 +149,9 @@ function buildSources(q) {
       .map((a) => ({
         icn: a.kind === 'temp' ? 'clock' : 'mail',
         label: a.address, sub: a.kind === 'temp' ? t('temporary') : t('permanent'),
-        run: () => {
-          state.currentAddressId = a.id;
-          localStorage.setItem('cmail_acct', a.id);
-          window.dispatchEvent(new CustomEvent('cmail:switch-inbox', { detail: a.id }));
-          location.hash = '#/mail';
-        },
+        // switching funnels through the one account switcher (the avatar
+        // circle) so every surface stays in sync
+        run: () => switchAccount(a.id),
       }));
     if (inb.length) s.push({ title: t('cmdkInboxes'), items: inb });
   }

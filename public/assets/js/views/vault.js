@@ -1,14 +1,13 @@
 // Cmail — 2FA vault: named TOTP entries with live codes, glyphs and account scoping
 import { api, state, errText } from '../api.js';
 import { t } from '../i18n.js';
-import { h, clear, icon, toast, modal, confirmBox, copyText, esc, glyphs, glyphCats, glyphTile, vibrate, fmtCountdown, lockBadge } from '../ui.js';
+import { h, clear, icon, toast, modal, confirmBox, copyText, esc, glyphs, glyphCats, glyphTile, vibrate, fmtCountdown, lockBadge, avatarColor } from '../ui.js';
 
 const COLORS = { violet: '#a78bfa', sky: '#38bdf8', mint: '#34d399', amber: '#fbbf24', rose: '#fb7185' };
 let entries = [];
 let folders = [];
 let tick = null;
-let scope = 'all';    // 'all' | 'none' | address id
-let fscope = 'all';   // 'all' | 'none' | folder id
+let fscope = 'all';   // 'all' | 'none' | folder id (folders belong to the live account)
 
 const tempAddress = (id) => {
   const a = (state.addresses ?? []).find((x) => x.id === id);
@@ -63,13 +62,13 @@ export function tempGuard(address, onAccept) {
 }
 
 export async function renderVault(root) {
-  // the add button lives in the page head but its state follows the scope:
-  // frozen (snowflake + lock) while the selected account is a temporary one
-  // still under responsibility, flame once it was granted, plain otherwise
+  // the vault opens on the account you are actually in — one account, one
+  // room: its codes, its folders, nothing from any other account. switching
+  // happens only in the avatar circle at the top of the page.
   const addBtn = h('button', { class: 'btn btn--primary' });
   function refreshAddBtn() {
     clear(addBtn);
-    const sid = scope !== 'all' && scope !== 'none' ? scope : null;
+    const sid = state.currentAddressId;
     const tmp = tempAddress(sid);
     if (tmp && !tempAuthorized(tmp.id)) {
       addBtn.className = 'btn btn--primary is-frozen';
@@ -82,29 +81,28 @@ export async function renderVault(root) {
     }
   }
 
+  // the identity chip beside the title: whose vault this is. a temporary
+  // account wears the frozen badge until the responsibility is granted —
+  // then the flame rides along instead
+  const idChip = h('div', { class: 'vault-id', id: 'vault-id' });
+
   const view = h('div', { class: 'view' });
   view.append(h('div', { class: 'page-head' },
     h('div', {}, h('div', { class: 'eyebrow' }, t('eyebrowVault')), h('h2', { class: 'page-title' }, t('vaultTitle')), h('div', { class: 'page-sub' }, t('vaultSub'))),
-    addBtn,
+    h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } }, idChip, addBtn),
   ));
 
-  const chips = h('div', { class: 'vault-filters' });
   const fchips = h('div', { class: 'vault-filters vault-filters--folders' });
   const searchIn = h('input', { class: 'input', type: 'search', placeholder: t('searchVault'), style: { marginBottom: '14px' } });
   searchIn.addEventListener('input', () => draw(searchIn.value.trim().toLowerCase()));
 
   const grid = h('div', { class: 'vault-grid', id: 'vault-grid' });
-  view.append(chips, fchips, searchIn, grid);
+  view.append(fchips, searchIn, grid);
   root.append(view);
 
   await api.get('/api/addresses').then((r) => state.addresses = r.addresses ?? []).catch(() => {});
   // grants for addresses that no longer exist are quietly retired
   pruneTempAuth();
-  // the vault opens on the account you are actually in — every section
-  // stays separate per account, exactly like the inbox
-  if (scope === 'all' && state.currentAddressId && state.addresses.some((a) => a.id === state.currentAddressId)) {
-    scope = state.currentAddressId;
-  }
 
   await load();
 
@@ -114,22 +112,16 @@ export async function renderVault(root) {
     updateRings();
   }, 1000);
 
-  function drawChips() {
-    clear(chips);
-    const mk = (key, label, dot, row) => h('button', {
-      class: `chip ${(row === 'f' ? fscope : scope) === key ? 'is-on' : ''}`,
-      onclick: (e) => {
-        if (row === 'f') fscope = key; else scope = key;
-        (row === 'f' ? fchips : chips).querySelectorAll('.chip').forEach((c) => c.classList.remove('is-on'));
-        e.currentTarget.classList.add('is-on'); vibrate(5); draw();
-      },
-    }, dot ? h('span', { class: 'chip-dot', style: { background: dot } }, '') : '', label);
-    chips.append(mk('all', t('acctAll'), 'var(--acc)'));
-    for (const a of state.addresses) {
-      chips.append(mk(a.id, a.label || a.address, a.kind === 'temp' ? 'var(--warn)' : 'var(--acc)'));
-    }
-    chips.append(mk('none', t('acctUnlinked'), 'var(--faint)'));
-    drawFchips();
+  function drawIdChip() {
+    clear(idChip);
+    const a = (state.addresses ?? []).find((x) => x.id === state.currentAddressId);
+    if (!a) return;
+    const locked = a.kind === 'temp' && !tempAuthorized(a.id);
+    idChip.append(
+      h('span', { class: 'email-row__ava', style: { background: avatarColor(a.address), width: '30px', height: '30px', borderRadius: '10px', fontSize: '12.5px' } }, (a.label || a.address).slice(0, 1).toUpperCase()),
+      h('span', { class: 'vault-id__addr mono' }, a.address),
+      h('span', { class: `kind-tag kind-tag--${a.kind === 'temp' ? 'temp' : 'perm'}` }, a.kind === 'temp' ? t('temporary') : t('permanent')),
+      a.kind === 'temp' ? lockBadge(locked ? 'frozen' : 'flame', locked ? t('vaultFrozen') : t('vaultFlame')) : '');
   }
 
   function drawFchips() {
@@ -152,10 +144,17 @@ export async function renderVault(root) {
 
   async function load() {
     try {
-      const [r, fr] = await Promise.all([api.get('/api/totp'), api.get('/api/totp/folders').catch(() => ({ folders: [] }))]);
+      // codes and folders both ride on the live account — two rooms, two keys
+      const sid = state.currentAddressId ?? '__none__';
+      const [r, fr] = await Promise.all([
+        api.get(`/api/totp?address_id=${encodeURIComponent(sid)}`),
+        api.get(`/api/totp/folders?address_id=${encodeURIComponent(sid)}`).catch(() => ({ folders: [] })),
+      ]);
       entries = r.entries ?? [];
       folders = fr.folders ?? [];
-      drawChips();
+      drawIdChip();
+      refreshAddBtn();
+      drawFchips();
       draw();
     } catch (e) { toast(errText(e), 'err'); }
   }
@@ -231,7 +230,8 @@ export async function renderVault(root) {
       if (!nameIn.value.trim()) { toast(t('folderNamePh'), 'err'); return; }
       createBtn.disabled = true;
       try {
-        const r = await api.post('/api/totp/folders', { name: nameIn.value.trim(), icon: newIcon });
+        // the folder is born inside THIS account — never shared with the others
+        const r = await api.post('/api/totp/folders', { name: nameIn.value.trim(), icon: newIcon, address_id: state.currentAddressId ?? undefined });
         folders.push(r.folder);
         nameIn.value = ''; newIcon = null;
         const fresh = glyphTile(null, 'var(--acc)', '?');
@@ -247,6 +247,7 @@ export async function renderVault(root) {
     modal({
       title: t('folderManage'), iconName: 'folder', wide: true,
       body: [
+        h('p', { class: 'small muted', style: { margin: '0 0 10px' } }, t('folderScopeHint')),
         listWrap,
         h('div', { class: 'fld-new' },
           h('div', { class: 'row', style: { alignItems: 'center', gap: '10px' } }, newPreview,
@@ -260,12 +261,10 @@ export async function renderVault(root) {
   }
 
   function draw(q = '') {
-    drawChips();
+    if (!grid?.isConnected) return;   // stale render — touch nothing
     refreshAddBtn();
-    const g = clear(document.getElementById('vault-grid') ?? grid);
+    const g = clear(grid);
     let list = entries.filter((e) => !q || (e.name + ' ' + (e.issuer ?? '')).toLowerCase().includes(q));
-    if (scope === 'none') list = list.filter((e) => !e.address_id);
-    else if (scope !== 'all') list = list.filter((e) => e.address_id === scope);
     if (fscope === 'none') list = list.filter((e) => !e.folder_id);
     else if (fscope !== 'all') list = list.filter((e) => e.folder_id === fscope);
     if (!list.length) {
@@ -296,9 +295,6 @@ export async function renderVault(root) {
       fld ? h('button', {
         class: 'totp-card__acc chip', onclick: (ev) => { ev.stopPropagation(); fscope = fld.id; draw(); },
       }, icon(fld.icon || 'folder'), fld.name) : '',
-      acc ? h('button', {
-        class: 'totp-card__acc chip', onclick: () => { location.hash = '#/mail'; },
-      }, h('span', { class: 'chip-dot', style: { background: acc.kind === 'temp' ? 'var(--warn)' : 'var(--acc)' } }, ''), `${t('acctLinked')} — ${acc.address}`) : '',
       acc && acc.kind === 'temp' && acc.expires_at
         ? h('span', { class: 'totp-temp', title: t('tempGuardTitle') }, icon('clock'), h('span', { class: 'mono' }, fmtCountdown(acc.expires_at - Date.now(), t))) : '',
       h('div', { class: 'totp-card__code-row' },
@@ -433,18 +429,36 @@ export function entryModal(entry = null, opts = {}) {
   // only the responsibility dialog opens it
   const tempWarn = h('div', { class: 'temp-guard temp-guard--inline', style: { display: tempAddress(addressId) ? '' : 'none' } },
     icon('lock'), h('span', {}, t('tempGuardInline')));
+
+  // folder link — the picker only ever offers the folders of the chosen
+  // account: groupings of account B are invisible while the key sits in A
+  let folderId = entry?.folder_id ?? null;
+  const fldSel = h('select', { class: 'input' });
+  const fldField = h('div', { class: 'field' }, h('label', {}, t('folderField')), fldSel);
+  async function syncFolderOptions() {
+    let opts = [];
+    if (addressId) {
+      try {
+        const fr = await api.get(`/api/totp/folders?address_id=${encodeURIComponent(addressId)}`);
+        opts = fr.folders ?? [];
+      } catch { opts = []; }
+    }
+    clear(fldSel);
+    fldSel.append(h('option', { value: '', selected: !folderId || undefined }, t('folderNone')));
+    for (const f of opts) fldSel.append(h('option', { value: f.id, selected: f.id === folderId || undefined }, f.name));
+    // the saved folder belongs to another account → let go of it quietly
+    if (folderId && !opts.some((f) => f.id === folderId)) { folderId = null; fldSel.value = ''; }
+    fldField.style.display = opts.length ? '' : 'none';
+  }
+  syncFolderOptions();
   addrSel.addEventListener('change', () => {
     addressId = addrSel.value || null;
     const tmp = !!tempAddress(addressId);
     tempWarn.style.display = tmp ? '' : 'none';
+    folderId = null;
+    syncFolderOptions();
     if (!entry) drawSaveBtn();
   });
-
-  // folder link (user-managed groups)
-  let folderId = entry?.folder_id ?? null;
-  const fldSel = h('select', { class: 'input' },
-    h('option', { value: '', selected: !folderId || undefined }, t('folderNone')),
-    folders.map((f) => h('option', { value: f.id, selected: f.id === folderId || undefined }, f.name)));
   fldSel.addEventListener('change', () => { folderId = fldSel.value || null; });
 
   const secretFields = entry ? [] : [
@@ -536,7 +550,7 @@ export function entryModal(entry = null, opts = {}) {
       ...secretFields,
       h('div', { class: 'field' }, h('label', {}, t('acct2fa')), addrSel),
       tempWarn,
-      h('div', { class: 'field' }, h('label', {}, t('folderField')), fldSel),
+      fldField,
       h('div', { class: 'field' }, h('label', {}, t('color')), colorRow),
       extraRow,
     ],

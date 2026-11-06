@@ -159,11 +159,13 @@ CREATE TABLE IF NOT EXISTS totp_entries (
   created_at  INTEGER NOT NULL
 );
 
--- User-managed vault folders. (SQLite resolves foreign keys lazily,
--- so declaration order between the two tables is not a constraint.)
+-- User-managed vault folders. Every folder belongs to ONE mailbox account —
+-- grouping never mixes two accounts' keys. (SQLite resolves foreign keys
+-- lazily, so declaration order between the two tables is not a constraint.)
 CREATE TABLE IF NOT EXISTS totp_folders (
   id         TEXT PRIMARY KEY,
   user_id    TEXT NOT NULL,
+  address_id TEXT,                                  -- the account this folder belongs to
   name       TEXT NOT NULL,
   icon       TEXT,
   color      TEXT,
@@ -204,3 +206,4 @@ CREATE INDEX IF NOT EXISTS idx_totp_user        ON totp_entries(user_id);
 CREATE INDEX IF NOT EXISTS idx_totp_addr        ON totp_entries(address_id);
 CREATE INDEX IF NOT EXISTS idx_totp_folder      ON totp_entries(folder_id);
 CREATE INDEX IF NOT EXISTS idx_folders_user     ON totp_folders(user_id);
+CREATE INDEX IF NOT EXISTS idx_folders_addr     ON totp_folders(address_id);

@@ -14,31 +14,40 @@ type Entry = {
   icon: string | null; address_id: string | null; folder_id: string | null;
 };
 
-// ---------- folders (user-managed groups of keys) ----------
+// ---------- folders (user-managed groups of keys, scoped to ONE account) ----------
 
-// list folders with entry counts
+// list folders with entry counts; ?address_id= scopes to one mailbox —
+// a folder never bridges two accounts
 app.get('/folders', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const scope = (c.req.query('address_id') ?? '').trim();
   const { results } = await c.env.DB.prepare(
-    `SELECT f.id, f.name, f.icon, f.color, f.created_at,
+    `SELECT f.id, f.name, f.icon, f.color, f.address_id, f.created_at,
        (SELECT COUNT(*) FROM totp_entries e WHERE e.folder_id = f.id) AS count
-     FROM totp_folders f WHERE f.user_id = ? ORDER BY f.created_at`
-  ).bind(u.id).all();
+     FROM totp_folders f WHERE f.user_id = ? ${scope ? 'AND f.address_id = ?' : ''} ORDER BY f.created_at`
+  ).bind(...(scope ? [u.id, scope] : [u.id])).all();
   return c.json({ ok: true, folders: results ?? [] });
 });
 
-// create folder
+// create folder — born bound to the account the vault is open on
 app.post('/folders', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
-  const body = await c.req.json<{ name?: string; icon?: string; color?: string }>().catch(() => null);
+  const body = await c.req.json<{ name?: string; icon?: string; color?: string; address_id?: string }>().catch(() => null);
   const name = clean(body?.name, 40);
   if (!name) return c.json({ ok: false, error: 'name_required' }, 400);
   const count = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM totp_folders WHERE user_id = ?').bind(u.id).first<{ n: number }>();
   if ((count?.n ?? 0) >= 30) return c.json({ ok: false, error: 'folder_limit' }, 409);
+  // the folder is stamped with its account — optional, but once set it must
+  // be an address this user owns
+  let addressId: string | null = null;
+  if (body?.address_id) {
+    const own = await c.env.DB.prepare('SELECT id FROM addresses WHERE id = ? AND user_id = ?').bind(body.address_id, u.id).first();
+    if (own) addressId = body.address_id;
+  }
   const id = uid('fld_');
-  await c.env.DB.prepare('INSERT INTO totp_folders (id, user_id, name, icon, color, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(id, u.id, name, clean(body?.icon, 40) || null, clean(body?.color, 20) || null, now()).run();
-  return c.json({ ok: true, folder: { id, name, icon: clean(body?.icon, 40) || null, color: clean(body?.color, 20) || null, count: 0 } });
+  await c.env.DB.prepare('INSERT INTO totp_folders (id, user_id, address_id, name, icon, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, u.id, addressId, name, clean(body?.icon, 40) || null, clean(body?.color, 20) || null, now()).run();
+  return c.json({ ok: true, folder: { id, name, icon: clean(body?.icon, 40) || null, color: clean(body?.color, 20) || null, address_id: addressId, count: 0 } });
 });
 
 // rename / restyle folder
@@ -144,11 +153,12 @@ app.post('/', requireUser, async (c) => {
     if (own) addressId = body.address_id;
   }
   const icon = clean(body?.icon, 40) || null;
-  // optional folder (must belong to this user)
+  // optional folder (must belong to this user, and to the same account —
+  // a folder of account B can never hold the keys of account A)
   let folderId: string | null = null;
   if (body?.folder_id) {
-    const fown = await c.env.DB.prepare('SELECT id FROM totp_folders WHERE id = ? AND user_id = ?').bind(body.folder_id, u.id).first();
-    if (fown) folderId = body.folder_id;
+    const fown = await c.env.DB.prepare('SELECT id, address_id FROM totp_folders WHERE id = ? AND user_id = ?').bind(body.folder_id, u.id).first<{ id: string; address_id: string | null }>();
+    if (fown && (!fown.address_id || !addressId || fown.address_id === addressId)) folderId = body.folder_id;
   }
   await c.env.DB.prepare(
     'INSERT INTO totp_entries (id, user_id, name, issuer, secret_enc, algo, digits, period, color, sort, created_at, icon, address_id, folder_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -203,12 +213,25 @@ app.patch('/:id', requireUser, async (c) => {
       if (own) addressId = body.address_id;
     }
     await c.env.DB.prepare('UPDATE totp_entries SET address_id = ? WHERE id = ?').bind(addressId, id).run();
+    // moving a key to another account releases the old account's folder —
+    // groupings never follow a key across accounts
+    if (addressId) {
+      await c.env.DB.prepare(
+        'UPDATE totp_entries SET folder_id = NULL WHERE id = ? AND folder_id IS NOT NULL AND folder_id NOT IN (SELECT id FROM totp_folders WHERE address_id = ? OR address_id IS NULL)'
+      ).bind(id, addressId).run();
+    } else {
+      await c.env.DB.prepare(
+        'UPDATE totp_entries SET folder_id = NULL WHERE id = ? AND folder_id IS NOT NULL AND folder_id NOT IN (SELECT id FROM totp_folders WHERE address_id IS NULL)'
+      ).bind(id).run();
+    }
   }
   if (body?.folder_id !== undefined) {
     let folderId: string | null = null;
     if (body.folder_id) {
-      const fown = await c.env.DB.prepare('SELECT id FROM totp_folders WHERE id = ? AND user_id = ?').bind(body.folder_id, u.id).first();
-      if (fown) folderId = body.folder_id;
+      // the folder must belong to this user AND to the entry's account
+      const addr = await c.env.DB.prepare('SELECT address_id FROM totp_entries WHERE id = ? AND user_id = ?').bind(id, u.id).first<{ address_id: string | null }>();
+      const fown = await c.env.DB.prepare('SELECT id, address_id FROM totp_folders WHERE id = ? AND user_id = ?').bind(body.folder_id, u.id).first<{ id: string; address_id: string | null }>();
+      if (fown && (!fown.address_id || !addr?.address_id || fown.address_id === addr.address_id)) folderId = body.folder_id;
     }
     await c.env.DB.prepare('UPDATE totp_entries SET folder_id = ? WHERE id = ?').bind(folderId, id).run();
   }

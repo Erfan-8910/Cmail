@@ -29,7 +29,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 | | |
 |---|---|
-| ⭕ **The account circle** | Every mailbox is its own account. Click the circle at the top right — exactly like the big mail clients — and each account shows its tiny details before you even enter: how many mails it received, how many 2FA codes it holds, what's unread. Add another account from the same panel; jump between accounts without ever leaving your page. |
+| ⭕ **The account circle — the only switcher** | Every mailbox is its own account. The circle at the top of the page is the one and only place accounts switch — each account shows its tiny details before you even enter: how many mails it received, how many 2FA codes it holds, what's unread. Add another account from the same panel. Nothing inside the inbox, the sidebar or the folders ever jumps accounts by accident. |
+| 📂 **A folder rail of its own** | The inbox sidebar is the active account's room: its identity card (address, kind, live stats) on top, then its own folders — **All · Unread · Starred · Noted** — each with a live count. One pull, instant folder flips, exact counters. |
 | 📄 **Every email gets its own page** | Opening a message navigates to a real page of its own — its own URL, its own back button, older/newer arrows — never a popup floating over your list. HTML mail renders sanitized inside a sandboxed frame; plain text has its own toggle. |
 | ⏱️ **The inbox breathes on its own** | Every 10 seconds the inbox quietly pulls for new mail, highlights what just landed and syncs the unread badges — no refresh button rituals. |
 | 🩺 **System health, on stage** | A full health report in Settings: D1 connection with live latency, every table with its row count and column state, the cron heartbeat, and the mail flow — each with its own fix button. |
@@ -39,7 +40,7 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 | 🔎 **D1 inspector** | The setup screen lists every expected table with its row count; build the missing ones with a button, drop the strays, keep your database honest. The health tab carries the same inspector, forever. |
 | 🗒️ **Notes on emails** | A colored personal note under any message — order numbers, tracking links, anything. Search finds it instantly. |
 | 👤 **Every inbox is an account** | Each mailbox behaves like a standalone account: its mail, its private notes and its own 2FA codes stay inside that space. |
-| 🔐 **2FA vault** | A built-in authenticator: live 6-digit codes with a countdown ring, sealed with AES-256-GCM, 77 built-in marks, folders, per-inbox binding. |
+| 🔐 **2FA vault — account by account** | A built-in authenticator: live 6-digit codes with a countdown ring, sealed with AES-256-GCM, 77 built-in marks. The vault always opens on the account you are in — and **folders belong to one account each**, so account B's groupings can never swallow account A's keys. |
 | ❄️ **Frozen until you decide** | The compose button and the temp-address vault wear an icy snowflake-and-padlock badge while their authorization is missing — the logo stays, the badge tells the truth. Grant the responsibility once and the badge flips to an open flame; the dialog never asks twice. |
 | 🛡️ **Account 2FA** | Signing in itself can be protected with TOTP. |
 | 📤 **Outgoing mail — optional** | Connect Brevo or Resend with one API key and send from your own domain, with a real test probe. It never gates the rest of the app. |
@@ -53,11 +54,11 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 <div align="center">
 
-| **The cockpit** — the active account's inbox, the account chip in its header, a pick-a-message reading pane |
+| **The cockpit** — the account's identity plate in the header, its folder rail beside it, one reading pane |
 |---|
-| <img src="docs/img/en/inbox.png" width="620" alt="Inbox — three panels, account sidebar, unread badges"> |
+| <img src="docs/img/en/inbox.png" width="620" alt="Inbox — identity plate, folder rail with live counts, reading pane"> |
 
-| **The account circle** — every mailbox is an account, with its details before you even enter |
+| **The account circle** — the one and only place accounts switch, with each account's details before you even enter |
 |---|
 | <img src="docs/img/en/switcher.png" width="620" alt="Account switcher — per-account mails, 2FA codes, unread badge, add account"> |
 
@@ -69,11 +70,11 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 |---|
 | <img src="docs/img/en/health.png" width="620" alt="System health — D1 connection, tables and columns, cron heartbeat, mail flow"> |
 
-| **The account's own vault** — live codes scoped per account; temp addresses stay locked |
+| **The account's own vault** — live codes scoped per account, **folders bound to that account**; temp addresses wear the frozen badge until you decide |
 |---|
-| <img src="docs/img/en/vault.png" width="620" alt="2FA vault — live codes, folders, glyph marks"> |
+| <img src="docs/img/en/vault.png" width="620" alt="2FA vault — per-account codes and folders, live countdown rings"> |
 
-| **Every domain, one card** — lifecycle trail, stat strip, Active & Catch-all keys |
+| **Every domain, one card** — lifecycle trail, stat strip, Active & Catch-all keys, a heartbeat ring when mail is flowing |
 |---|
 | <img src="docs/img/en/domains.png" width="620" alt="Domains — status chips, catch-all switches, inbox counts"> |
 
@@ -97,13 +98,26 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 |---|
 | <img src="docs/img/en/login.png" width="560" alt="Sign-in — centered card, aurora stage, recovery guide"> |
 
-| **About — the maker card** |
+| **About — the maker card and the Climind-W ribbon** |
 |---|
-| <img src="docs/img/en/about.png" width="620" alt="About panel with the maker card"> |
+| <img src="docs/img/en/about.png" width="620" alt="About panel with the maker card and the Climind-W ribbon"> |
 
 </div>
 
-## What's new in 2.7 — the release that names its colors and locks what needs locking
+## What's new in 2.8 — the release that gives switching one home
+
+- **Switching accounts happens in exactly one place: the circle at the top.** The inbox sidebar no longer lists accounts, and the inbox header's chip is now a quiet identity plate — it states whose inbox you are in and never navigates. The folder rail under the identity card is the account's own rooms: **All · Unread · Starred · Noted**, each with a live counter, cut client-side so flips are instant and the counters are always exact.
+- **The 2FA vault is a room per account — folders included.** The account chips are gone from the vault; it always opens on the account you are in. Folders stopped being global: every folder is born bound to one account (`address_id` in the database, with a graceful migration for old installs), the folder picker only ever offers that account's groupings, and moving a key to another account releases the old account's folder automatically. One account's keys can never mix with another account's folders.
+- **The frozen badge now rides with the account everywhere it appears** — beside the temp account in the mail sidebar's identity card, in the vault's identity chip, on the add-code button — snowflake-and-padlock before the responsibility is granted, a breathing flame 🔥 after.
+- **Rapid clicking finally met its root cause.** A stale view's async continuation could reach into the fresh view's DOM through `getElementById` fallbacks and paint a page twice; every view now paints only into its own captured nodes and a stale render touches nothing. Open dialogs (and their Escape handlers), floating menus and popovers all retire the moment you navigate — a dialog can no longer haunt the next page.
+- **Settings lost the dead weight:** the “Service name” field is gone — the app already has one. The System-health tab re-checks the admin role on the spot, and assets now carry a versioned URL (`app.css?v=2.8.0`), so no browser can ever serve an old script from cache after an update.
+- **The About page wears the sibling ribbon:** an animated aurora band advertising **Climind-W**, the maker's other project — one press from the About page to the repository.
+- **Domains breathe:** cards get a living aurora wash under the cursor and a soft heartbeat ring around the globe of any domain that is actually receiving mail.
+- **The mobile overlap is dead:** the “active account” badge on the Inboxes page reserved its own width — long addresses no longer run underneath it.
+- **Fresh animated hero, version badge and 24 retaken screenshots** — every view, both languages, from the 2.8 build.
+
+<details>
+<summary><b>What 2.7 changed — the release that names its colors and locks what needs locking</b></summary>
 
 - **Palettes are named by their color. Period.** Sage, Serene and the rest of the poetry retired — the picker now says **Green · Blue · Purple · Amber**, and the background modes say what they do: **Animated · Still · Plain**. Old picks fold into their color automatically. Switching a palette still repaints the entire room — instantly, live, without a reload.
 - **Frozen locks where responsibility is due.** While no sending provider is connected, the compose button (header + floating action button) stays on stage with its paper plane wearing an icy snowflake-and-padlock badge — tapping it explains what is missing instead of vanishing in silence. The reader's reply button obeys the same rule. Once a provider is configured, the badge becomes an open shackle and everything just works.
@@ -113,6 +127,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 - **The sidebar only repaints when something changed**, so your scroll position and any open menu survive the auto-refresh untouched.
 - **Status you can see:** the Sending settings open with a live "Sending locked / Sending ready" chip, so the state of outgoing mail is visible before reading a single field.
 - **Fresh hero and version badge**, animated, in both languages.
+
+</details>
 
 <details>
 <summary><b>What 2.6 changed — the release that gives every account its own room</b></summary>
@@ -172,8 +188,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.7.0/worker.js)** — the entire application in one file (~1.2 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v2.7.0:** [`CMail-v2.7.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.7.0/CMail-v2.7.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.8.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v2.8.0:** [`CMail-v2.8.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.8.0/CMail-v2.8.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 
@@ -216,8 +232,21 @@ MIT © [Erfan-8910](https://github.com/Erfan-8910)
 
 <div align="center">
 
+### ☁️ Also from the maker
+
+**[Climind-W](https://github.com/Erfan-8910/Climind-W)** — a modern weather web app with the same liquid-glass obsession.
+Same hand, same taste — go give it a star.
+
+[![Climind-W](https://img.shields.io/badge/Climind--W-weather%20web%20app-2563eb?style=flat-square&logo=github&logoColor=white)](https://github.com/Erfan-8910/Climind-W)
+
+</div>
+
+---
+
+<div align="center">
+
 **Cmail** — *your mailbox, your rules.* 🌿
 
-[Deploy guide](docs/DEPLOY.md) · [Usage guide](docs/USAGE.md) · [Releases](https://github.com/Erfan-8910/Cmail/releases) · [فارسی](README.fa.md)
+[Deploy guide](docs/DEPLOY.md) · [Usage guide](docs/USAGE.md) · [Releases](https://github.com/Erfan-8910/Cmail/releases) · [Climind-W](https://github.com/Erfan-8910/Climind-W) · [فارسی](README.fa.md)
 
 </div>

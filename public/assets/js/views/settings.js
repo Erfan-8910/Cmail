@@ -11,6 +11,11 @@ let settingsTab = '';
 
 export async function renderSettings(root) {
   clear(root);
+  // self-heal the admin gate: a stale session snapshot (an old tab, a restored
+  // cache) must never hide the admin panes — the role is re-checked right here
+  if (state.user && state.user.role !== 'admin') {
+    try { const me = await api.get('/api/auth/me'); if (me?.user) state.user = me.user; } catch { /* offline — draw with what we have */ }
+  }
   const view = h('div', { class: 'view' });
   view.append(h('div', { class: 'page-head' },
     h('div', {},
@@ -253,7 +258,8 @@ async function generalPane() {
 
   const pane = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
 
-  const appName = h('input', { class: 'input', value: s.app_name });
+  // the service already has a name — Cmail. the “service name” field was
+  // dead weight nobody needed, so it is gone.
   const ttl = h('input', { class: 'input', type: 'number', min: 1, max: 8760, value: s.temp_ttl_default });
   const maxAddr = h('input', { class: 'input', type: 'number', min: 1, max: 1000, value: s.max_addresses });
   const sess = h('input', { class: 'input', type: 'number', min: 1, max: 365, value: s.session_days });
@@ -267,7 +273,6 @@ async function generalPane() {
   }
   pane.append(h('div', { class: 'glass card' },
     h('h3', { style: { margin: '0 0 12px', fontSize: '15px' } }, t('general')),
-    row(t('appNameSet'), appName),
     row(t('defaultTtl'), ttl),
     row(t('maxAddresses'), maxAddr),
     row(t('sessionDays'), sess),
@@ -276,7 +281,6 @@ async function generalPane() {
       h('button', { class: 'btn btn--primary', onclick: async () => {
         try {
           await api.put('/api/admin/settings', {
-            app_name: appName.value,
             temp_ttl_default: +ttl.value, max_addresses: +maxAddr.value,
             session_days: +sess.value, retention_days: +ret.value,
           });

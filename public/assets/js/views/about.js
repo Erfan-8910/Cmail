@@ -1,5 +1,6 @@
 // Cmail — About view: the story, the features, the numbers, the maker.
 // Liquid-glass polish: count-up numbers, pointer tilt, mood-tinted glow.
+import { state } from '../api.js';
 import { t, lang } from '../i18n.js';
 import { h, icon } from '../ui.js';
 
@@ -8,7 +9,7 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 export function renderAbout(root) {
   const app = root;
   const FA = (n) => lang === 'fa' ? String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : String(n);
-  const VERSION = '2.6.0';
+  const VERSION = state.setup?.version || '2.8.0';
 
   // ---------- hero ----------
   const hero = h('section', { class: 'ab-hero glass' },
@@ -23,6 +24,22 @@ export function renderAbout(root) {
       h('a', { class: 'btn btn--primary', href: 'https://github.com/Erfan-8910/CMail', target: '_blank', rel: 'noopener' }, icon('external'), t('aboutGithub')),
       h('a', { class: 'btn', href: '#/help' }, icon('help'), t('aboutGuide')),
     ),
+  );
+
+  // ---------- the sibling-project ribbon: Climind-W ----------
+  // a slow aurora band advertising the maker's other project — living,
+  // glassy, one press away from the repository
+  const ribbon = h('a', {
+    class: 'ab-ribbon', href: 'https://github.com/Erfan-8910/Climind-W', target: '_blank', rel: 'noopener',
+    'aria-label': t('ribbonClimindCta'),
+  },
+    h('span', { class: 'ab-ribbon__aurora', 'aria-hidden': 'true' }),
+    h('span', { class: 'ab-ribbon__mark', 'aria-hidden': 'true' }, icon('cloud')),   // the sky mark — this one reads the sky
+    h('span', { class: 'ab-ribbon__txt' },
+      h('b', {}, 'Climind-W'),
+      h('span', { class: 'ab-ribbon__d' }, t('ribbonClimindDesc'))),
+    h('span', { class: 'ab-ribbon__chip' }, t('ribbonClimindTag')),
+    h('span', { class: 'ab-ribbon__cta' }, t('ribbonClimindCta'), icon('external')),
   );
 
   // ---------- feature grid (icon beside the title — always aligned) ----------
@@ -90,7 +107,7 @@ export function renderAbout(root) {
       h('div', {},
         h('div', { class: 'eyebrow' }, icon('heart'), t('eyebrowAbout')),
         h('h1', { class: 'page-title' }, t('navAbout')))),
-    hero, grid, stats, stackRow, creator, made,
+    hero, ribbon, grid, stats, stackRow, creator, made,
   );
 
   // ---------- effects ----------

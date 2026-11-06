@@ -4,7 +4,7 @@
 // HTML emails are sanitized and rendered in a height-adaptive sandboxed frame.
 import { api, state, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
-import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avatarColor, fmtBytes, vibrate, glyphTile, dropdown, lockBadge } from '../ui.js';
+import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avatarColor, fmtBytes, fmtCountdown, vibrate, glyphTile, lockBadge } from '../ui.js';
 import { entryModal, tempGuard, tempAuthorized, grantTempAuth } from './vault.js';
 
 let box = 'inbox';
@@ -19,18 +19,16 @@ let autoT = null;        // inbox auto-refresh timer
 let emails = [];
 let listScroll = null;
 let sidebarScroll = null;
+let idPlate = null;
+let bulkBarEl = null;
 let listSeq = 0;         // racing list loads — newest wins
 
 const sendReady = () => state.setup?.sending_ready !== false && !!state.setup?.admin_created;
 
 // global cross-module events (command palette → mail)
 window.addEventListener('cmail:refresh-mail', () => {
-  if (!document.getElementById('email-list')) return;
+  if (!listScroll?.isConnected) return;
   loadEmails(true);
-});
-window.addEventListener('cmail:switch-inbox', (e) => {
-  if (!document.getElementById('email-list')) return;
-  switchInbox(e.detail ?? null, { keepClosed: true });
 });
 
 export async function renderMail(root, arg) {
@@ -72,7 +70,9 @@ export async function renderMail(root, arg) {
   // stays out of the way while an overlay is open
   clearInterval(autoT);
   autoT = setInterval(async () => {
-    if (!document.getElementById('email-list')) { clearInterval(autoT); return; }
+    // the timer only serves THIS render's list — a stale timer from a
+    // previous render must never feed the fresh view (rapid-click safety)
+    if (!listScroll?.isConnected) { clearInterval(autoT); return; }
     if (document.hidden || document.querySelector('.modal-back, .cmdk-back')) return;
     loadEmails(true);
     loadAddresses(true);
@@ -83,7 +83,7 @@ function emptyViewer() {
   return h('div', { class: 'empty' }, icon('mail'), h('div', { class: 'empty__t' }, t('selectEmail')), h('div', { class: 'empty__d' }, t('selectEmailSub')));
 }
 
-// ---------- accounts ----------
+// ---------- the current account ----------
 let addrSig = '';  // last painted sidebar signature — skip repaints when nothing changed
 async function loadAddresses(quiet = false) {
   try {
@@ -104,8 +104,9 @@ async function loadAddresses(quiet = false) {
   // must never yank an open dropdown, a focused row or the scroll position
   // out from under the user
   const sig = JSON.stringify([
-    state.addresses.map((a) => [a.id, a.kind, a.label, a.unread, a.total, a.expires_at]),
+    state.addresses.map((a) => [a.id, a.kind, a.label, a.unread, a.total, a.expires_at, tempAuthorized(a.id)]),
     state.currentAddressId,
+    emails.length,
   ]);
   if (quiet && sig === addrSig) return;
   addrSig = sig;
@@ -113,10 +114,6 @@ async function loadAddresses(quiet = false) {
   drawSidebar();
   syncAvatarLetter();
   drawListHead();
-  if (!state.currentAddressId) {
-    drawList();
-    return;
-  }
   drawList();
   if (!quiet) loadEmails();
 }
@@ -129,7 +126,10 @@ function syncAvatarLetter() {
   av.textContent = (a ? (a.label || a.address) : (state.user?.username ?? '?')).slice(0, 1).toUpperCase();
 }
 
+const activeAccount = () => (state.addresses ?? []).find((x) => x.id === state.currentAddressId) ?? null;
+
 // switching spaces — one function every entry point funnels through
+// (the only switcher in the whole app is the avatar circle in the top bar)
 function switchInbox(id, opts = {}) {
   state.currentAddressId = id;
   localStorage.setItem('cmail_acct', id ?? '');
@@ -146,65 +146,75 @@ function switchInbox(id, opts = {}) {
   vibrate(5);
 }
 
+// ---------- sidebar: the account itself + its folders ----------
+// no account list here anymore — accounts are switched exclusively from the
+// avatar circle in the top bar, exactly like the big clients. the rail under
+// the identity card is the account's own folders.
 function buildSidebar() {
   const head = h('div', { class: 'mail__head' },
-    h('h3', {}, icon('user'), t('inboxes')),
-    h('div', { class: 'row', style: { gap: '2px' } },
-      h('button', { class: 'icon-btn', title: t('newAlias'), onclick: () => createAddressModal(() => { loadAddresses(); }) }, icon('plus')),
-    ));
+    h('h3', {}, icon('user'), t('navMail')));
   sidebarScroll = h('div', { class: 'mail__scroll', id: 'addr-list' });
   const aside = h('aside', { class: 'mail__col glass mail__sidebar' }, head, sidebarScroll);
   return aside;
 }
 
 function drawSidebar() {
-  const box2 = clear(document.getElementById('addr-list') ?? sidebarScroll);
-  for (const a of state.addresses) {
-    const item = h('div', {
-      class: `addr-item ${a.id === state.currentAddressId ? 'is-on' : ''}`,
-      onclick: () => switchInbox(a.id),
-    },
-      h('span', { class: 'email-row__ava addr-item__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
-      h('span', { class: 'addr-item__body' },
-        h('span', { class: 'addr-item__addr' }, a.address),
-        h('span', { class: 'addr-item__meta' },
-          h('span', { class: `kind-tag kind-tag--${a.kind === 'temp' ? 'temp' : 'perm'}` }, a.kind === 'temp' ? t('temporary') : t('permanent')),
-          a.label ? h('span', {}, a.label) : '')),
-      a.unread > 0 ? h('span', { class: 'addr-item__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : '',
-      h('button', {
-        class: 'icon-btn addr-item__info', title: t('more'), 'aria-label': t('more'),
-        onclick: (e) => { e.stopPropagation(); vibrate(5); accountMenu(a, e.currentTarget); },
-      }, icon('more')));
-    box2.append(item);
-  }
-  // add-another-account row
-  box2.append(h('button', {
-    class: 'addr-add',
-    onclick: () => createAddressModal(() => { loadAddresses(); }),
-  }, h('span', { class: 'addr-add__plus' }, icon('plus')), h('span', {}, t('acctNew'))));
-}
+  // only ever paint into THIS render's sidebar — a stale async continuation
+  // must not reach into the live DOM of a newer render (rapid-click safety)
+  if (!sidebarScroll?.isConnected) return;
+  const box2 = clear(sidebarScroll);
+  const a = activeAccount();
 
-// per-inbox quick menu — the whole account lifecycle in four actions
-function accountMenu(a, anchor) {
-  dropdown(anchor, [
-    { label: t('acctProfile'), icon: 'edit', fn: () => accountModal(a) },
-    { label: t('copy'), icon: 'copy', fn: async () => { await copyText(a.address); toast(t('copied'), 'ok', 1300); } },
-    '-',
-    { label: t('acctPurge'), icon: 'archive', fn: () => confirmBox(t('acctPurgeConfirm'), async () => {
-      try { await api.post(`/api/addresses/${a.id}/purge`); toast(t('acctPurged'), 'ok'); switchInbox(state.currentAddressId, { keepClosed: true }); } catch (e) { toast(errText(e), 'err'); }
-    }) },
-    { label: t('acctDelete'), icon: 'trash', fn: () => confirmBox(t('acctDeleteConfirm'), async () => {
-      try {
-        await api.del(`/api/addresses/${a.id}`);
-        toast(t('deletedN'), 'ok', 1400);
-        if (state.currentAddressId === a.id) {
-          const rest = state.addresses.filter((x) => x.id !== a.id);
-          state.currentAddressId = rest[0]?.id ?? null;
-        }
-        loadAddresses();
-      } catch (e) { toast(errText(e), 'err'); }
-    }) },
-  ]);
+  // ----- identity card: the account this space belongs to -----
+  if (!a) {
+    box2.append(h('div', { class: 'acct-id glass' },
+      h('div', { class: 'empty', style: { padding: '18px 8px' } },
+        icon('mail'),
+        h('div', { class: 'empty__t' }, t('noAccountsYet')),
+        h('div', { class: 'empty__d' }, t('noAccountsSub')),)));
+    return;
+  }
+  const locked = a.kind === 'temp' && !tempAuthorized(a.id);
+  const left = a.kind === 'temp' && a.expires_at ? a.expires_at - Date.now() : null;
+  const idcard = h('div', { class: 'acct-id glass' },
+    h('div', { class: 'acct-id__row' },
+      h('span', { class: 'email-row__ava', style: { background: avatarColor(a.address), width: '40px', height: '40px', borderRadius: '13px', fontSize: '16px' } }, (a.label || a.address).slice(0, 1).toUpperCase()),
+      h('div', { class: 'acct-id__body' },
+        h('div', { class: 'acct-id__addr mono', title: t('copy'), onclick: async () => { await copyText(a.address); toast(t('copied'), 'ok', 1200); } }, a.address),
+        h('div', { class: 'acct-id__meta' },
+          h('span', { class: `kind-tag kind-tag--${a.kind === 'temp' ? 'temp' : 'perm'}` }, a.kind === 'temp' ? t('temporary') : t('permanent')),
+          a.label ? h('span', { class: 'kind-tag kind-tag--label' }, a.label) : '',
+          a.kind === 'temp' ? lockBadge(locked ? 'frozen' : 'flame', locked ? t('vaultFrozen') : t('vaultFlame')) : '')),
+      h('button', { class: 'icon-btn', title: t('acctProfile'), 'aria-label': t('acctProfile'), onclick: () => accountModal(a) }, icon('settings'))),
+    h('div', { class: 'acct-id__stats' },
+      h('span', {}, icon('inbox'), h('b', {}, String(a.total ?? 0)), ' ' + t('acctMails')),
+      a.unread > 0 ? h('span', { class: 'is-warm' }, icon('mail'), h('b', {}, String(a.unread)), ' ' + t('unread')) : '',
+      left !== null ? h('span', { class: left < 3_600_000 ? 'is-warm' : '' }, icon('clock'), h('b', { class: 'mono' }, fmtCountdown(left, t))) : ''));
+  box2.append(idcard);
+
+  // ----- folder rail: this account's own boxes -----
+  const counts = {
+    inbox: emails.length,
+    unread: emails.filter((x) => !x.is_read).length,
+    starred: emails.filter((x) => x.starred).length,
+    noted: emails.filter((x) => x.has_note).length,
+  };
+  const rail = h('nav', { class: 'mail-folders', role: 'navigation' });
+  for (const [key, icn, label] of [
+    ['inbox', 'inbox', t('allMail')],
+    ['unread', 'mail', t('unread')],
+    ['starred', 'star', t('starred')],
+    ['noted', 'note', t('noted')],
+  ]) {
+    rail.append(h('button', {
+      class: `mfolder ${box === key ? 'is-on' : ''}`,
+      onclick: () => { box = key; drawSidebar(); drawList(); vibrate(5); },
+    },
+      h('span', { class: 'mfolder__icn' }, icon(icn)),
+      h('span', { class: 'mfolder__t' }, label),
+      counts[key] > 0 ? h('span', { class: `mfolder__n ${key === 'unread' ? 'mfolder__n--hot' : ''}` }, counts[key] > 99 ? '99+' : String(counts[key])) : ''));
+  }
+  box2.append(rail);
 }
 
 // ---------- mailbox account modal: identity + notes + its own 2FA ----------
@@ -304,6 +314,28 @@ async function accountModal(a) {
         totpWrap),
     ],
     footer: [
+      // the whole account lifecycle lives here now: the sidebar kebab is
+      // gone, so purge / delete sit beside save — clear and honest
+      h('button', { class: 'btn btn--ghost btn--danger-ghost', title: t('acctPurge'), onclick: () => {
+        confirmBox(t('acctPurgeConfirm'), async () => {
+          try { await api.post(`/api/addresses/${a.id}/purge`); toast(t('acctPurged'), 'ok'); m.close(); switchInbox(state.currentAddressId, { keepClosed: true }); } catch (e) { toast(errText(e), 'err'); }
+        });
+      } }, icon('archive'), t('acctPurge')),
+      h('button', { class: 'btn btn--ghost btn--danger-ghost', title: t('acctDelete'), onclick: () => {
+        confirmBox(t('acctDeleteConfirm'), async () => {
+          try {
+            await api.del(`/api/addresses/${a.id}`);
+            toast(t('deletedN'), 'ok', 1400);
+            m.close();
+            if (state.currentAddressId === a.id) {
+              const rest = state.addresses.filter((x) => x.id !== a.id);
+              state.currentAddressId = rest[0]?.id ?? null;
+            }
+            loadAddresses();
+          } catch (e) { toast(errText(e), 'err'); }
+        });
+      } }, icon('trash'), t('acctDelete')),
+      h('span', { style: { flex: '1' } }),
       h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('cancel')),
       h('button', { class: 'btn btn--primary', onclick: () => { saveAccount(true); m.close(); } }, t('save')),
     ],
@@ -325,19 +357,12 @@ function composeBtn() {
 }
 
 function buildList() {
-  // the header carries the account itself: a rounded chip with the avatar,
-  // the address and a chevron — open it to jump between accounts right here,
-  // without ever leaving the inbox
-  const acctBtn = h('button', {
-    class: 'acct-switch', id: 'acct-switch', title: t('switchAcct'), 'aria-label': t('switchAcct'),
-    onclick: (e) => { e.stopPropagation(); vibrate(5); openInboxSwitcher(acctBtn); },
-  });
+  // the header carries the account itself — as an identity plate, not a
+  // switcher: switching lives only in the avatar circle at the top of the
+  // page, so nothing inside the inbox ever jumps between accounts
+  idPlate = h('div', { class: 'acct-idplate' });
   const head = h('div', { class: 'mail__head' },
-    h('div', { class: 'mail__head-id' }, acctBtn,
-      h('button', { class: 'icon-btn icon-btn--xs', id: 'acct-copy', title: t('copy'), onclick: async () => {
-        const a = (state.addresses ?? []).find((x) => x.id === state.currentAddressId);
-        if (a) { await copyText(a.address); toast(t('copied'), 'ok', 1200); }
-      } }, icon('copy'))),
+    h('div', { class: 'mail__head-id' }, idPlate),
     h('div', { class: 'row', style: { gap: '4px' } },
       composeBtn(),
       h('button', { class: 'icon-btn', title: t('refresh'), onclick: (e) => { e.currentTarget.querySelector('svg')?.classList.add('spin'); loadEmails(true); loadAddresses(true); setTimeout(() => document.querySelector('.mail .icon-btn svg.spin')?.classList.remove('spin'), 700); } }, icon('refresh')),
@@ -349,90 +374,32 @@ function buildList() {
     oninput: (e) => { search = e.target.value.trim(); clearTimeout(searchInput._t); searchInput._t = setTimeout(() => loadEmails(true), 350); },
   });
 
-  const filters = h('div', { class: 'filters' });
-  for (const [key, label] of [['inbox', t('allMail')], ['unread', t('unread')], ['starred', t('starred')], ['noted', t('noted')]]) {
-    filters.append(h('button', {
-      class: `chip ${box === key ? 'is-on' : ''}`,
-      onclick: (e) => { box = key; filters.querySelectorAll('.chip').forEach((c) => c.classList.remove('is-on')); e.currentTarget.classList.add('is-on'); loadEmails(true); },
-    }, label));
-  }
-
   listScroll = h('div', { class: 'mail__scroll', id: 'email-list' });
-  const bulk = h('div', { class: 'filters filters--bulk hidden', id: 'bulk-bar' });
+  bulkBarEl = h('div', { class: 'filters filters--bulk hidden' });
 
-  const sec = h('section', { class: 'mail__col glass mail__list-col' }, head, searchInput, filters, bulk, listScroll);
+  const sec = h('section', { class: 'mail__col glass mail__list-col' }, head, searchInput, bulkBarEl, listScroll);
   return sec;
 }
 
-// paint the account chip in the list header from the live account
+// paint the identity plate in the list header from the live account —
+// a quiet statement of whose inbox this is, never a button
 function drawListHead() {
-  const el = document.getElementById('acct-switch');
-  if (!el) return;
+  if (!idPlate?.isConnected) return;
+  const el = idPlate;
   const a = (state.addresses ?? []).find((x) => x.id === state.currentAddressId);
   clear(el);
-  if (!a) { el.append(h('span', { class: 'acct-switch__name muted' }, t('noAccountsYet'))); return; }
+  if (!a) { el.append(h('span', { class: 'acct-idplate__name muted' }, t('noAccountsYet'))); return; }
   el.append(
-    h('span', { class: 'email-row__ava acct-switch__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
-    h('span', { class: 'acct-switch__txt' },
-      h('span', { class: 'acct-switch__name' }, a.label || a.address),
-      h('span', { class: 'acct-switch__meta' }, `${a.kind === 'temp' ? t('temporary') : t('permanent')} · ${a.total ?? 0} ${t('acctMails')}`)),
-    a.unread > 0 ? h('span', { class: 'acct-switch__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : '',
-    h('span', { class: 'icn acct-switch__chev' }, icon('chevron')));
-}
-
-// the inbox-level account switcher: a glass card listing every account with
-// its unread badge and live stats — tap one, the whole space follows.
-// it lives on <body> with fixed positioning so no column ever clips it
-function openInboxSwitcher(anchor) {
-  document.querySelectorAll('.acct-switch-pop').forEach((m) => m.remove());
-  const pop = h('div', { class: 'acct-switch-pop' });
-  const menu = h('div', { class: 'menu menu--accts', role: 'menu' });
-  const list = h('div', { class: 'acct-switch__list' });
-  menu.append(list);
-  for (const a of state.addresses) {
-    list.append(h('button', {
-      class: `acct-row ${a.id === state.currentAddressId ? 'is-on' : ''}`,
-      onclick: () => { pop.remove(); document.removeEventListener('click', off, true); switchInbox(a.id); },
-    },
-      h('span', { class: 'acct-row__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
-      h('span', { class: 'acct-row__body' },
-        h('span', { class: 'acct-row__addr' }, a.label || a.address),
-        h('span', { class: 'acct-row__meta' },
-          h('span', { class: `kind-tag kind-tag--${a.kind === 'temp' ? 'temp' : 'perm'}` }, a.kind === 'temp' ? t('temporary') : t('permanent')),
-          h('span', {}, h('b', {}, String(a.total ?? 0)), ' ' + t('acctMails')))),
-      h('span', { class: 'acct-row__end' },
-        a.unread > 0 ? h('span', { class: 'acct-row__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : '',
-        a.id === state.currentAddressId ? h('span', { class: 'acct-row__check' }, icon('check')) : '')));
-  }
-  menu.append(h('button', {
-    class: 'acct-menu__add', onclick: () => { pop.remove(); document.removeEventListener('click', off, true); createAddressModal(() => loadAddresses()); },
-  }, icon('plus'), h('span', {}, t('acctNew'))));
-  pop.append(menu);
-  document.body.append(pop);
-
-  // place it just under the chip, hugging the chip's start edge
-  const place = () => {
-    const r = anchor.getBoundingClientRect();
-    const mw = menu.offsetWidth, mh = menu.offsetHeight;
-    const top = Math.min(r.bottom + 8, window.innerHeight - mh - 10);
-    menu.style.top = `${Math.max(10, top)}px`;
-    if (document.documentElement.dir === 'rtl') {
-      menu.style.right = `${Math.max(9, window.innerWidth - r.right)}px`;
-      menu.style.left = 'auto';
-    } else {
-      menu.style.left = `${Math.max(9, r.left)}px`;
-      menu.style.right = 'auto';
-    }
-  };
-  place();
-  const off = (e) => { if (!menu.contains(e.target) && !anchor.contains(e.target)) { pop.remove(); document.removeEventListener('click', off, true); } };
-  setTimeout(() => document.addEventListener('click', off, true), 0);
-  window.addEventListener('resize', () => pop.remove(), { once: true });
+    h('span', { class: 'email-row__ava acct-idplate__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
+    h('span', { class: 'acct-idplate__txt' },
+      h('span', { class: 'acct-idplate__name' }, a.label || a.address),
+      h('span', { class: 'acct-idplate__meta' }, `${a.kind === 'temp' ? t('temporary') : t('permanent')} · ${a.total ?? 0} ${t('acctMails')}`)),
+    a.unread > 0 ? h('span', { class: 'acct-idplate__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : '');
 }
 
 function drawBulkBar() {
-  const bar = document.getElementById('bulk-bar');
-  if (!bar) return;
+  const bar = bulkBarEl;
+  if (!bar?.isConnected) return;
   if (!selected.size) { bar.classList.add('hidden'); clear(bar); return; }
   bar.classList.remove('hidden');
   clear(bar);
@@ -466,33 +433,45 @@ async function bulkAction(action) {
 }
 
 async function loadEmails(silent) {
-  if (!state.currentAddressId) { emails = []; drawList(); return; }
+  if (!state.currentAddressId) { emails = []; drawList(); drawSidebar(); return; }
   // racing loads (fast clicks, auto-refresh, account switches) — only the
   // newest request may paint the list; older responses bail out silently
   const seq = ++listSeq;
   if (!document.body.contains(listScroll ?? document.body)) return;
   if (!silent) listScroll.append(h('div', { class: 'skel', style: { height: '70px', marginBottom: '8px' } }));
   try {
+    // the whole box arrives in one pull — folders (all / unread / starred /
+    // noted) are cut client-side, so flipping between them is instant and
+    // the sidebar counters are always exact
     const params = new URLSearchParams({ limit: '80' });
     params.set('address_id', state.currentAddressId);
-    if (box !== 'inbox') params.set('box', box);
     if (search) params.set('q', search);
     const r = await api.get(`/api/emails?${params}`);
     if (seq !== listSeq || !document.body.contains(listScroll ?? document.body)) return;
     const fresh = r.emails ?? [];
     // auto-refresh detection: the newest id changed without any user action
-    if (silent && fresh.length && !search && box === 'inbox') {
+    if (silent && fresh.length && !search) {
       if (lastFirstId && fresh[0].id !== lastFirstId) newFlashId = fresh[0].id;
       lastFirstId = fresh[0].id;
     }
     emails = fresh;
-    if (cursorIdx >= emails.length) cursorIdx = emails.length - 1;
+    if (cursorIdx >= visibleEmails().length) cursorIdx = visibleEmails().length - 1;
     drawList();
+    drawSidebar();
   } catch (e) { if (seq === listSeq) toast(errText(e), 'err'); }
 }
 
+// the visible cut of the folder the user is in
+function visibleEmails() {
+  if (box === 'unread') return emails.filter((x) => !x.is_read);
+  if (box === 'starred') return emails.filter((x) => x.starred);
+  if (box === 'noted') return emails.filter((x) => x.has_note);
+  return emails;
+}
+
 function drawList() {
-  const list = clear(document.getElementById('email-list') ?? listScroll);
+  if (!listScroll?.isConnected) return;   // stale render — touch nothing
+  const list = clear(listScroll);
   document.querySelector('.mail')?.classList.toggle('is-selecting', selecting || selected.size > 0);
   if (!state.addresses?.length) {
     list.append(h('div', { style: { height: '100%', display: 'grid', placeItems: 'center' } },
@@ -502,13 +481,15 @@ function drawList() {
         h('button', { class: 'btn btn--primary mt-2', onclick: () => createAddressModal(() => loadAddresses()) }, icon('plus'), t('acctNew')))));
     return;
   }
-  if (!emails.length) {
+  const visible = visibleEmails();
+  if (!visible.length) {
     list.append(h('div', { style: { height: '100%', display: 'grid', placeItems: 'center' } },
-      h('div', { class: 'empty' }, icon('inbox'), h('div', { class: 'empty__t' }, t('noEmails')), h('div', { class: 'empty__d' }, t('noEmailsSub')))));
+      h('div', { class: 'empty' }, icon(box === 'inbox' ? 'inbox' : box === 'starred' ? 'star' : box === 'noted' ? 'note' : 'mail'),
+        h('div', { class: 'empty__t' }, t('noEmails')), h('div', { class: 'empty__d' }, t('noEmailsSub')))));
     cursorIdx = -1;
     return;
   }
-  emails.forEach((em, i) => {
+  visible.forEach((em, i) => {
     const row = emailRow(em);
     if (i === cursorIdx) row.classList.add('is-cursor');
     if (newFlashId && em.id === newFlashId && i === 0) row.classList.add('is-new');
@@ -645,11 +626,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); moveCursor(1); }
   else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); moveCursor(-1); }
   else if (e.key === 'Enter' || e.key === 'o') { openCursor(); }
-  else if (e.key.toLowerCase() === 'x') { if (emails[cursorIdx]) { e.preventDefault(); toggleSelect(emails[cursorIdx].id); } }
+  else if (e.key.toLowerCase() === 'x') { const em = visibleEmails()[cursorIdx]; if (em) { e.preventDefault(); toggleSelect(em.id); } }
   else if (e.key.toLowerCase() === 's') {
-    if (emails[cursorIdx]) {
+    const em = visibleEmails()[cursorIdx];
+    if (em) {
       e.preventDefault(); vibrate(6);
-      const em = emails[cursorIdx];
       api.patch(`/api/emails/${em.id}`, { starred: !em.starred }).then(() => { em.starred = em.starred ? 0 : 1; loadEmails(true); }).catch(() => {});
     }
   }
@@ -659,14 +640,15 @@ document.addEventListener('keydown', (e) => {
 });
 
 function moveCursor(dir) {
-  if (!emails.length) return;
-  cursorIdx = Math.min(emails.length - 1, Math.max(0, cursorIdx + dir));
+  const visible = visibleEmails();
+  if (!visible.length) return;
+  cursorIdx = Math.min(visible.length - 1, Math.max(0, cursorIdx + dir));
   drawList();
   document.querySelector('.email-row.is-cursor')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 function openCursor() {
-  const em = emails[cursorIdx];
+  const em = visibleEmails()[cursorIdx];
   if (!em) return;
   location.hash = `#/mail/m/${em.id}`;
 }
