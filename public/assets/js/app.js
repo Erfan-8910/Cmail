@@ -437,6 +437,12 @@ export function updateUnreadBadge() {
 
 // ---------- boot ----------
 (async function boot() {
+  // one app, one boot — a duplicated module instance (unversioned import
+  // graph) used to run the whole shell twice: two hashchange listeners,
+  // two routers racing, an inbox that painted into a detached view and
+  // sections that opened on top of each other
+  if (window.__cmailBooted) return;
+  window.__cmailBooted = true;
   setTheme(localStorage.getItem('cmail_theme') ?? 'dark');
   // older builds shipped other accent names — fold everything into the four
   // palettes that carry their color's own name
@@ -455,7 +461,7 @@ export function updateUnreadBadge() {
   });
   window.addEventListener('cmail:rerender', () => { if (!location.hash.includes('/status')) route(); });
   window.addEventListener('cmail:unread-changed', (e) => { state.unread = e.detail ?? 0; updateUnreadBadge(); });
-  window.addEventListener('hashchange', () => { closeSwitcher(); route(); });
+  window.addEventListener('hashchange', () => { console.log('[hashchange event]'); closeSwitcher(); route(); });
 
   // ⌘K / Ctrl+K — command palette · “/” focus mail search
   const kbdHandler = (e) => {

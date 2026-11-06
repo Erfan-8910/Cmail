@@ -19,9 +19,15 @@ let autoT = null;        // inbox auto-refresh timer
 let emails = [];
 let listScroll = null;
 let sidebarScroll = null;
-let idPlate = null;
+let ovalEl = null;       // the account oval in the list header (name + address + copy)
+let barEl = null;        // inbox card toolbar (select-all · refresh · counters)
+let barMeta = null;
 let bulkBarEl = null;
+let statusEl = null;     // slow-load status strip inside the card
 let listSeq = 0;         // racing list loads — newest wins
+let listLoading = false;
+let listError = null;
+let slowT = null;        // reveals the status strip only when a load drags on
 
 const sendReady = () => state.setup?.sending_ready !== false && !!state.setup?.admin_created;
 
@@ -48,10 +54,9 @@ export async function renderMail(root, arg) {
   const scrim = h('div', { class: 'mail__scrim', onclick: () => grid.classList.remove('show-sidebar') });
 
   const sidebar = buildSidebar();
-  const listCol = buildList();
-  const viewerCol = h('section', { class: 'mail__col glass mail__viewer-col viewer' }, emptyViewer());
+  const mainCol = buildMain();
 
-  grid.append(sidebar, listCol, viewerCol, scrim);
+  grid.append(sidebar, mainCol, scrim);
   view.append(grid);
   root.append(view);
 
@@ -77,10 +82,6 @@ export async function renderMail(root, arg) {
     loadEmails(true);
     loadAddresses(true);
   }, 10_000);
-}
-
-function emptyViewer() {
-  return h('div', { class: 'empty' }, icon('mail'), h('div', { class: 'empty__t' }, t('selectEmail')), h('div', { class: 'empty__d' }, t('selectEmailSub')));
 }
 
 // ---------- the current account ----------
@@ -113,7 +114,8 @@ async function loadAddresses(quiet = false) {
 
   drawSidebar();
   syncAvatarLetter();
-  drawListHead();
+  drawOval();
+  drawBar();
   drawList();
   if (!quiet) loadEmails();
 }
@@ -140,23 +142,26 @@ function switchInbox(id, opts = {}) {
   if (si) si.value = '';
   drawSidebar(); drawList(); loadEmails();
   // the list column announces the active space
-  drawListHead();
+  drawOval();
+  drawBar();
   syncAvatarLetter();
   if (!opts.keepClosed) document.querySelector('.mail')?.classList.remove('show-sidebar');
   vibrate(5);
 }
 
-// ---------- sidebar: the account itself + its folders ----------
+// ---------- sidebar: the account rail + its folders ----------
 // no account list here anymore — accounts are switched exclusively from the
-// avatar circle in the top bar, exactly like the big clients. the rail under
-// the identity card is the account's own folders.
+// avatar circle in the top bar, exactly like the big clients. the identity
+// itself (name + full address + copy) lives in the oval above the list; the
+// rail carries the account's own folders.
 function buildSidebar() {
-  const head = h('div', { class: 'mail__head' },
-    h('h3', {}, icon('user'), t('navMail')));
-  sidebarScroll = h('div', { class: 'mail__scroll', id: 'addr-list' });
-  const aside = h('aside', { class: 'mail__col glass mail__sidebar' }, head, sidebarScroll);
+  sidebarScroll = h('div', { class: 'mail__scroll mail__scroll--rail', id: 'addr-list' });
+  const aside = h('aside', { class: 'mail__col glass mail__sidebar' }, sidebarScroll);
   return aside;
 }
+
+// the local part of an address — the honest short name of a mailbox
+const localPart = (addr) => String(addr ?? '').split('@')[0] || addr;
 
 function drawSidebar() {
   // only ever paint into THIS render's sidebar — a stale async continuation
@@ -165,32 +170,28 @@ function drawSidebar() {
   const box2 = clear(sidebarScroll);
   const a = activeAccount();
 
-  // ----- identity card: the account this space belongs to -----
+  // ----- compact identity: whose rail this is -----
   if (!a) {
-    box2.append(h('div', { class: 'acct-id glass' },
+    box2.append(h('div', { class: 'rail-id' },
       h('div', { class: 'empty', style: { padding: '18px 8px' } },
         icon('mail'),
         h('div', { class: 'empty__t' }, t('noAccountsYet')),
-        h('div', { class: 'empty__d' }, t('noAccountsSub')),)));
+        h('div', { class: 'empty__d' }, t('noAccountsSub')),
+        h('button', { class: 'btn btn--primary mt-2', onclick: () => createAddressModal(() => loadAddresses()) }, icon('plus'), t('acctNew')))));
     return;
   }
   const locked = a.kind === 'temp' && !tempAuthorized(a.id);
   const left = a.kind === 'temp' && a.expires_at ? a.expires_at - Date.now() : null;
-  const idcard = h('div', { class: 'acct-id glass' },
-    h('div', { class: 'acct-id__row' },
-      h('span', { class: 'email-row__ava', style: { background: avatarColor(a.address), width: '40px', height: '40px', borderRadius: '13px', fontSize: '16px' } }, (a.label || a.address).slice(0, 1).toUpperCase()),
-      h('div', { class: 'acct-id__body' },
-        h('div', { class: 'acct-id__addr mono', title: t('copy'), onclick: async () => { await copyText(a.address); toast(t('copied'), 'ok', 1200); } }, a.address),
-        h('div', { class: 'acct-id__meta' },
+  box2.append(h('div', { class: 'rail-id' },
+    h('div', { class: 'rail-id__row' },
+      h('span', { class: 'email-row__ava', style: { background: avatarColor(a.address), width: '36px', height: '36px', borderRadius: '12px', fontSize: '14.5px' } }, (a.label || a.address).slice(0, 1).toUpperCase()),
+      h('div', { class: 'rail-id__t' },
+        h('b', { class: 'rail-id__name' }, a.label || localPart(a.address)),
+        h('span', { class: 'rail-id__meta' },
           h('span', { class: `kind-tag kind-tag--${a.kind === 'temp' ? 'temp' : 'perm'}` }, a.kind === 'temp' ? t('temporary') : t('permanent')),
-          a.label ? h('span', { class: 'kind-tag kind-tag--label' }, a.label) : '',
           a.kind === 'temp' ? lockBadge(locked ? 'frozen' : 'flame', locked ? t('vaultFrozen') : t('vaultFlame')) : '')),
       h('button', { class: 'icon-btn', title: t('acctProfile'), 'aria-label': t('acctProfile'), onclick: () => accountModal(a) }, icon('settings'))),
-    h('div', { class: 'acct-id__stats' },
-      h('span', {}, icon('inbox'), h('b', {}, String(a.total ?? 0)), ' ' + t('acctMails')),
-      a.unread > 0 ? h('span', { class: 'is-warm' }, icon('mail'), h('b', {}, String(a.unread)), ' ' + t('unread')) : '',
-      left !== null ? h('span', { class: left < 3_600_000 ? 'is-warm' : '' }, icon('clock'), h('b', { class: 'mono' }, fmtCountdown(left, t))) : ''));
-  box2.append(idcard);
+    left !== null ? h('div', { class: 'rail-id__ttl' }, icon('clock'), h('b', { class: 'mono' }, fmtCountdown(left, t))) : ''));
 
   // ----- folder rail: this account's own boxes -----
   const counts = {
@@ -208,13 +209,17 @@ function drawSidebar() {
   ]) {
     rail.append(h('button', {
       class: `mfolder ${box === key ? 'is-on' : ''}`,
-      onclick: () => { box = key; drawSidebar(); drawList(); vibrate(5); },
+      onclick: () => { box = key; drawSidebar(); drawList(); drawBar(); vibrate(5); },
     },
       h('span', { class: 'mfolder__icn' }, icon(icn)),
       h('span', { class: 'mfolder__t' }, label),
       counts[key] > 0 ? h('span', { class: `mfolder__n ${key === 'unread' ? 'mfolder__n--hot' : ''}` }, counts[key] > 99 ? '99+' : String(counts[key])) : ''));
   }
   box2.append(rail);
+
+  // ----- footer: the door to the accounts hall -----
+  box2.append(h('button', { class: 'rail-manage', onclick: () => { location.hash = '#/addresses'; } },
+    icon('mail'), h('span', {}, t('manageAddresses'))));
 }
 
 // ---------- mailbox account modal: identity + notes + its own 2FA ----------
@@ -356,16 +361,15 @@ function composeBtn() {
   return b;
 }
 
-function buildList() {
-  // the header carries the account itself — as an identity plate, not a
-  // switcher: switching lives only in the avatar circle at the top of the
-  // page, so nothing inside the inbox ever jumps between accounts
-  idPlate = h('div', { class: 'acct-idplate' });
-  const head = h('div', { class: 'mail__head' },
-    h('div', { class: 'mail__head-id' }, idPlate),
-    h('div', { class: 'row', style: { gap: '4px' } },
+function buildMain() {
+  // ----- the account oval: name + full address + copy, one clear identity -----
+  // never a switcher — switching lives only in the avatar circle at the top
+  // of the page, so nothing inside the inbox ever jumps between accounts
+  ovalEl = h('div', { class: 'acct-oval' });
+  const ovalRow = h('div', { class: 'mail__ovalrow' },
+    ovalEl,
+    h('div', { class: 'row', style: { gap: '5px' } },
       composeBtn(),
-      h('button', { class: 'icon-btn', title: t('refresh'), onclick: (e) => { e.currentTarget.querySelector('svg')?.classList.add('spin'); loadEmails(true); loadAddresses(true); setTimeout(() => document.querySelector('.mail .icon-btn svg.spin')?.classList.remove('spin'), 700); } }, icon('refresh')),
       h('button', { class: 'icon-btn', title: t('navAddresses'), onclick: () => document.querySelector('.mail')?.classList.toggle('show-sidebar'), dataset: { mobile: 'menu' } }, icon('menu')),
     ));
 
@@ -374,27 +378,73 @@ function buildList() {
     oninput: (e) => { search = e.target.value.trim(); clearTimeout(searchInput._t); searchInput._t = setTimeout(() => loadEmails(true), 350); },
   });
 
-  listScroll = h('div', { class: 'mail__scroll', id: 'email-list' });
-  bulkBarEl = h('div', { class: 'filters filters--bulk hidden' });
+  // ----- the one card the whole inbox lives in -----
+  barMeta = h('span', { class: 'inbox-bar__meta' });
+  const allBox = h('button', {
+    class: 'inbox-selbox', title: t('selectAll'), 'aria-label': t('selectAll'),
+    onclick: () => toggleSelectAll(),
+  });
+  barEl = h('div', { class: 'inbox-bar' },
+    allBox,
+    h('button', { class: 'icon-btn', title: t('refresh'), 'aria-label': t('refresh'), onclick: (e) => { e.currentTarget.querySelector('svg')?.classList.add('spin'); loadEmails(true); loadAddresses(true); setTimeout(() => document.querySelector('.inbox-bar .icon-btn svg.spin')?.classList.remove('spin'), 700); } }, icon('refresh')),
+    h('span', { class: 'autodot', title: t('autoRefreshOn') }, ''),
+    h('span', { class: 'inbox-bar__sp' }),
+    barMeta);
 
-  const sec = h('section', { class: 'mail__col glass mail__list-col' }, head, searchInput, bulkBarEl, listScroll);
+  bulkBarEl = h('div', { class: 'inbox-bulk hidden' });
+  statusEl = h('div', { class: 'inbox-status hidden' }, h('span', { class: 'inbox-status__spin' }, icon('refresh')), h('span', {}, t('inboxStillLoading')));
+  listScroll = h('div', { class: 'inbox-card__list', id: 'email-list' });
+
+  const card = h('section', { class: 'inbox-card glass' }, barEl, bulkBarEl, statusEl, listScroll);
+  const sec = h('section', { class: 'mail__main' }, ovalRow, searchInput, card);
   return sec;
 }
 
-// paint the identity plate in the list header from the live account —
-// a quiet statement of whose inbox this is, never a button
-function drawListHead() {
-  if (!idPlate?.isConnected) return;
-  const el = idPlate;
-  const a = (state.addresses ?? []).find((x) => x.id === state.currentAddressId);
-  clear(el);
-  if (!a) { el.append(h('span', { class: 'acct-idplate__name muted' }, t('noAccountsYet'))); return; }
+// paint the account oval from the live account — name + full address + copy
+function drawOval() {
+  if (!ovalEl?.isConnected) return;
+  const el = clear(ovalEl);
+  const a = activeAccount();
+  if (!a) { el.append(h('span', { class: 'acct-oval__none muted' }, t('noAccountsYet'))); return; }
+  const locked = a.kind === 'temp' && !tempAuthorized(a.id);
   el.append(
-    h('span', { class: 'email-row__ava acct-idplate__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
-    h('span', { class: 'acct-idplate__txt' },
-      h('span', { class: 'acct-idplate__name' }, a.label || a.address),
-      h('span', { class: 'acct-idplate__meta' }, `${a.kind === 'temp' ? t('temporary') : t('permanent')} · ${a.total ?? 0} ${t('acctMails')}`)),
-    a.unread > 0 ? h('span', { class: 'acct-idplate__badge' }, a.unread > 9 ? '9+' : String(a.unread)) : '');
+    h('span', { class: 'email-row__ava acct-oval__ava', style: { background: avatarColor(a.address) } }, (a.label || a.address).slice(0, 1).toUpperCase()),
+    h('span', { class: 'acct-oval__txt' },
+      h('b', { class: 'acct-oval__name' }, a.label || localPart(a.address)),
+      h('span', { class: 'acct-oval__addr mono' }, a.address)),
+    a.kind === 'temp' ? lockBadge(locked ? 'frozen' : 'flame', locked ? t('vaultFrozen') : t('vaultFlame')) : '',
+    h('button', { class: 'icon-btn acct-oval__copy', title: t('copyAddress'), 'aria-label': t('copyAddress'), onclick: async (e) => { e.stopPropagation(); await copyText(a.address); toast(t('copied'), 'ok', 1200); } }, icon('copy')),
+    a.unread > 0 ? h('span', { class: 'acct-oval__badge' }, a.unread > 99 ? '99+' : String(a.unread)) : '');
+}
+
+// the toolbar: select-all box, refresh, breathing auto-refresh dot, counters
+function drawBar() {
+  if (!barEl?.isConnected) return;
+  const allBox = barEl.querySelector('.inbox-selbox');
+  const vis = visibleEmails().filter((x) => !x.expired);
+  const sel = vis.filter((x) => selected.has(x.id)).length;
+  allBox.classList.toggle('is-on', vis.length > 0 && sel === vis.length);
+  allBox.classList.toggle('is-part', sel > 0 && sel < vis.length);
+  clear(barMeta);
+  if (selected.size) {
+    barMeta.append(h('b', {}, String(selected.size)), ' ' + t('selectedN'));
+  } else {
+    const unread = emails.filter((x) => !x.is_read).length;
+    barMeta.append(
+      h('span', {}, `${emails.length} ${t('acctMails')}`),
+      unread > 0 ? h('span', { class: 'inbox-bar__warm' }, `· ${unread} ${t('unread')}`) : '');
+  }
+}
+
+// select-all — one box, like the big clients: click once selects the
+// visible rows, click again releases them
+function toggleSelectAll() {
+  const vis = visibleEmails().filter((x) => !x.expired);
+  const every = vis.length && vis.every((x) => selected.has(x.id));
+  vis.forEach((x) => { if (every) selected.delete(x.id); else selected.add(x.id); });
+  selecting = selected.size > 0;
+  drawList(); drawBulkBar(); drawBar();
+  vibrate(5);
 }
 
 function drawBulkBar() {
@@ -407,15 +457,9 @@ function drawBulkBar() {
     h('span', { class: 'chip is-on' }, `${selected.size}`),
     // delete leads the bar — the action people pick must be the first one there
     h('button', { class: 'chip chip--danger', onclick: () => confirmBox(t('deleteSelConfirm'), () => bulkAction('delete')) }, icon('trash'), t('deleteSel')),
-    h('button', { class: 'chip', onclick: () => {
-      const visible = emails.filter((x) => !x.expired);
-      const every = visible.length && visible.every((x) => selected.has(x.id));
-      visible.forEach((x) => { if (every) selected.delete(x.id); else selected.add(x.id); });
-      selecting = selected.size > 0;
-      drawList(); drawBulkBar();
-    } }, icon('check'), t('selectAll')),
+    h('button', { class: 'chip', onclick: () => toggleSelectAll() }, icon('check'), t('selectAll')),
     h('button', { class: 'chip', onclick: () => bulkAction('read') }, icon('check'), t('markSelRead')),
-    h('button', { class: 'chip', onclick: () => { selected.clear(); selecting = false; drawList(); } }, icon('x'), t('clearSel')),
+    h('button', { class: 'chip', onclick: () => { selected.clear(); selecting = false; drawList(); drawBar(); } }, icon('x'), t('clearSel')),
   );
 }
 
@@ -433,12 +477,18 @@ async function bulkAction(action) {
 }
 
 async function loadEmails(silent) {
-  if (!state.currentAddressId) { emails = []; drawList(); drawSidebar(); return; }
+  if (!state.currentAddressId) { emails = []; listLoading = false; listError = null; hideSlow(); drawList(); drawSidebar(); drawBar(); return; }
   // racing loads (fast clicks, auto-refresh, account switches) — only the
   // newest request may paint the list; older responses bail out silently
   const seq = ++listSeq;
   if (!document.body.contains(listScroll ?? document.body)) return;
-  if (!silent) listScroll.append(h('div', { class: 'skel', style: { height: '70px', marginBottom: '8px' } }));
+  if (!silent) {
+    listLoading = true; listError = null;
+    drawList(); drawBar();
+  }
+  // even a background refresh tells the truth when it drags on —
+  // the status strip (and the top bar) appear, the old rows stay put
+  showSlow();
   try {
     // the whole box arrives in one pull — folders (all / unread / starred /
     // noted) are cut client-side, so flipping between them is instant and
@@ -455,10 +505,32 @@ async function loadEmails(silent) {
       lastFirstId = fresh[0].id;
     }
     emails = fresh;
+    listLoading = false; listError = null;
+    hideSlow();
     if (cursorIdx >= visibleEmails().length) cursorIdx = visibleEmails().length - 1;
     drawList();
     drawSidebar();
-  } catch (e) { if (seq === listSeq) toast(errText(e), 'err'); }
+    drawBar();
+  } catch (e) {
+    if (seq !== listSeq) return;
+    hideSlow();
+    if (silent) return; // a background refresh never wipes a good list
+    listLoading = false;
+    listError = errText(e);
+    drawList();
+    drawBar();
+  }
+}
+
+// the status strip only appears when a load really drags on —
+// a blink of loading must never flash a spinner in the user's face
+function showSlow() {
+  clearTimeout(slowT);
+  slowT = setTimeout(() => statusEl?.classList.remove('hidden'), 900);
+}
+function hideSlow() {
+  clearTimeout(slowT);
+  statusEl?.classList.add('hidden');
 }
 
 // the visible cut of the folder the user is in
@@ -473,19 +545,54 @@ function drawList() {
   if (!listScroll?.isConnected) return;   // stale render — touch nothing
   const list = clear(listScroll);
   document.querySelector('.mail')?.classList.toggle('is-selecting', selecting || selected.size > 0);
+  const center = (inner) => h('div', { class: 'inbox-card__center' }, inner);
+
+  // ----- no accounts at all: the honest door in -----
   if (!state.addresses?.length) {
-    list.append(h('div', { style: { height: '100%', display: 'grid', placeItems: 'center' } },
-      h('div', { class: 'empty' }, icon('mail'),
-        h('div', { class: 'empty__t' }, t('noAccountsYet')),
-        h('div', { class: 'empty__d' }, t('noAccountsSub')),
-        h('button', { class: 'btn btn--primary mt-2', onclick: () => createAddressModal(() => loadAddresses()) }, icon('plus'), t('acctNew')))));
+    list.append(center(h('div', { class: 'empty' }, icon('mail'),
+      h('div', { class: 'empty__t' }, t('noAccountsYet')),
+      h('div', { class: 'empty__d' }, t('noAccountsSub')),
+      h('button', { class: 'btn btn--primary mt-2', onclick: () => createAddressModal(() => loadAddresses()) }, icon('plus'), t('acctNew')))));
     return;
   }
+
+  // ----- no account picked: point at the avatar circle up top -----
+  if (!state.currentAddressId) {
+    list.append(center(h('div', { class: 'empty' }, h('span', { class: 'empty__point' }, icon('user')),
+      h('div', { class: 'empty__t' }, t('noAcctPicked')),
+      h('div', { class: 'empty__d' }, t('noAcctPickedSub')))));
+    cursorIdx = -1;
+    return;
+  }
+
+  // ----- first paint: skeleton rows that breathe -----
+  if (listLoading && !emails.length) {
+    for (let i = 0; i < 7; i++) list.append(skelRow(i));
+    cursorIdx = -1;
+    return;
+  }
+
+  // ----- a load that failed: say so, with a way back -----
+  if (listError) {
+    list.append(center(h('div', { class: 'empty' }, icon('mail'),
+      h('div', { class: 'empty__t' }, t('loadFail')),
+      h('div', { class: 'empty__d' }, listError),
+      h('button', { class: 'btn btn--primary mt-2', onclick: () => loadEmails() }, icon('refresh'), t('retry')))));
+    cursorIdx = -1;
+    return;
+  }
+
   const visible = visibleEmails();
   if (!visible.length) {
-    list.append(h('div', { style: { height: '100%', display: 'grid', placeItems: 'center' } },
-      h('div', { class: 'empty' }, icon(box === 'inbox' ? 'inbox' : box === 'starred' ? 'star' : box === 'noted' ? 'note' : 'mail'),
+    // an empty folder and a search that found nothing deserve different words
+    if (search) {
+      list.append(center(h('div', { class: 'empty' }, icon('search'),
+        h('div', { class: 'empty__t' }, t('noMatch')),
+        h('div', { class: 'empty__d' }, t('noMatchSub')))));
+    } else {
+      list.append(center(h('div', { class: 'empty' }, icon(box === 'inbox' ? 'inbox' : box === 'starred' ? 'star' : box === 'noted' ? 'note' : 'mail'),
         h('div', { class: 'empty__t' }, t('noEmails')), h('div', { class: 'empty__d' }, t('noEmailsSub')))));
+    }
     cursorIdx = -1;
     return;
   }
@@ -496,6 +603,18 @@ function drawList() {
     list.append(row);
   });
   if (newFlashId) setTimeout(() => { newFlashId = null; list.querySelector('.email-row.is-new')?.classList.remove('is-new'); }, 1600);
+}
+
+// one shimmering placeholder row — the list announces its shape before the
+// data arrives, exactly the way the big clients do
+function skelRow(i) {
+  const w = [96, 72, 120, 64, 88][i % 5];
+  return h('div', { class: 'skel-row', 'aria-hidden': 'true' },
+    h('span', { class: 'select-box' }),
+    h('span', { class: 'skel skel-row__ava' }),
+    h('span', { class: 'skel', style: { width: `${w}px`, height: '11px' } }),
+    h('span', { class: 'skel skel-row__mid' }),
+    h('span', { class: 'skel', style: { width: '42px', height: '11px' } }));
 }
 
 function emailRow(em) {
@@ -538,6 +657,8 @@ function emailRow(em) {
     onclick: (e) => { e.stopPropagation(); vibrate(5); rowMenu(em); },
   }, icon('more'));
 
+  // one row, one line — the way a grown-up mail client reads:
+  // [box] [face] Sender  Subject — preview ………………… [flags][star] time
   const row = h('div', {
     class: `email-row ${em.is_read ? '' : 'is-unread'} ${selected.has(em.id) ? 'is-selected' : ''}`,
     dataset: { id: em.id },
@@ -552,13 +673,16 @@ function emailRow(em) {
     h('span', { class: 'email-row__ava', style: { background: color }, title: t('selHint'),
       onclick: (e) => { e.stopPropagation(); toggleSelect(em.id); } },
       (em.from_name || em.from_addr || '?').slice(0, 1).toUpperCase()),
-    h('span', { class: 'email-row__body' },
-      h('span', { class: 'email-row__top' },
-        h('span', { class: 'email-row__from' }, em.from_name || em.from_addr),
-        h('span', { class: 'email-row__end' }, starSlot, kebab, h('span', { class: 'email-row__time' }, timeAgo(em.received_at, t)))),
-      h('div', { class: 'email-row__subj' }, em.subject || '(no subject)'),
-      h('div', { class: 'email-row__prev' }, em.preview || ''),
-      flags.children.length ? flags : ''),
+    h('span', { class: 'email-row__from' }, em.from_name || em.from_addr),
+    h('span', { class: 'email-row__mid' },
+      h('span', { class: 'email-row__subj' }, em.subject || '(no subject)'),
+      em.preview ? h('span', { class: 'email-row__sep' }, '—') : '',
+      em.preview ? h('span', { class: 'email-row__prev' }, em.preview) : ''),
+    h('span', { class: 'email-row__end' },
+      flags,
+      starSlot,
+      h('span', { class: 'email-row__time' }, timeAgo(em.received_at, t)),
+      kebab),
     qa);
 
   // touch: long-press enters multi-select mode

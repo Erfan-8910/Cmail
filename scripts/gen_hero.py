@@ -18,7 +18,7 @@ HERO_EN = {
         ('L', '#7fa5d9', 'Linux Mag', 'Weekly digest: kernel 6.12 is out'),
         ('P', '#b98fd4', 'Payment Gateway', 'Receipt #8842 — paid successfully'),
     ],
-    'chip': 'v2.8 — One switcher · Folders per account · Per-account 2FA vault',
+    'chip': 'v2.9 — The inbox, rebuilt · identity oval · one living card',
     'font': 'Segoe UI, system-ui, sans-serif',
 }
 HERO_FA = {
@@ -31,7 +31,7 @@ HERO_FA = {
         ('ل', '#7fa5d9', 'لینوکس‌مگ', 'خلاصهٔ هفته: هستهٔ ۶٫۱۲ منتشر شد'),
         ('پ', '#b98fd4', 'درگاه پرداخت', 'رسید #۸۸۴۲ — پرداخت موفق'),
     ],
-    'chip': 'نسخهٔ ۲.۸ — تعویض حساب فقط از دایرهٔ بالا · پوشه‌ها برای هر حساب · گاوصندوق حساب‌به‌حساب',
+    'chip': 'نسخهٔ ۲.۹ — صندوق نو با ساختار بزرگ‌سال‌ها · بیضی هویت با کپی آدرس · همهٔ نامه‌ها در یک کارت',
     'font': 'Vazirmatn, Tahoma, sans-serif',
 }
 
@@ -131,7 +131,7 @@ def hero(d):
 </svg>'''
 
 BADGES = [
-    ('badge-version.svg',  'version',            'v2.8.0',             '#2f9e63', '#0b0f14', '#e8f5ec'),
+    ('badge-version.svg',  'version',            'v2.9.0',             '#2f9e63', '#0b0f14', '#e8f5ec'),
     ('badge-platform.svg', 'runs on',            'Cloudflare Workers', '#c05f2a', '#0b0f14', '#fdeee4'),
     ('badge-storage.svg',  'storage',            'one D1 database',    '#2f7fb0', '#0b0f14', '#e6f2fa'),
     ('badge-license.svg',  'license',            'MIT',                '#7e5fa6', '#0b0f14', '#f1ecf9'),
