@@ -12,27 +12,67 @@ export const state = {
 
 const BASE = ''; // same-origin
 
+// ---------- the global progress bar ----------
+// any request that runs longer than a blink paints a thin living bar at the
+// very top of the page — nobody ever stares at a silent screen again
+let inflight = 0;
+let barShowT = null;
+let barEl = null;
+
+function progressStart() {
+  inflight++;
+  if (barShowT || barEl) return;
+  barShowT = setTimeout(() => {
+    barShowT = null;
+    if (barEl) return;
+    barEl = document.createElement('div');
+    barEl.className = 'loadbar';
+    barEl.setAttribute('aria-hidden', 'true');
+    barEl.innerHTML = '<i></i>';
+    document.body.append(barEl);
+    requestAnimationFrame(() => barEl?.classList.add('is-on'));
+  }, 280);
+}
+
+function progressEnd() {
+  inflight = Math.max(0, inflight - 1);
+  if (inflight > 0) return;
+  if (barShowT) { clearTimeout(barShowT); barShowT = null; return; }
+  if (barEl) {
+    const b = barEl;
+    barEl = null;
+    b.classList.remove('is-on');
+    b.classList.add('is-done');
+    setTimeout(() => b.remove(), 420);
+  }
+}
+
 async function request(method, path, body, opts = {}) {
-  const res = await fetch(BASE + path, {
-    method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: 'same-origin',
-    ...opts,
-  });
-  let data = null;
-  try { data = await res.json(); } catch { /* non-json */ }
-  if (res.status === 401 && !path.startsWith('/api/auth') && !path.startsWith('/api/setup')) {
-    // session died
-    window.dispatchEvent(new CustomEvent('cmail:unauthorized'));
+  progressStart();
+  try {
+    const res = await fetch(BASE + path, {
+      method,
+      headers: body ? { 'content-type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: 'same-origin',
+      ...opts,
+    });
+    let data = null;
+    try { data = await res.json(); } catch { /* non-json */ }
+    if (res.status === 401 && !path.startsWith('/api/auth') && !path.startsWith('/api/setup')) {
+      // session died
+      window.dispatchEvent(new CustomEvent('cmail:unauthorized'));
+    }
+    if (!res.ok || (data && data.ok === false)) {
+      const err = new Error(data?.error || `HTTP ${res.status}`);
+      err.code = data?.error || 'http_error';
+      err.detail = data?.detail;
+      throw err;
+    }
+    return data;
+  } finally {
+    progressEnd();
   }
-  if (!res.ok || (data && data.ok === false)) {
-    const err = new Error(data?.error || `HTTP ${res.status}`);
-    err.code = data?.error || 'http_error';
-    err.detail = data?.detail;
-    throw err;
-  }
-  return data;
 }
 
 export const api = {

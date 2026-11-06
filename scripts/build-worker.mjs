@@ -47,6 +47,22 @@ function walk(dir, out = []) {
 
 // ---------- 1) embedded assets ----------
 const APP_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version ?? '0.0.0';
+
+// ---------- module graph integrity ----------
+// The entry script in index.html carries a version query (app.js?v=…). If the
+// internal imports stayed bare ('./app.js'), the browser would treat the two
+// URLs as two different modules: the whole shell booted twice — two
+// hashchange listeners, two routers racing each other, views painted into
+// detached nodes (the "inbox loads nothing / two sections open at once"
+// bug family). Every relative import therefore gets the SAME version query,
+// so the graph stays one single instance per release.
+const VER = `?v=${APP_VERSION}`;
+const stampImports = (code) => code
+  // static: from './x.js'  /  import '../x.js'
+  .replace(/(from\s+|import\s+)'((?:\.\.?\/)[^']*\.js)'/g, (_m, kw, spec) => `${kw}'${spec}${VER}'`)
+  // dynamic: import('./x.js')
+  .replace(/import\(\s*'((?:\.\.?\/)[^']*\.js)'\s*\)/g, (_m, spec) => `import('${spec}${VER}')`);
+
 const files = walk(PUB);
 const entries = [];
 for (const p of files) {
@@ -60,6 +76,9 @@ for (const p of files) {
   // app.js/app.css from its cache after an update
   if (key === 'index.html') {
     buf = Buffer.from(buf.toString('utf8').replaceAll('__CM_VER__', APP_VERSION), 'utf8');
+  }
+  if (ext === '.js' && key.startsWith('assets/js/')) {
+    buf = Buffer.from(stampImports(buf.toString('utf8')), 'utf8');
   }
   const tag = djb2(buf.toString('latin1'));
   if (TEXT_EXT.has(ext)) {

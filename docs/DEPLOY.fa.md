@@ -49,7 +49,7 @@ bash deploy.sh
 
 - **Workers & Pages → Create → Workers → Create Worker**
 - اسمش را بگذار `cmail` و یک بار با کد پیش‌فرض **Deploy** کن.
-- **Edit code** را بزن، کد پیش‌فرض را پاک کن، محتوای کامل [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.8.0/worker.js) آماده را جای‌گذاری کن و **Deploy** بزن.
+- **Edit code** را بزن، کد پیش‌فرض را پاک کن، محتوای کامل [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.9.0/worker.js) آماده را جای‌گذاری کن و **Deploy** بزن.
 
 **۳) تنها Binding مورد نیاز: D1**
 

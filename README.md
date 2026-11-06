@@ -30,9 +30,9 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 | | |
 |---|---|
 | ⭕ **The account circle — the only switcher** | Every mailbox is its own account. The circle at the top of the page is the one and only place accounts switch — each account shows its tiny details before you even enter: how many mails it received, how many 2FA codes it holds, what's unread. Add another account from the same panel. Nothing inside the inbox, the sidebar or the folders ever jumps accounts by accident. |
-| 📂 **A folder rail of its own** | The inbox sidebar is the active account's room: its identity card (address, kind, live stats) on top, then its own folders — **All · Unread · Starred · Noted** — each with a live count. One pull, instant folder flips, exact counters. |
+| 📂 **The identity oval and the one big card** | The inbox reads the way a grown-up mail client reads: the account's **identity oval** — its face, its name and its full address with a one-tap copy button — sits above one living card that holds the entire mailbox. A toolbar with a select-all box, a refresh and a breathing auto-refresh dot; single-line rows (face · sender · subject — preview · star · time); the folder rail beside it with **All · Unread · Starred · Noted** and live counts. |
 | 📄 **Every email gets its own page** | Opening a message navigates to a real page of its own — its own URL, its own back button, older/newer arrows — never a popup floating over your list. HTML mail renders sanitized inside a sandboxed frame; plain text has its own toggle. |
-| ⏱️ **The inbox breathes on its own** | Every 10 seconds the inbox quietly pulls for new mail, highlights what just landed and syncs the unread badges — no refresh button rituals. |
+| ⏱️ **The inbox breathes on its own** | Every 10 seconds the inbox quietly pulls for new mail, highlights what just landed and syncs the unread badges — no refresh button rituals. And nothing loads in silence: a thin living progress bar rides the top of the page the moment anything drags, and the inbox's own status strip says what is happening. |
 | 🩺 **System health, on stage** | A full health report in Settings: D1 connection with live latency, every table with its row count and column state, the cron heartbeat, and the mail flow — each with its own fix button. |
 | 🚨 **Problems announce themselves** | When something serious breaks — D1 unreachable, tables missing, schema outdated, mail stalled — a banner appears above the app with the cause and the one-press fix. You hear it from your app first, never from a broken inbox. |
 | 🌐 **Domain connect wizard** | Add a domain and it takes your hand: a crisp connect guide, then a verification code you mail to your own domain. The screen re-checks itself every few seconds until the loop proves itself — and mailboxes unlock. Walked away mid-way? The draft waits in the setup screen and on the domains page with a **Continue** button — nobody ever retypes a domain. |
@@ -54,9 +54,9 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 <div align="center">
 
-| **The cockpit** — the account's identity plate in the header, its folder rail beside it, one reading pane |
+| **The cockpit** — the identity oval (name + address + copy) above one living card; single-line rows, folder rail with live counts |
 |---|
-| <img src="docs/img/en/inbox.png" width="620" alt="Inbox — identity plate, folder rail with live counts, reading pane"> |
+| <img src="docs/img/en/inbox.png" width="620" alt="Inbox — identity oval, one card, single-line rows, folder rail with live counts"> |
 
 | **The account circle** — the one and only place accounts switch, with each account's details before you even enter |
 |---|
@@ -104,7 +104,16 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 2.8 — the release that gives switching one home
+## What's new in 2.9 — the release that rebuilds the inbox like the big clients
+
+- **The inbox is rebuilt from zero.** One clear **identity oval** up top — the account's face, its name and its full address with a **one-tap copy button** — then the whole mailbox in **one living card**: a toolbar with a select-all box, a refresh and a breathing auto-refresh dot, and rows that read on a single line, the way grown-up mail clients read: face · sender · subject — preview · star · time. Unread rows show a little dot where the checkbox would be; reach for the row and the checkbox takes its place. The wasted reading column is gone — the list owns the full width, and every email still opens on its own dedicated page.
+- **Loading never lies.** Any request that runs longer than a blink paints a **thin living progress bar** at the very top of the page. When the inbox's own load drags on, a status strip with a spinner and honest words slides in — even during a background refresh. A failed load says what happened and offers a retry; an empty folder, a fruitless search and a missing mailbox each get their own words instead of a blank stare.
+- **The About ribbon learned mobile manners.** On phones the Climind-W band lays itself out as a proper two-row card — mark and text up top, chip and button below — instead of crushing its text into a sliver, and its aurora stops spinning on mobile GPUs.
+- **The app finally boots exactly once.** This release exposed a silent double-boot: the versioned entry script and the bare internal imports loaded the whole shell twice — two routers racing, two hash listeners, an inbox that sometimes painted into a detached view and showed nothing. That was the real face of the “two sections open at once” bug family. Every module import now carries the same version stamp as the entry, so the app is one instance — guaranteed.
+- **Fresh animated hero, version badge and retaken screenshots** for the rebuilt inbox, switcher, palette, daylight and mobile scenes — both languages.
+
+<details>
+<summary><b>What 2.8 changed — the release that gives switching one home</b></summary>
 
 - **Switching accounts happens in exactly one place: the circle at the top.** The inbox sidebar no longer lists accounts, and the inbox header's chip is now a quiet identity plate — it states whose inbox you are in and never navigates. The folder rail under the identity card is the account's own rooms: **All · Unread · Starred · Noted**, each with a live counter, cut client-side so flips are instant and the counters are always exact.
 - **The 2FA vault is a room per account — folders included.** The account chips are gone from the vault; it always opens on the account you are in. Folders stopped being global: every folder is born bound to one account (`address_id` in the database, with a graceful migration for old installs), the folder picker only ever offers that account's groupings, and moving a key to another account releases the old account's folder automatically. One account's keys can never mix with another account's folders.
@@ -115,6 +124,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 - **Domains breathe:** cards get a living aurora wash under the cursor and a soft heartbeat ring around the globe of any domain that is actually receiving mail.
 - **The mobile overlap is dead:** the “active account” badge on the Inboxes page reserved its own width — long addresses no longer run underneath it.
 - **Fresh animated hero, version badge and 24 retaken screenshots** — every view, both languages, from the 2.8 build.
+
+</details>
 
 <details>
 <summary><b>What 2.7 changed — the release that names its colors and locks what needs locking</b></summary>
@@ -188,8 +199,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.8.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v2.8.0:** [`CMail-v2.8.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.8.0/CMail-v2.8.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.9.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v2.9.0:** [`CMail-v2.9.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.9.0/CMail-v2.9.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 
