@@ -1,9 +1,14 @@
 // Cmail — TOTP vault: named 2FA code entries with live generation
+// v3.0.0 r6: the vault is SHARED with the guest credentials. A share guest
+// sees exactly the entries bound to its shared mailboxes and can add its own
+// — both land in the owner's vault (entries live under the owner's user_id),
+// so admin and guest always read the SAME codes for the SAME account. True
+// sync, zero duplicates.
 import { Hono } from 'hono';
 import { renderSVG } from 'uqr';
 import type { Env, AppEnv, SessionUser } from '../util';
 import { uid, now, clean, sealText, openText } from '../util';
-import { requireUser, } from '../auth';
+import { requireUser } from '../auth';
 import { totp, totpRemaining, parseOtpauthUri, normalizeSecret, verifyTotp } from '../totp';
 
 const app = new Hono<AppEnv>();
@@ -14,48 +19,83 @@ type Entry = {
   icon: string | null; address_id: string | null; folder_id: string | null;
 };
 
+// the vault scope of the caller: null = the owner (sees everything),
+// string[] = a guest's shared mailboxes (may be [] — matches nothing)
+function vaultScope(u: SessionUser): string[] | null {
+  if (u.role === 'share' && u.share) {
+    const ids = (u.share.address_ids?.length ? u.share.address_ids : [u.share.address_id]).filter(Boolean);
+    return ids;
+  }
+  return null;
+}
+const inPh = (ids: string[]) => `(${ids.map(() => '?').join(',')})`;
+// WHERE fragment carrying the scope (col defaults to the entries table)
+function scopeSql(scope: string[] | null, col = 'address_id'): string {
+  if (scope === null) return '';
+  return scope.length ? ` AND ${col} IN ${inPh(scope)}` : ' AND 1=0';
+}
+// the bindings that go WITH scopeSql — every IN placeholder the fragment
+// adds must be bound, in order, right after user_id (r7 fix: the guest
+// vault used to answer D1_ERROR wrong-parameter-count because these were
+// never bound — the admin (null scope) never saw it)
+function scopeBinds(scope: string[] | null): string[] {
+  return scope && scope.length ? scope : [];
+}
+// can the caller touch an entry bound to this address? (owner: always)
+function scopeAllows(scope: string[] | null, addressId: string | null | undefined): boolean {
+  if (scope === null) return true;
+  return !!addressId && scope.includes(addressId);
+}
+
 // ---------- folders (user-managed groups of keys, scoped to ONE account) ----------
 
 // list folders with entry counts; ?address_id= scopes to one mailbox —
-// a folder never bridges two accounts
+// a folder never bridges two accounts. A guest sees exactly the folders of
+// its shared mailboxes (they live in the owner's book — same for both sides)
 app.get('/folders', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
-  const scope = (c.req.query('address_id') ?? '').trim();
+  const scope = vaultScope(u);
+  const qScope = (c.req.query('address_id') ?? '').trim();
+  // a guest asking outside its shared set gets an empty answer, never an error leak
+  if (scope !== null && qScope && !scope.includes(qScope)) return c.json({ ok: true, folders: [] });
   const { results } = await c.env.DB.prepare(
     `SELECT f.id, f.name, f.icon, f.color, f.address_id, f.created_at,
        (SELECT COUNT(*) FROM totp_entries e WHERE e.folder_id = f.id) AS count
-     FROM totp_folders f WHERE f.user_id = ? ${scope ? 'AND f.address_id = ?' : ''} ORDER BY f.created_at`
-  ).bind(...(scope ? [u.id, scope] : [u.id])).all();
+     FROM totp_folders f WHERE f.user_id = ? ${scopeSql(scope, 'f.address_id')} ${qScope ? 'AND f.address_id = ?' : ''} ORDER BY f.created_at`
+  ).bind(...[u.id, ...scopeBinds(scope), ...(qScope ? [qScope] : [])]).all();
   return c.json({ ok: true, folders: results ?? [] });
 });
 
 // create folder — born bound to the account the vault is open on
 app.post('/folders', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const scope = vaultScope(u);
   const body = await c.req.json<{ name?: string; icon?: string; color?: string; address_id?: string }>().catch(() => null);
   const name = clean(body?.name, 40);
   if (!name) return c.json({ ok: false, error: 'name_required' }, 400);
   const count = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM totp_folders WHERE user_id = ?').bind(u.id).first<{ n: number }>();
   if ((count?.n ?? 0) >= 30) return c.json({ ok: false, error: 'folder_limit' }, 409);
   // the folder is stamped with its account — optional, but once set it must
-  // be an address this user owns
+  // be an address this user owns (and for a guest: one it shares)
   let addressId: string | null = null;
   if (body?.address_id) {
     const own = await c.env.DB.prepare('SELECT id FROM addresses WHERE id = ? AND user_id = ?').bind(body.address_id, u.id).first();
-    if (own) addressId = body.address_id;
+    if (own && scopeAllows(scope, body.address_id)) addressId = body.address_id;
   }
+  if (scope !== null && !addressId) return c.json({ ok: false, error: 'forbidden' }, 403);
   const id = uid('fld_');
   await c.env.DB.prepare('INSERT INTO totp_folders (id, user_id, address_id, name, icon, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .bind(id, u.id, addressId, name, clean(body?.icon, 40) || null, clean(body?.color, 20) || null, now()).run();
   return c.json({ ok: true, folder: { id, name, icon: clean(body?.icon, 40) || null, color: clean(body?.color, 20) || null, address_id: addressId, count: 0 } });
 });
 
-// rename / restyle folder
+// rename / restyle folder (a guest may restyle only folders of its shared mailboxes)
 app.patch('/folders/:id', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const scope = vaultScope(u);
   const id = c.req.param('id');
-  const own = await c.env.DB.prepare('SELECT id FROM totp_folders WHERE id = ? AND user_id = ?').bind(id, u.id).first();
-  if (!own) return c.json({ ok: false, error: 'not_found' }, 404);
+  const own = await c.env.DB.prepare('SELECT id, address_id FROM totp_folders WHERE id = ? AND user_id = ?').bind(id, u.id).first<{ id: string; address_id: string | null }>();
+  if (!own || !scopeAllows(scope, own.address_id)) return c.json({ ok: false, error: 'not_found' }, 404);
   const body = await c.req.json<{ name?: string; icon?: string; color?: string }>().catch(() => null);
   if (body?.name !== undefined) await c.env.DB.prepare('UPDATE totp_folders SET name = ? WHERE id = ?').bind(clean(body.name, 40) || 'unnamed', id).run();
   if (body?.icon !== undefined) await c.env.DB.prepare('UPDATE totp_folders SET icon = ? WHERE id = ?').bind(clean(body.icon, 40) || null, id).run();
@@ -66,20 +106,27 @@ app.patch('/folders/:id', requireUser, async (c) => {
 // delete folder — its keys stay, they just become ungrouped
 app.delete('/folders/:id', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const scope = vaultScope(u);
   const id = c.req.param('id');
+  const own = await c.env.DB.prepare('SELECT id, address_id FROM totp_folders WHERE id = ? AND user_id = ?').bind(id, u.id).first<{ id: string; address_id: string | null }>();
+  if (!own || !scopeAllows(scope, own.address_id)) return c.json({ ok: false, error: 'not_found' }, 404);
   await c.env.DB.prepare('UPDATE totp_entries SET folder_id = NULL WHERE folder_id = ? AND user_id = ?').bind(id, u.id).run();
   await c.env.DB.prepare('DELETE FROM totp_folders WHERE id = ? AND user_id = ?').bind(id, u.id).run();
   return c.json({ ok: true });
 });
 
-// list entries (no secrets) + fresh code for each; ?address_id= scopes to one mailbox
+// list entries (no secrets) + fresh code for each; ?address_id= scopes to one
+// mailbox. A guest sees exactly the entries of its shared mailboxes — the
+// same rows the admin sees, the same live codes: that IS the sync.
 app.get('/', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const vscope = vaultScope(u);
   const scope = (c.req.query('address_id') ?? '').trim();
+  if (vscope !== null && scope && !vscope.includes(scope)) return c.json({ ok: true, entries: [], server_time: Date.now() });
   const { results } = await c.env.DB.prepare(
     `SELECT id, name, issuer, algo, digits, period, color, sort, created_at, icon, address_id, folder_id FROM totp_entries
-     WHERE user_id = ? ${scope ? 'AND address_id = ?' : ''} ORDER BY sort, created_at`
-  ).bind(...(scope ? [u.id, scope] : [u.id])).all<any>();
+     WHERE user_id = ? ${scopeSql(vscope)} ${scope ? 'AND address_id = ?' : ''} ORDER BY sort, created_at`
+  ).bind(...[u.id, ...scopeBinds(vscope), ...(scope ? [scope] : [])]).all<any>();
   const entries = results ?? [];
   const t = Date.now();
   const withCodes = await Promise.all(entries.map(async (e) => {
@@ -100,7 +147,10 @@ app.get('/', requireUser, async (c) => {
 // live codes only (light polling)
 app.get('/codes', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
-  const { results } = await c.env.DB.prepare('SELECT id, algo, digits, period, secret_enc FROM totp_entries WHERE user_id = ?').bind(u.id).all<Entry>();
+  const vscope = vaultScope(u);
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, algo, digits, period, secret_enc FROM totp_entries WHERE user_id = ?${scopeSql(vscope)}`
+  ).bind(...[u.id, ...scopeBinds(vscope)]).all<Entry>();
   const t = Date.now();
   const codes = await Promise.all((results ?? []).map(async (e) => {
     try {
@@ -111,9 +161,12 @@ app.get('/codes', requireUser, async (c) => {
   return c.json({ ok: true, codes, server_time: t });
 });
 
-// create
+// create — a guest may add codes ONLY bound to one of its shared mailboxes;
+// the entry lands under the owner's user_id, so the admin's vault picks it
+// up the moment it exists (one row, both sides — no copies to drift)
 app.post('/', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const vscope = vaultScope(u);
   const body = await c.req.json<{
     name?: string; issuer?: string; secret?: string; uri?: string;
     algo?: string; digits?: number; period?: number; color?: string;
@@ -146,12 +199,14 @@ app.post('/', requireUser, async (c) => {
 
   const id = uid('tfa_');
   const sealed = await sealText(c.env, secret);
-  // optional mailbox link (must belong to this user)
+  // optional mailbox link (must belong to this user; for a guest it MUST be
+  // one of its shared mailboxes — the sync is per-account, never wider)
   let addressId: string | null = null;
   if (body?.address_id) {
     const own = await c.env.DB.prepare('SELECT id FROM addresses WHERE id = ? AND user_id = ?').bind(body.address_id, u.id).first();
-    if (own) addressId = body.address_id;
+    if (own && scopeAllows(vscope, body.address_id)) addressId = body.address_id;
   }
+  if (vscope !== null && !addressId) return c.json({ ok: false, error: 'forbidden' }, 403);
   const icon = clean(body?.icon, 40) || null;
   // optional folder (must belong to this user, and to the same account —
   // a folder of account B can never hold the keys of account A)
@@ -171,10 +226,11 @@ app.post('/', requireUser, async (c) => {
 // QR code (svg) for exporting an entry
 app.get('/:id/qr', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const vscope = vaultScope(u);
   const id = c.req.param('id');
-  const row = await c.env.DB.prepare('SELECT name, issuer, secret_enc, algo, digits, period FROM totp_entries WHERE id = ? AND user_id = ?')
-    .bind(id, u.id).first<{ name: string; issuer: string | null; secret_enc: string; algo: string; digits: number; period: number }>();
-  if (!row) return c.json({ ok: false, error: 'not_found' }, 404);
+  const row = await c.env.DB.prepare('SELECT name, issuer, secret_enc, algo, digits, period, address_id FROM totp_entries WHERE id = ? AND user_id = ?')
+    .bind(id, u.id).first<{ name: string; issuer: string | null; secret_enc: string; algo: string; digits: number; period: number; address_id: string | null }>();
+  if (!row || !scopeAllows(vscope, row.address_id)) return c.json({ ok: false, error: 'not_found' }, 404);
   const secret = await openText(c.env, row.secret_enc);
   const label = `${row.issuer ?? 'Cmail'}:${row.name}`;
   const p = new URLSearchParams({ secret, issuer: row.issuer ?? 'Cmail', algorithm: row.algo, digits: String(row.digits), period: String(row.period) });
@@ -183,24 +239,26 @@ app.get('/:id/qr', requireUser, async (c) => {
   return c.body(svg, 200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' });
 });
 
-// reveal secret (for migration to another app) — sensitive
+// reveal secret (for migration to another app) — sensitive, same scope rule
 app.get('/:id/secret', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const vscope = vaultScope(u);
   const id = c.req.param('id');
-  const row = await c.env.DB.prepare('SELECT secret_enc, name FROM totp_entries WHERE id = ? AND user_id = ?').bind(id, u.id)
-    .first<{ secret_enc: string; name: string }>();
-  if (!row) return c.json({ ok: false, error: 'not_found' }, 404);
+  const row = await c.env.DB.prepare('SELECT secret_enc, name, address_id FROM totp_entries WHERE id = ? AND user_id = ?').bind(id, u.id)
+    .first<{ secret_enc: string; name: string; address_id: string | null }>();
+  if (!row || !scopeAllows(vscope, row.address_id)) return c.json({ ok: false, error: 'not_found' }, 404);
   const secret = await openText(c.env, row.secret_enc);
   return c.json({ ok: true, secret, name: row.name });
 });
 
-// update
+// update (a guest only inside its shared mailboxes)
 app.patch('/:id', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const vscope = vaultScope(u);
   const id = c.req.param('id');
   const body = await c.req.json<{ name?: string; issuer?: string; color?: string; sort?: number; icon?: string; address_id?: string | null; folder_id?: string | null }>().catch(() => null);
-  const row = await c.env.DB.prepare('SELECT id FROM totp_entries WHERE id = ? AND user_id = ?').bind(id, u.id).first();
-  if (!row) return c.json({ ok: false, error: 'not_found' }, 404);
+  const row = await c.env.DB.prepare('SELECT id, address_id FROM totp_entries WHERE id = ? AND user_id = ?').bind(id, u.id).first<{ id: string; address_id: string | null }>();
+  if (!row || !scopeAllows(vscope, row.address_id)) return c.json({ ok: false, error: 'not_found' }, 404);
   if (body?.name !== undefined) await c.env.DB.prepare('UPDATE totp_entries SET name = ? WHERE id = ?').bind(clean(body.name, 60) || 'unnamed', id).run();
   if (body?.issuer !== undefined) await c.env.DB.prepare('UPDATE totp_entries SET issuer = ? WHERE id = ?').bind(clean(body.issuer, 60) || null, id).run();
   if (body?.color !== undefined) await c.env.DB.prepare('UPDATE totp_entries SET color = ? WHERE id = ?').bind(clean(body.color, 20) || null, id).run();
@@ -210,8 +268,10 @@ app.patch('/:id', requireUser, async (c) => {
     let addressId: string | null = null;
     if (body.address_id) {
       const own = await c.env.DB.prepare('SELECT id FROM addresses WHERE id = ? AND user_id = ?').bind(body.address_id, u.id).first();
-      if (own) addressId = body.address_id;
+      if (own && scopeAllows(vscope, body.address_id)) addressId = body.address_id;
     }
+    if (vscope !== null && body.address_id && !addressId) return c.json({ ok: false, error: 'forbidden' }, 403);
+    if (vscope !== null && addressId === null && body.address_id) return c.json({ ok: false, error: 'not_found' }, 404);
     await c.env.DB.prepare('UPDATE totp_entries SET address_id = ? WHERE id = ?').bind(addressId, id).run();
     // moving a key to another account releases the old account's folder —
     // groupings never follow a key across accounts
@@ -240,7 +300,10 @@ app.patch('/:id', requireUser, async (c) => {
 
 app.delete('/:id', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const vscope = vaultScope(u);
   const id = c.req.param('id');
+  const row = await c.env.DB.prepare('SELECT id, address_id FROM totp_entries WHERE id = ? AND user_id = ?').bind(id, u.id).first<{ id: string; address_id: string | null }>();
+  if (!row || !scopeAllows(vscope, row.address_id)) return c.json({ ok: false, error: 'not_found' }, 404);
   await c.env.DB.prepare('DELETE FROM totp_entries WHERE id = ? AND user_id = ?').bind(id, u.id).run();
   return c.json({ ok: true });
 });
@@ -248,11 +311,12 @@ app.delete('/:id', requireUser, async (c) => {
 // verify a code against an entry (handy when double-checking)
 app.post('/:id/verify', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  const vscope = vaultScope(u);
   const id = c.req.param('id');
   const body = await c.req.json<{ code?: string }>().catch(() => null);
-  const row = await c.env.DB.prepare('SELECT secret_enc, algo, digits, period FROM totp_entries WHERE id = ? AND user_id = ?')
-    .bind(id, u.id).first<{ secret_enc: string; algo: string; digits: number; period: number }>();
-  if (!row) return c.json({ ok: false, error: 'not_found' }, 404);
+  const row = await c.env.DB.prepare('SELECT secret_enc, algo, digits, period, address_id FROM totp_entries WHERE id = ? AND user_id = ?')
+    .bind(id, u.id).first<{ secret_enc: string; algo: string; digits: number; period: number; address_id: string | null }>();
+  if (!row || !scopeAllows(vscope, row.address_id)) return c.json({ ok: false, error: 'not_found' }, 404);
   const secret = await openText(c.env, row.secret_enc);
   const valid = await verifyTotp(secret, (body?.code ?? '').trim(), row.algo, row.digits, row.period);
   return c.json({ ok: true, valid });

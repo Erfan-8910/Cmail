@@ -77,9 +77,20 @@ export const icons = {
   spark: I('<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/>'),
   lock: I('<rect x="4.5" y="10.5" width="15" height="10" rx="3"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>'),
   lockOpen: I('<rect x="4.5" y="10.5" width="15" height="10" rx="3"/><path d="M8 10.5V7a4 4 0 0 1 7.7-1.5"/>'),
+  phone: I('<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M10.5 18.5h3"/>'),
+  monitor: I('<rect x="2.5" y="4" width="19" height="13" rx="2.5"/><path d="M9 21h6"/><path d="M12 17v4"/>'),
   snow: I('<path d="M12 2.5v19"/><path d="m4.9 6.2 14.2 11.6"/><path d="M19.1 6.2 4.9 17.8"/><path d="m12 2.5-2.2 2.2M12 2.5l2.2 2.2"/><path d="m12 21.5-2.2-2.2M12 21.5l2.2-2.2"/><path d="M6.7 8.7 4 9.4M17.3 15.3 20 14.6M17.3 8.7 20 9.4M6.7 15.3 4 14.6"/>'),
   flame: I('<path d="M12 21.5c-4.1 0-6.5-2.6-6.5-6 0-2.7 1.7-4.6 3.1-6.4C9.9 7.4 11 5.5 11 3c3 1.5 4.6 3.7 4.2 6.5 1-.4 1.7-1.2 2-2.3 1.5 1.7 2.3 3.9 2.3 6.3 0 4.4-3.4 8-7.5 8z"/>'),
   palette2: I('<circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="14.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="13.5" r="1.2" fill="currentColor" stroke="none"/>'),
+  users: I('<circle cx="9" cy="8.5" r="3.4"/><path d="M2.8 20c.7-3.4 3.2-5.2 6.2-5.2s5.5 1.8 6.2 5.2"/><path d="M16 5.4a3.5 3.5 0 0 1 0 6.2"/><path d="M18.2 15.3c1.7.8 2.7 2.3 3 4.7"/>'),
+  folder: I('<path d="M3 7.5V17a2.5 2.5 0 0 0 2.5 2.5h13A2.5 2.5 0 0 0 21 17V9.5A2.5 2.5 0 0 0 18.5 7h-6L10.6 4.9a1.6 1.6 0 0 0-1.2-.6H5.5A2.5 2.5 0 0 0 3 6.8z"/>'),
+  // the dedicated Lock-mode mark: a padlock whose keyhole carries its own
+  // spark — one glance says “the panel is sealed on purpose”. Theme-aware
+  // like every icon: it inherits whatever color the current mood hands it.
+  lockMode: I('<rect x="4.5" y="10.5" width="15" height="10" rx="3"/><path d="M8.2 10.5V7a3.8 3.8 0 0 1 7.3-1.4"/><circle cx="12" cy="14.7" r="1.5"/><path d="M12 16.2v1.6"/><path d="M18.6 4.2v2.4"/><path d="M17.4 5.4h2.4"/>'),
+  // the Climind-W sibling mark: an open C holding a small world — drawn on
+  // currentColor so the little ribbon logo re-tints itself with every mood
+  climind: I('<path d="M19.2 6.2A8.6 8.6 0 1 0 19.2 17.8"/><circle cx="12" cy="12" r="3.6"/><path d="M9.5 12h5"/>'),
 };
 
 // ---------- responsibility badge ----------
@@ -224,26 +235,115 @@ export function vibrate(ms = 8) {
   try { navigator.vibrate?.(ms); } catch { /* unsupported */ }
 }
 
-// ---------- toast ----------
-// every toast carries its own × — closing it only ever touches this one node,
-// never the room around it (the old auto-dismiss timer is cancelled on tap)
+// ---------- toasts: dynamic island notes ----------
+// spring in, drain a quiet progress bar, hold while the pointer rests on
+// them, leave with the same spring — stacked, capped, RTL-aware.
 export function toast(msg, kind = 'info', ms = 2600) {
   const box = document.getElementById('toasts');
-  const el = h('div', { class: `toast toast--${kind}`, role: 'status' },
-    icon(kind === 'ok' ? 'check' : kind === 'err' ? 'x' : 'info'),
-    h('span', { class: 'toast__msg' }, msg));
-  let gone = false;
+  let gone = false, start = Date.now(), left = ms, timer = null;
   const close = () => {
     if (gone || !el.isConnected) return;
     gone = true;
     clearTimeout(timer);
     el.classList.add('leaving');
-    setTimeout(() => el.remove(), 300);
+    setTimeout(() => el.remove(), 320);
   };
-  const timer = setTimeout(close, ms);
-  el.append(h('button', { class: 'toast__x', 'aria-label': t('close'), onclick: (e) => { e.stopPropagation(); close(); } }, icon('x')));
+  const arm = (m) => { clearTimeout(timer); start = Date.now(); left = m; timer = setTimeout(close, m); };
+  const el = h('div', { class: `toast toast--${kind}`, role: 'status' },
+    h('span', { class: 'toast__icn', 'aria-hidden': 'true' }, icon(kind === 'ok' ? 'check' : kind === 'err' ? 'x' : 'info')),
+    h('span', { class: 'toast__msg' }, msg),
+    h('span', { class: 'toast__bar', style: { animationDuration: `${Math.max(1200, ms)}ms` }, 'aria-hidden': 'true' }),
+    h('button', { class: 'toast__x', 'aria-label': t('close'), onclick: (e) => { e.stopPropagation(); close(); } }, icon('x')));
+  arm(ms);
+  el.addEventListener('mouseenter', () => {
+    if (gone) return;
+    clearTimeout(timer);
+    left = Math.max(600, left - (Date.now() - start));
+    el.classList.add('hold');
+  });
+  el.addEventListener('mouseleave', () => {
+    if (gone) return;
+    el.classList.remove('hold');
+    arm(left);
+  });
   box.append(el);
+  // the stack stays readable — the oldest note gives its seat away
+  while (box.children.length > 4) box.firstElementChild?.remove();
   vibrate(kind === 'err' ? [14, 60, 14] : 8);
+}
+
+// ---------- the frozen share page (suspended share) ----------
+// a suspended share keeps the credential working and the guest signed in,
+// but an icy glass room answers instead of the inbox — and it rechecks on
+// its own, so the moment the admin unsuspends (or re-assigns mailboxes),
+// the guest walks back in untouched, with a hello toast. The card shows the
+// REASON (suspended by the admin / no mailbox assigned) and — when the
+// subscription has an end — the remaining time, ticking live or standing
+// perfectly still when the admin froze the countdown.
+let frozenTimer = null;
+let frozenClock = null;
+async function recheckFrozen() {
+  try {
+    const r = await fetch('/api/emails?limit=1', { headers: { accept: 'application/json' } });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d && d.ok && d.suspended === false) shareUnfrozen(true);
+  } catch { /* offline — stay frozen, the timer tries again */ }
+}
+async function frozenLogout() {
+  clearInterval(frozenTimer);
+  clearInterval(frozenClock);
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* session already gone */ }
+  location.assign('/');
+}
+export function shareFrozen(share = null) {
+  if (document.getElementById('share-frozen')) return;
+  // the reason line: why is this share frozen? (no payload → the neutral text)
+  const reasonKey = !share ? 'shareFrozenDesc'
+    : (share.time_frozen || share.address_ids?.length || share.address) ? 'shareFrozenManual'
+    : 'shareFrozenNoMailbox';
+  // remaining subscription time — frozen shows a constant, otherwise it ticks
+  let leftMs = null;
+  if (share?.expires_at) {
+    leftMs = share.time_frozen && share.frozen_at
+      ? Math.max(0, Number(share.expires_at) - Number(share.frozen_at))
+      : Math.max(0, Number(share.expires_at) - Date.now());
+  }
+  const leftEl = leftMs !== null ? h('span', { class: 'share-frozen__left mono' }, fmtCountdown(leftMs, t)) : null;
+  const leftRow = leftEl ? h('div', { class: 'share-frozen__clock' }, icon('clock'), h('span', {}, `${t('shareFrozenLeft')}: `), leftEl) : null;
+  const el = h('div', { class: 'share-frozen', id: 'share-frozen', role: 'alertdialog', 'aria-modal': 'true', 'aria-label': t('shareFrozenTitle') },
+    h('div', { class: 'share-frozen__card glass' },
+      h('span', { class: 'share-frozen__sigil', 'aria-hidden': 'true' }, icon('snow')),
+      h('h2', { class: 'share-frozen__title' }, t('shareFrozenTitle')),
+      h('p', { class: 'share-frozen__desc' }, t(reasonKey)),
+      leftRow,
+      h('div', { class: 'share-frozen__acts' },
+        h('button', { class: 'btn', onclick: recheckFrozen }, icon('refresh'), t('shareFrozenRetry')),
+        h('button', { class: 'btn btn--ghost', onclick: frozenLogout }, icon('logout'), t('lockLogout')))));
+  document.body.append(el);
+  requestAnimationFrame(() => el.classList.add('is-on'));
+  clearInterval(frozenTimer);
+  frozenTimer = setInterval(recheckFrozen, 45_000);
+  // a live countdown while the time is allowed to burn; a frozen countdown
+  // is a constant — drawing it once is enough
+  clearInterval(frozenClock);
+  if (leftEl && leftMs > 0 && !(share?.time_frozen && share?.frozen_at)) {
+    const end = Date.now() + leftMs;
+    frozenClock = setInterval(() => {
+      const v = end - Date.now();
+      if (v <= 0) { leftEl.textContent = t('soon'); clearInterval(frozenClock); return; }
+      leftEl.textContent = fmtCountdown(v, t);
+    }, 1000);
+  }
+}
+export function shareUnfrozen(resumed = false) {
+  clearInterval(frozenTimer);
+  clearInterval(frozenClock);
+  const el = document.getElementById('share-frozen');
+  if (!el) return;
+  el.classList.add('leaving');
+  setTimeout(() => el.remove(), 380);
+  if (resumed) toast(t('shareResumed'), 'ok', 3800);
 }
 
 // ---------- modal (bottom-sheet on touch devices) ----------
@@ -285,9 +385,11 @@ export function modal({ title, iconName, body, footer, wide, onClose, cls = '' }
   if (title) m.append(h('div', { class: 'modal__head' }, h('h3', { class: 'modal__title' }, iconName ? icon(iconName) : '', title),
     h('button', { class: 'icon-btn', onclick: close }, icon('x'))));
   const bd = h('div', { class: 'modal__body' });
-  if (body) bd.append(...(Array.isArray(body) ? body : [body]));
+  // null/false entries are skipped, never stringified — Element.append(null)
+  // paints the literal word "null" (the guest's account modal taught us that)
+  if (body) bd.append(...(Array.isArray(body) ? body.filter((x) => x != null && x !== false) : [body]));
   m.append(bd);
-  if (footer) m.append(h('div', { class: 'modal__foot' }, ...(Array.isArray(footer) ? footer : [footer])));
+  if (footer) m.append(h('div', { class: 'modal__foot' }, ...(Array.isArray(footer) ? footer.filter((x) => x != null && x !== false) : [footer])));
   back.append(m);
   root.append(back);
   return { close, el: m, body: bd };

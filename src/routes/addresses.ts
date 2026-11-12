@@ -4,13 +4,13 @@ import type { Env, AppEnv, SessionUser } from '../util';
 import {
   uid, now, clean, RE_LOCAL_PART, RE_DOMAIN, randomLocalPart, getSetting,
 } from '../util';
-import { requireUser, requireAdmin, } from '../auth';
+import { requireUser, requireOwner, requireAdmin } from '../auth';
 
 const app = new Hono<AppEnv>();
 
 // ---------- domains ----------
 
-app.get('/domains', requireUser, async (c) => {
+app.get('/domains', requireOwner, async (c) => {
   const u = c.get('user') as SessionUser;
   const admin = u.role === 'admin';
   const { results } = admin
@@ -138,21 +138,75 @@ app.delete('/domains/:id', requireAdmin, async (c) => {
   return c.json({ ok: true });
 });
 
+// live DNS reality-check, straight from the resolver (DNS-over-HTTPS).
+// MX answers "can this domain receive mail", TXT answers "is SPF published".
+// The worker does the lookup — the browser never leaves our origin (CSP-safe).
+app.get('/domains/:id/dns-check', requireAdmin, async (c) => {
+  const id = c.req.param('id');
+  const dom = await c.env.DB.prepare('SELECT id, name FROM domains WHERE id = ?').bind(id)
+    .first<{ id: string; name: string }>();
+  if (!dom) return c.json({ ok: false, error: 'not_found' }, 404);
+
+  const doh = async (type: string): Promise<{ Status: number; Answer?: { name: string; type: number; data: string }[] }> => {
+    const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(dom!.name)}&type=${type}`, {
+      headers: { accept: 'application/dns-json' },
+    });
+    if (!res.ok) throw new Error(`dns_${res.status}`);
+    return res.json();
+  };
+
+  try {
+    const [mx, txt] = await Promise.all([doh('MX'), doh('TXT')]);
+    const mxRecords = (mx.Answer ?? []).filter((a) => a.type === 15).map((a) => a.data.replace(/^\d+\s+/, ''));
+    const txtRecords = (txt.Answer ?? []).filter((a) => a.type === 16).map((a) => a.data.replace(/^"|"$/g, ''));
+    const cfMx = mxRecords.some((r) => /\.mx\.cloudflare\.net\.?$/i.test(r) || /mx\.cloudflare\.net/i.test(r));
+    const spf = txtRecords.find((r) => /^v=spf1/i.test(r.trim())) ?? null;
+    const spfCf = !!spf && /_spf\.mx\.cloudflare\.net/i.test(spf);
+    return c.json({
+      ok: true,
+      check: {
+        domain: dom.name,
+        mx_ok: mxRecords.length > 0,
+        mx_cloudflare: cfMx,
+        mx_records: mxRecords.slice(0, 6),
+        spf_ok: !!spf,
+        spf_cloudflare: spfCf,
+        spf_record: spf,
+        checked_at: now(),
+      },
+    });
+  } catch (e) {
+    return c.json({ ok: false, error: 'dns_check_failed', detail: String((e as Error)?.message ?? e).slice(0, 120) }, 502);
+  }
+});
+
 // ---------- addresses ----------
 
 app.get('/', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
-  const { results } = await c.env.DB.prepare(
-    `SELECT a.id, a.address, a.label, a.kind, a.expires_at, a.forward_to, a.notes, a.created_at, a.last_mail_at, d.name AS domain,
-       (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id AND e.is_read = 0) AS unread,
-       (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id) AS total
-     FROM addresses a LEFT JOIN domains d ON d.id = a.domain_id
-     WHERE a.user_id = ? ORDER BY a.created_at DESC`
-  ).bind(u.id).all();
+  // a share guest owns the shared mailbox SET — their list is those rows
+  const guestIds = u.share
+    ? (u.share.address_ids?.length ? u.share.address_ids : [u.share.address_id]).filter(Boolean)
+    : [];
+  const { results } = guestIds.length
+    ? await c.env.DB.prepare(
+      `SELECT a.id, a.address, a.label, a.kind, a.expires_at, a.forward_to, a.notes, a.created_at, a.last_mail_at, d.name AS domain,
+         (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id AND e.is_read = 0) AS unread,
+         (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id) AS total
+       FROM addresses a LEFT JOIN domains d ON d.id = a.domain_id
+       WHERE a.id IN (${guestIds.map(() => '?').join(',')}) ORDER BY a.created_at DESC`
+    ).bind(...guestIds).all()
+    : await c.env.DB.prepare(
+      `SELECT a.id, a.address, a.label, a.kind, a.expires_at, a.forward_to, a.notes, a.created_at, a.last_mail_at, d.name AS domain,
+         (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id AND e.is_read = 0) AS unread,
+         (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id) AS total
+       FROM addresses a LEFT JOIN domains d ON d.id = a.domain_id
+       WHERE a.user_id = ? ORDER BY a.created_at DESC`
+    ).bind(u.id).all();
   return c.json({ ok: true, addresses: results ?? [] });
 });
 
-app.post('/', requireUser, async (c) => {
+app.post('/', requireOwner, async (c) => {
   const u = c.get('user') as SessionUser;
   const body = await c.req.json<{ local?: string; domain?: string; kind?: string; ttl_hours?: number; label?: string; notes?: string }>().catch(() => null);
 
@@ -194,7 +248,7 @@ app.post('/', requireUser, async (c) => {
   return c.json({ ok: true, address: { id, address, kind, expires_at: expiresAt, label: clean(body?.label, 80) || null } });
 });
 
-app.patch('/:id', requireUser, async (c) => {
+app.patch('/:id', requireOwner, async (c) => {
   const u = c.get('user') as SessionUser;
   const id = c.req.param('id');
   const addr = await c.env.DB.prepare('SELECT id, user_id, kind, expires_at FROM addresses WHERE id = ? AND user_id = ?')
@@ -219,16 +273,21 @@ app.patch('/:id', requireUser, async (c) => {
   return c.json({ ok: true });
 });
 
-// delete an address (its emails cascade)
-app.delete('/:id', requireUser, async (c) => {
+// delete an address — its emails cascade, its 2FA codes die with it, its
+// share junction rows cascade: exactly what the delete confirm promises
+app.delete('/:id', requireOwner, async (c) => {
   const u = c.get('user') as SessionUser;
   const id = c.req.param('id');
+  const own = await c.env.DB.prepare('SELECT id FROM addresses WHERE id = ? AND user_id = ?').bind(id, u.id).first();
+  if (!own) return c.json({ ok: false, error: 'not_found' }, 404);
+  // bound vault codes are explicit (their FK is SET NULL, not CASCADE)
+  await c.env.DB.prepare('DELETE FROM totp_entries WHERE address_id = ?').bind(id).run().catch(() => { /* older database */ });
   await c.env.DB.prepare('DELETE FROM addresses WHERE id = ? AND user_id = ?').bind(id, u.id).run();
   return c.json({ ok: true });
 });
 
 // empty an inbox
-app.post('/:id/purge', requireUser, async (c) => {
+app.post('/:id/purge', requireOwner, async (c) => {
   const u = c.get('user') as SessionUser;
   const id = c.req.param('id');
   const addr = await c.env.DB.prepare('SELECT id FROM addresses WHERE id = ? AND user_id = ?').bind(id, u.id).first();

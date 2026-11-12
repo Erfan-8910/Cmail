@@ -1,7 +1,8 @@
 // Cmail — app shell: boot, router, floating pill navigation + account switcher
 import { api, state, errText } from './api.js';
 import { t, setLang, lang } from './i18n.js';
-import { h, clear, icon, toast, vibrate, avatarColor, closeAllOverlays } from './ui.js';
+import { h, clear, icon, toast, vibrate, avatarColor, closeAllOverlays, confirmBox, copyText } from './ui.js';
+import * as island from './island.js';
 import { openCmdk, closeCmdk, cmdkIsOpen, cmdkKey } from './cmdk.js';
 import { renderLogin } from './views/auth.js';
 import { renderGate } from './views/gate.js';
@@ -13,6 +14,7 @@ import { renderSettings } from './views/settings.js';
 import { renderAbout } from './views/about.js';
 import { renderHelp } from './views/help.js';
 import { renderInto as renderAlerts } from './health.js';
+import { lockNow, maybeLock, isLocked } from './lockscreen.js';
 
 const app = document.getElementById('app');
 const pillbar = document.getElementById('pillbar');
@@ -89,30 +91,54 @@ async function route() {
   if (needsAuth && !state.user) { location.hash = '#/login'; return; }
   if (page === 'login' && state.user) { location.hash = ready ? '#/mail' : '#/status'; return; }
 
+  // a locked panel stays locked — the overlay covers every page until the
+  // credential the owner chose (or a full sign-out) answers
+  maybeLock();
+
   const authView = page === 'login' || page === 'status';
   renderShell(page, authView);
   if (stale()) return;
   clear(app);
   window.scrollTo({ top: 0 });
 
-  // serious system issues (D1 down, tables missing, schema old, mail stalled)
-  // show as banners above the content — admins only, cached for a minute
+  // a share guest gets no admin alerts — its own island lives above the page
   const alertHost = document.getElementById('sysalert');
   if (alertHost) {
     if (!authView && state.user?.role === 'admin') {
       await renderAlerts(alertHost);
       if (stale()) return;
       document.body.classList.toggle('has-alert', !alertHost.hidden && alertHost.children.length > 0);
+    } else if (!authView && state.user?.role === 'share') {
+      // the Dynamic Island floats fixed above the content — no banner, no
+      // padding shift, the page keeps its full height
+      alertHost.hidden = true; clear(alertHost);
+      document.body.classList.remove('has-alert');
+      renderShareIsland();
     } else {
       alertHost.hidden = true; clear(alertHost);
       document.body.classList.remove('has-alert');
+      removeShareIsland();
     }
+  }
+
+  // a guest may only stand in the rooms its credential grants: mail, the
+  // synced vault, help and about — every other URL folds back into the mail
+  if (state.user?.role === 'share' && page && !['mail', 'vault', 'help', 'about'].includes(page)) {
+    location.hash = '#/mail'; return;
   }
 
   if (authView) {
     app.className = 'view view--auth';
     if (page === 'login') return renderLogin(app);
     return renderGate(app);
+  }
+
+  // an address that leads nowhere gets an honest page — the old behavior
+  // silently rendered the inbox under any unknown URL
+  if (!routes[page] && page) {
+    app.className = 'view';
+    render404(app);
+    return;
   }
 
   app.className = 'view';
@@ -128,8 +154,27 @@ async function route() {
   if (!stale()) slideGlider();
 }
 
+// ---------- 404 — the page that admits the URL went nowhere ----------
+function render404(root) {
+  const el = h('div', { class: 'nf404' },
+    h('div', { class: 'illus-plate' }, h('img', { src: 'assets/img/p404.webp', alt: '', width: '720', height: '720', decoding: 'async' })),
+    h('h2', { class: 'nf404__t' }, t('nf404Title')),
+    h('p', { class: 'nf404__d' }, t('nf404D')),
+    h('button', { class: 'btn btn--primary', onclick: () => { location.hash = state.user ? '#/mail' : '#/login'; } }, icon('inbox'), t('nf404Home')));
+  root.append(el);
+}
+
 // ---------- shell: floating pill navigation + mobile tabbar ----------
 function navItems() {
+  // a share guest lives inside its shared mailboxes — mail, vault (the synced
+  // 2FA codes of those very accounts) and help are the whole world
+  if (state.user?.role === 'share') {
+    return [
+      { key: 'mail', icon: 'inbox', label: t('navMail'), href: '#/mail' },
+      { key: 'vault', icon: 'key', label: t('navVault'), href: '#/vault' },
+      { key: 'help', icon: 'help', label: t('navHelp'), href: '#/help' },
+    ];
+  }
   const items = [
     { key: 'mail', icon: 'inbox', label: t('navMail'), href: '#/mail' },
     { key: 'addresses', icon: 'mail', label: t('navAddresses'), href: '#/addresses' },
@@ -140,6 +185,14 @@ function navItems() {
 }
 
 function tabItems() {
+  if (state.user?.role === 'share') {
+    return [
+      { key: 'mail', icon: 'inbox', label: t('navMail') },
+      { key: 'vault', icon: 'key', label: t('navVault') },
+      { key: 'help', icon: 'help', label: t('navHelp') },
+      { key: 'about', icon: 'heart', label: t('navAbout') },
+    ];
+  }
   return [
     { key: 'mail', icon: 'inbox', label: t('navMail') },
     { key: 'addresses', icon: 'mail', label: t('navAddresses') },
@@ -170,7 +223,7 @@ function renderShell(page, authView) {
   pbNav.append(h('span', { class: 'pill-glider', id: 'pill-glider', 'aria-hidden': 'true' }));
   requestAnimationFrame(() => slideGlider(true));
 
-  // ----- end controls: search · theme · language · account -----
+  // ----- end controls: search · theme · language · lock · account -----
   clear(pbEnd);
   pbEnd.append(
     h('button', { class: 'spot-pill', title: t('searchMail'), 'aria-label': t('searchMail'), onclick: () => openCmdk() },
@@ -179,6 +232,9 @@ function renderShell(page, authView) {
     h('button', { class: 'icon-btn', title: t('theme'), 'aria-label': t('theme'), onclick: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') }, icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')),
     h('button', { class: 'icon-btn', title: t('language'), 'aria-label': t('language'), onclick: () => { setLang(lang === 'fa' ? 'en' : 'fa'); route(); } }, icon('globe')),
   );
+  // the padlock that really locks the panel — visible for the owner when the
+  // second factor is on (default mode) or whenever the password mode is picked
+  refreshLockBadge();
   const userWrap = h('div', { style: { position: 'relative', display: 'inline-flex' } });
   userWrap.append(h('button', { class: 'avatar', id: 'acct-avatar', 'aria-label': t('account'), title: t('account'), onclick: (e) => { e.stopPropagation(); openSwitcher(userWrap); } }, activeAvatarLetter()));
   pbEnd.append(userWrap);
@@ -195,6 +251,156 @@ function renderShell(page, authView) {
 }
 
 function isMac() { return /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent); }
+
+// ---------- the padlock at the top — a real lock ----------
+function lockBadgeBtn() {
+  const pw = state.lockMode === 'password';
+  return h('button', {
+    class: 'icon-btn lock-badge', id: 'lock-badge',
+    title: pw ? t('lockBadgePw') : t('lockBadgeTotp'),
+    'aria-label': pw ? t('lockBadgePw') : t('lockBadgeTotp'),
+    onclick: () => {
+      vibrate(6);
+      // before locking, say plainly what will be asked on the way back in
+      confirmBox(pw ? t('lockConfirmPw') : t('lockConfirmTotp'), () => lockNow(), false);
+    },
+  }, icon('lockMode'));
+}
+// the padlock shows for the owner when 2FA is on (totp mode) — or always,
+// once the owner picks the password mode in Settings → Security
+export function refreshLockBadge() {
+  const existing = document.getElementById('lock-badge');
+  const show = !!state.user && state.user.role !== 'share'
+    && (!!state.user.totp_enabled || state.lockMode === 'password');
+  if (show && !existing && !pillbar.hidden && state.user) pbEnd.append(lockBadgeBtn());
+  if (!show && existing) existing.remove();
+}
+// kept for the 2FA enable/disable flows in Settings
+export function updateLockBadge(_on) { refreshLockBadge(); }
+
+// ---------- the share island — the guest's Dynamic Island ----------
+// The old banner pushed the whole page down and talked too much. Now: one
+// compact floating pill in the Apple Dynamic Island spirit — icon, mailbox
+// summary, a live countdown and a single "?" that morphs it open. The
+// details are the essentials and nothing else: which mailboxes, how much
+// time is left, the admin's note when there is one, and the way out.
+let shareTick = null;
+let shareIslandEl = null;
+let shareIslandSig = '';
+
+function dhms(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(s / 86400);
+  const h = String(Math.floor((s % 86400) / 3600)).padStart(2, '0');
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  return lang === 'fa'
+    ? `${d ? d + ' روز و ' : ''}${h}:${m}:${ss}`
+    : `${d ? d + 'd ' : ''}${h}:${m}:${ss}`;
+}
+
+export function removeShareIsland() {
+  if (shareTick) { clearInterval(shareTick); shareTick = null; }
+  if (shareIslandEl) { shareIslandEl.remove(); shareIslandEl = null; }
+  shareIslandSig = '';
+}
+
+function shareIslandLogout() {
+  removeShareIsland();
+  return api.post('/api/auth/logout').catch(() => { })
+    .then(() => { state.user = null; nav('/login'); });
+}
+
+// the window closed under the guest's feet — say it plainly, then out
+function shareExpired() {
+  if (!state.user || state.user.role !== 'share') return;
+  removeShareIsland();
+  state.user = null;
+  toast(t('shareEnded'), 'err', 4200);
+  location.hash = '#/login';
+}
+
+function renderShareIsland() {
+  const sh = state.user?.share;
+  // nothing changed since the last draw — the island never repaints itself
+  // out from under a tap (the 20s keepalive runs this check constantly).
+  // the language rides in the signature: switching fa↔en redraws the words
+  const sig = JSON.stringify(sh ?? null) + '|' + lang;
+  if (!sh) { removeShareIsland(); return; }
+  if (shareIslandEl && sig === shareIslandSig) return;
+  removeShareIsland();
+  shareIslandSig = sig;
+
+  const shAddrs = (sh.addresses?.length ? sh.addresses : [sh.address]).filter(Boolean);
+  const localPart = (a) => String(a ?? '').split('@')[0] || a;
+
+  // two clocks, one number: the pill wears the countdown, the open details
+  // label it — both breathe from the same tick
+  const cd = h('span', { class: 'sisland__cd mono' }, '—');
+  const cd2 = h('b', { class: 'mono' }, '—');
+  const setCd = (v) => { cd.textContent = v; cd2.textContent = v; };
+
+  const pill = h('button', {
+    class: 'sisland__pill', 'aria-expanded': 'false', 'aria-label': t('shareIslandTitle'),
+    onclick: () => {
+      const open = el.classList.toggle('is-open');
+      pill.setAttribute('aria-expanded', String(open));
+      clear(qBtn).append(icon(open ? 'x' : 'help'));
+      vibrate(open ? 8 : 5);
+    },
+  },
+    h('span', { class: 'sisland__icn' }, icon('users')),
+    h('span', { class: 'sisland__label' },
+      shAddrs.length === 1 ? localPart(shAddrs[0]) : t('shareIslandCount').replace('{n}', lang === 'fa' ? faDig(shAddrs.length) : String(shAddrs.length))),
+    h('span', { class: 'sisland__clock' }, icon('clock'), cd),
+    h('span', { class: 'sisland__q', 'aria-hidden': 'true' }, icon('help')));
+
+  // the details: the mailboxes (tap = copy), the labeled time, the admin's
+  // note when one exists — and nothing else
+  const boxes = h('div', { class: 'sisland__boxes' },
+    shAddrs.map((a) => h('button', {
+      class: 'sisland__box', title: t('copy'),
+      onclick: async () => { await copyText(a); toast(t('copied'), 'ok', 1300); },
+    },
+      h('span', { class: 'sisland__box-icn' }, icon('mail')),
+      h('span', { class: 'mono' }, a),
+      h('span', { class: 'sisland__box-copy' }, icon('copy')))));
+
+  const body = h('div', { class: 'sisland__body' },
+    h('div', { class: 'sisland__in' },
+      h('div', { class: 'sisland__row' }, icon('clock'), h('span', {}, `${t('shareFrozenLeft')}: `), cd2),
+      boxes,
+      sh.note ? h('div', { class: 'sisland__note' }, icon('note'), h('span', {}, sh.note)) : '',
+      h('div', { class: 'sisland__acts' },
+        h('button', { class: 'btn btn--sm btn--danger-ghost', onclick: shareIslandLogout }, icon('logout'), t('logout')))));
+
+  const qBtn = pill.querySelector('.sisland__q');
+  const el = h('div', { class: 'sisland', id: 'share-island' }, pill, body);
+  document.body.append(el);
+  shareIslandEl = el;
+
+  // a FROZEN countdown stands still at frozen_at — no burning, no logout,
+  // the honest number the admin froze; no expiry at all says so in a word
+  const frozenLeft = sh.time_frozen && sh.frozen_at && sh.expires_at
+    ? Math.max(0, Number(sh.expires_at) - Number(sh.frozen_at))
+    : null;
+  if (frozenLeft !== null) { setCd(dhms(frozenLeft)); return; }
+  if (!sh.expires_at) { setCd(t('shareNoLimit')); return; }
+  const tick = () => {
+    const left = (sh.expires_at ?? 0) - Date.now();
+    if (left <= 0) {
+      if (shareTick) { clearInterval(shareTick); shareTick = null; }
+      shareExpired();
+      return;
+    }
+    setCd(dhms(left));
+  };
+  tick();
+  shareTick = window.setInterval(tick, 1000);
+}
+
+const FA_DIGITS_ISLAND = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+function faDig(n) { return String(n).replace(/\d/g, (d) => FA_DIGITS_ISLAND[+d]); }
 
 // ---------- the gliding glass indicator ----------
 // one pill of frosted glass lives under the nav; picking a page makes it
@@ -297,20 +503,23 @@ async function openSwitcher(anchor) {
   const listBox = h('div', { class: 'acct-menu__list' });
   menu.append(label, listBox);
 
-  // ----- add another account -----
-  menu.append(h('button', { class: 'acct-menu__add', onclick: async () => { closeSwitcher(); await createAddressModal(() => { invalidateAccounts(); route(); }); } },
-    icon('plus'), h('span', {}, t('acctNew'))));
+  // ----- add another account (the owner only — a guest cannot add) -----
+  if (state.user?.role !== 'share') {
+    menu.append(h('button', { class: 'acct-menu__add', onclick: async () => { closeSwitcher(); await createAddressModal(() => { invalidateAccounts(); route(); }); } },
+      icon('plus'), h('span', {}, t('acctNew'))));
+  }
 
   // ----- footer: manage / settings / about / sign out -----
+  const isShare = state.user?.role === 'share';
   const foot = h('div', { class: 'acct-menu__foot' });
   const footBtn = (icn, lbl, fn, cls = '') => {
     const b = h('button', { class: cls, onclick: () => { closeSwitcher(); fn(); } }, icon(icn), h('span', {}, lbl));
     return b;
   };
   foot.append(
-    footBtn('inbox', t('navAddresses'), () => nav('/addresses')),
+    isShare ? '' : footBtn('inbox', t('navAddresses'), () => nav('/addresses')),
     state.user?.role === 'admin' ? footBtn('globe', t('navDomains'), () => nav('/domains')) : '',
-    footBtn('settings', t('navSettings'), () => nav('/settings')),
+    isShare ? '' : footBtn('settings', t('navSettings'), () => nav('/settings')),
     footBtn('heart', t('navAbout'), () => nav('/about')),
     footBtn('logout', t('logout'), async () => { await api.post('/api/auth/logout').catch(() => {}); state.user = null; nav('/login'); }, 'is-danger'),
   );
@@ -373,12 +582,20 @@ function closeSwitcher() {
 }
 
 // ---------- theme & accent ----------
-// four palettes, each named after its actual color
+// twelve palettes, each named after its actual color
 const MOOD_META = {
   green: { dark: '#161c17', light: '#f3f6ef' },
   blue: { dark: '#131b21', light: '#eff4f6' },
   purple: { dark: '#181522', light: '#f4f1f7' },
   amber: { dark: '#1d1812', light: '#f7f3ea' },
+  rose: { dark: '#1f1419', light: '#f9f1f4' },
+  cyan: { dark: '#101c1b', light: '#eef6f5' },
+  orange: { dark: '#1f1712', light: '#f9f3ec' },
+  lime: { dark: '#191d10', light: '#f5f8ea' },
+  teal: { dark: '#111d18', light: '#eff6f2' },
+  indigo: { dark: '#14161f', light: '#f0f1f8' },
+  slate: { dark: '#14181c', light: '#f1f4f6' },
+  crimson: { dark: '#1f1413', light: '#f9f1f0' },
 };
 
 export function setTheme(theme) {
@@ -412,11 +629,26 @@ setInterval(async () => {
   try {
     const r = await api.get('/api/auth/me');
     state.user = r.user;
+    if (r.lock_mode) state.lockMode = r.lock_mode;
+    // the owner's toolbar may grow or lose the padlock as settings change
+    refreshLockBadge();
+    // the guest's island rides the freshest share facts — freeze state,
+    // mailbox set, expiry — repainting only when something really changed
+    if (state.user?.role === 'share') renderShareIsland();
+    const last = r.last_email ?? null;
     if (r.unread !== state.unread) {
       const grew = state.unread > 0 && r.unread > state.unread;
       state.unread = r.unread;
       updateUnreadBadge();
-      if (grew) toast(t('newMailToast'), 'ok', 3200);
+      if (grew && last) {
+        const seen = sessionStorage.getItem('cmail_seen_mail') ?? '';
+        const fresh = last.id !== seen && Date.now() - (last.received_at ?? 0) < 120_000;
+        if (fresh) { sessionStorage.setItem('cmail_seen_mail', last.id); island.arrived(last); }
+        else toast(t('newMailToast'), 'ok', 3200);
+      }
+    } else if (last && !sessionStorage.getItem('cmail_seen_mail')) {
+      // first poll of the session — the newest mail is old news, mark it seen
+      sessionStorage.setItem('cmail_seen_mail', last.id);
     }
   } catch { /* silent */ }
 }, 20_000);
@@ -444,20 +676,28 @@ export function updateUnreadBadge() {
   if (window.__cmailBooted) return;
   window.__cmailBooted = true;
   setTheme(localStorage.getItem('cmail_theme') ?? 'dark');
-  // older builds shipped other accent names — fold everything into the four
+  // older builds shipped other accent names — fold everything into the
   // palettes that carry their color's own name
   const LEGACY = {
     sage: 'green', serene: 'blue', violet: 'purple',
     emerald: 'green', ocean: 'blue', midnight: 'blue', ice: 'blue',
-    sakura: 'purple', rose: 'purple', wine: 'purple', coral: 'purple', gold: 'amber',
+    sakura: 'purple', wine: 'purple', coral: 'purple', gold: 'amber',
   };
   const savedAccent = localStorage.getItem('cmail_accent') ?? 'green';
   setAccent(LEGACY[savedAccent] ?? savedAccent);
   document.documentElement.dataset.bg = localStorage.getItem('cmail_bg') ?? 'aurora';
+  // scenes are gone — the living color stage is the one and only backdrop
+  if (localStorage.getItem('cmail_scene')) localStorage.removeItem('cmail_scene');
+  delete document.documentElement.dataset.scene;
 
   window.addEventListener('cmail:unauthorized', () => {
+    const wasShare = state.user?.role === 'share';
     state.user = null;
-    if (!location.hash.startsWith('#/login')) { toast(t('invalidCredentials'), 'err'); location.hash = '#/login'; }
+    if (!location.hash.startsWith('#/login')) {
+      // a guest whose credential was revoked/expired gets its own honest line
+      toast(wasShare ? t('shareEnded') : t('invalidCredentials'), 'err');
+      location.hash = '#/login';
+    }
   });
   window.addEventListener('cmail:rerender', () => { if (!location.hash.includes('/status')) route(); });
   window.addEventListener('cmail:unread-changed', (e) => { state.unread = e.detail ?? 0; updateUnreadBadge(); });
@@ -494,6 +734,7 @@ export function updateUnreadBadge() {
     const me = await api.get('/api/auth/me');
     state.user = me.user;
     state.unread = me.unread ?? 0;
+    if (me.lock_mode) state.lockMode = me.lock_mode;
   } catch { state.user = null; }
 
   if (!location.hash) location.hash = state.user ? '#/mail' : '#/login';

@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
 import { uid, now, clean, getSettings, setSetting, hashPassword, passwordStrong, RE_LOCAL_PART, randomLocalPart } from '../util';
-import { requireAdmin } from '../auth';
+import { requireAdmin, tokenFrom } from '../auth';
 import { testProvider } from '../emailout';
 import { TABLES, EXPECTED } from '../tables';
 
@@ -71,6 +71,7 @@ app.get('/settings', requireAdmin, async (c) => {
   const s = await getSettings(c.env, [
     'app_name', 'login_username', 'temp_ttl_default', 'max_addresses', 'session_days',
     'sending_provider', 'sending_api_key', 'sending_from_email', 'sending_from_name', 'retention_days',
+    'totp_grace_min', 'lock_mode',
   ]);
   return c.json({
     ok: true,
@@ -85,6 +86,8 @@ app.get('/settings', requireAdmin, async (c) => {
       sending_from_email: s.sending_from_email || '',
       sending_from_name: s.sending_from_name || 'Cmail',
       retention_days: parseInt(s.retention_days ?? '0', 10) || 0,
+      totp_grace_min: parseInt(s.totp_grace_min ?? '0', 10) || 0,
+      lock_mode: s.lock_mode === 'password' ? 'password' : 'totp',
     },
   });
 });
@@ -99,6 +102,15 @@ app.put('/settings', requireAdmin, async (c) => {
   if (body.max_addresses !== undefined) await setSetting(c.env, 'max_addresses', String(Math.min(1000, Math.max(1, parseInt(String(body.max_addresses), 10) || 50))));
   if (body.session_days !== undefined) await setSetting(c.env, 'session_days', String(Math.min(365, Math.max(1, parseInt(String(body.session_days), 10) || 30))));
   if (body.retention_days !== undefined) await setSetting(c.env, 'retention_days', String(Math.min(3650, Math.max(0, parseInt(String(body.retention_days), 10) || 0))));
+  // re-ask timer for the second factor: minutes after the last verified code
+  // during which a fresh password sign-in skips the TOTP step (0 = always ask)
+  if (body.totp_grace_min !== undefined) await setSetting(c.env, 'totp_grace_min', String(Math.min(1440, Math.max(0, parseInt(String(body.totp_grace_min), 10) || 0))));
+  // the padlock at the top: what it asks for when the owner presses it —
+  // the second factor (default, needs 2FA on) or the panel password (works
+  // with 2FA off, so the padlock can live on the toolbar either way)
+  if (body.lock_mode !== undefined) {
+    await setSetting(c.env, 'lock_mode', body.lock_mode === 'password' ? 'password' : 'totp');
+  }
 
   if (body.sending_provider !== undefined) {
     const provider = String(body.sending_provider);
@@ -125,6 +137,51 @@ app.post('/cleanup', requireAdmin, async (c) => {
   const { scheduledCleanup } = await import('../emailin');
   await scheduledCleanup(c.env);
   return c.json({ ok: true });
+});
+
+// --------------------------------------------------------------------------
+//  Devices & sessions — the admin's remote kill switch. Every signed-in
+//  device is listed with its browser/platform/IP, the current one is marked,
+//  and any of them (or all the others at once) can be forced offline:
+//  the session row is deleted, so its very next request answers 401.
+// --------------------------------------------------------------------------
+app.get('/sessions', requireAdmin, async (c) => {
+  const cur = tokenFrom(c);
+  const { results } = await c.env.DB.prepare(
+    `SELECT s.token, s.user_id, s.created_at, s.expires_at, s.ua, s.ip, s.share_id, u.username, sl.username AS share_username
+       FROM sessions s JOIN users u ON u.id = s.user_id
+       LEFT JOIN share_links sl ON sl.id = s.share_id
+      WHERE s.expires_at > ? ORDER BY s.created_at DESC LIMIT 100`
+  ).bind(now()).all<{ token: string; user_id: string; created_at: number; expires_at: number; ua: string; ip: string; share_id: string | null; username: string; share_username: string | null }>();
+  // the raw token never leaves the worker — each row carries a short
+  // fingerprint instead, and the current browser is flagged exactly
+  const rows = (results ?? []).map((r) => ({
+    fingerprint: (r.token.slice(0, 6) + '…'),
+    user_id: r.user_id, username: r.share_username ? `${r.username} ⇐ ${r.share_username}` : r.username,
+    share: !!r.share_id,
+    created_at: r.created_at, expires_at: r.expires_at, ua: r.ua, ip: r.ip,
+    current: !!cur && r.token === cur,
+  }));
+  return c.json({ ok: true, sessions: rows });
+});
+
+app.post('/sessions/revoke', requireAdmin, async (c) => {
+  const body = await c.req.json<{ created_at?: number; ip?: string; ua?: string }>().catch(() => null);
+  if (typeof body?.created_at !== 'number' || !body?.ip) return c.json({ ok: false, error: 'bad_request' }, 400);
+  // sessions are identified by (created_at, ip) — a millisecond-precise login
+  // moment from one IP; the raw token never travels through the API
+  const r = await c.env.DB.prepare('DELETE FROM sessions WHERE created_at = ? AND ip = ?')
+    .bind(body.created_at, body.ip).run();
+  return c.json({ ok: true, removed: r.meta?.changes ?? 0 });
+});
+
+app.post('/sessions/revoke-others', requireAdmin, async (c) => {
+  const cur = tokenFrom(c);
+  if (!cur) return c.json({ ok: false, error: 'bad_request' }, 400);
+  // every session of this account except the browser holding the panel dies
+  const r = await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token != ?')
+    .bind((c.get('user') as SessionUser).id, cur).run();
+  return c.json({ ok: true, removed: r.meta?.changes ?? 0 });
 });
 
 // --------------------------------------------------------------------------
@@ -165,22 +222,27 @@ app.get('/health', requireAdmin, async (c) => {
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
     ).all<{ name: string }>();
     const existing = new Set((results ?? []).map((r) => r.name));
-    for (const t of TABLES) {
+    // every table answers in parallel — the report arrives in the time of
+    // its slowest single query, not the sum of all of them
+    const probed = await Promise.all(TABLES.map(async (t) => {
       const exists = existing.has(t.name);
       let rows: number | null = null;
       let missing_cols: string[] = [];
       if (exists) {
-        try { rows = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${t.name}`).first<{ n: number }>())?.n ?? 0; }
-        catch { rows = null; }
-        try {
-          const info = await env.DB.prepare(`PRAGMA table_info(${t.name})`).all<{ name: string }>();
-          const have = new Set((info.results ?? []).map((r) => r.name));
-          missing_cols = t.columns.filter((col) => !have.has(col));
-        } catch { /* pragma unavailable — treat as ok */ }
+        const [cnt, cols] = await Promise.all([
+          env.DB.prepare(`SELECT COUNT(*) AS n FROM ${t.name}`).first<{ n: number }>().catch(() => null),
+          env.DB.prepare(`PRAGMA table_info(${t.name})`).all<{ name: string }>().catch(() => ({ results: [] as { name: string }[] })),
+        ]);
+        rows = cnt?.n ?? null;
+        const have = new Set((cols.results ?? []).map((r) => r.name));
+        missing_cols = t.columns.filter((col) => !have.has(col));
       }
-      tables.push({ name: t.name, exists, rows, missing_cols });
-      if (!exists) missingTables++;
-      missingCols += missing_cols.length;
+      return { name: t.name, exists, rows, missing_cols } as TableRow;
+    }));
+    for (const r of probed) {
+      tables.push(r);
+      if (!r.exists) missingTables++;
+      missingCols += r.missing_cols.length;
     }
     for (const n of existing) if (!EXPECTED.has(n)) extras.push(n);
   }
@@ -200,6 +262,26 @@ app.get('/health', requireAdmin, async (c) => {
   const cron_dead = tables_ok() && install_age_h !== null && install_age_h > 26
     && (cron_last === null || cron_age_h === null || cron_age_h > 26);
   if (cron_dead) issues.push({ code: 'cron_dead', severity: 'warn' });
+
+  // ---- 3b) expired share credentials the cron has not reached yet ----
+  // the hourly cleanup deletes expired shares + their sessions; when the cron
+  // is missing or has not fired, the leftovers must be named for the admin.
+  // A share with a FROZEN countdown is not expired — its clock stands at
+  // frozen_at while suspended (0011).
+  let expired_shares = 0;
+  if (connected) {
+    try {
+      const r = await env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM share_links
+          WHERE expires_at IS NOT NULL AND (
+            (time_frozen = 1 AND frozen_at IS NOT NULL AND expires_at < frozen_at)
+            OR ((time_frozen IS NULL OR time_frozen = 0) AND expires_at < ?)
+          )`
+      ).bind(now()).first<{ n: number }>();
+      expired_shares = r?.n ?? 0;
+    } catch { /* share tables missing — nothing to count */ }
+    if (expired_shares > 0) issues.push({ code: 'expired_shares', severity: 'warn', detail: String(expired_shares) });
+  }
 
   // ---- 4) mail flow ----
   let emails_total = 0, addresses_total = 0, temp_active = 0;

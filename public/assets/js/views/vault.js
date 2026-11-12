@@ -2,6 +2,7 @@
 import { api, state, errText } from '../api.js';
 import { t } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, esc, glyphs, glyphCats, glyphTile, vibrate, fmtCountdown, lockBadge, avatarColor } from '../ui.js';
+import { invalidateAccounts } from '../app.js';
 
 const COLORS = { violet: '#a78bfa', sky: '#38bdf8', mint: '#34d399', amber: '#fbbf24', rose: '#fb7185' };
 let entries = [];
@@ -103,6 +104,12 @@ export async function renderVault(root) {
   await api.get('/api/addresses').then((r) => state.addresses = r.addresses ?? []).catch(() => {});
   // grants for addresses that no longer exist are quietly retired
   pruneTempAuth();
+  // a guest landing straight on the vault picks its first shared mailbox —
+  // the vault opens on the account you are actually in, guests included
+  if (state.user?.role === 'share' && !state.currentAddressId && state.addresses?.length) {
+    state.currentAddressId = state.addresses[0].id;
+    try { localStorage.setItem('cmail_acct', state.currentAddressId); } catch { /* private mode */ }
+  }
 
   await load();
 
@@ -290,7 +297,7 @@ export async function renderVault(root) {
           h('div', { class: 'totp-card__issuer' }, e.issuer ?? '')),
         h('div', { class: 'row', style: { gap: '0' } },
           h('button', { class: 'icon-btn', title: t('edit'), onclick: (ev) => { ev.stopPropagation(); entryModal(e, { onDone: load }); } }, icon('edit')),
-          h('button', { class: 'icon-btn', title: t('deleteEntry'), onclick: (ev) => { ev.stopPropagation(); confirmBox(t('deleteEntryConfirm'), async () => { await api.del(`/api/totp/${e.id}`); entries = entries.filter((x) => x.id !== e.id); draw(); toast(t('deletedN'), 'ok', 1500); }); } }, icon('trash')),
+          h('button', { class: 'icon-btn', title: t('deleteEntry'), onclick: (ev) => { ev.stopPropagation(); confirmBox(t('deleteEntryConfirm'), async () => { await api.del(`/api/totp/${e.id}`); entries = entries.filter((x) => x.id !== e.id); invalidateAccounts(); draw(); toast(t('deletedN'), 'ok', 1500); }); } }, icon('trash')),
         )),
       fld ? h('button', {
         class: 'totp-card__acc chip', onclick: (ev) => { ev.stopPropagation(); fscope = fld.id; draw(); },
@@ -421,9 +428,12 @@ export function entryModal(entry = null, opts = {}) {
     pickerWrap.classList.remove('is-open');
   }));
 
-  // mailbox link (its 2FA then lives on that account only)
+  // mailbox link (its 2FA then lives on that account only) — a guest always
+  // keeps the key inside one of its shared mailboxes: the unlinked option
+  // would only answer 403, so it is not offered at all
+  const isGuest = state.user?.role === 'share';
   const addrSel = h('select', { class: 'input' },
-    h('option', { value: '', selected: !addressId || undefined }, t('acctUnlinked')),
+    ...(isGuest ? [] : [h('option', { value: '', selected: !addressId || undefined }, t('acctUnlinked'))]),
     state.addresses.map((a) => h('option', { value: a.id, selected: a.id === addressId || undefined }, a.label || a.address)));
   // temporary accounts keep their vault locked — the button wears a lock and
   // only the responsibility dialog opens it
@@ -486,7 +496,7 @@ export function entryModal(entry = null, opts = {}) {
     } catch (e) { toast(errText(e), 'err'); }
   } }, icon('eye'), t('showSecret')) : null;
 
-  const refreshCard = () => { vibrate(6); if (opts.onDone) opts.onDone(); };
+  const refreshCard = () => { vibrate(6); invalidateAccounts(); if (opts.onDone) opts.onDone(); };
 
   const doSave = async () => {
     if (entry) {

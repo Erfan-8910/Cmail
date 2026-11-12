@@ -1,8 +1,11 @@
-// Cmail — views: first-run access creation + login / 2FA
-// Single-user ecosystem: the first visit creates the one account, then it is login-only.
+// Cmail — views: first-run access creation + login (owner AND share guest) / 2FA
+// Single-user ecosystem: the first visit creates the one account, then it is
+// login-only. Since v3.0.0 the sign-in card carries two doors: the owner's
+// account door and the shared-access door (بخش ورود اشتراکی) — the credential
+// an admin handed out signs the guest straight into its shared mailboxes.
 import { api, state, errText } from '../api.js';
 import { t, lang, setLang } from '../i18n.js';
-import { h, clear, icon, toast, copyText, vibrate } from '../ui.js';
+import { h, clear, icon, toast, copyText, vibrate, shareFrozen } from '../ui.js';
 import { setTheme } from '../app.js';
 
 // shared recovery copy-lines (used on the login page AND in the help view)
@@ -54,13 +57,41 @@ export function renderLogin(root) {
   const withUsername = state.setup?.login_username !== false;
   let pending = null;
   let form = null;
+  // which door is open — 'account' (owner / first run) or 'share' (guest)
+  let door = 'account';
 
   const card = h('div', { class: 'auth-card glass' });
   wrap.append(card);
 
+  // ---------- the two doors: account ↔ shared access ----------
+  // a slim segmented control above the card; the guest door only exists once
+  // the admin account exists (before that there is nothing to share yet)
+  let seg = null;
+  if (!firstRun) {
+    const accBtn = h('button', { class: 'auth-seg__btn is-on', type: 'button' }, icon('user'), t('loginTabAccount'));
+    const shareBtn = h('button', { class: 'auth-seg__btn', type: 'button' }, icon('users'), t('loginTabShare'));
+    accBtn.addEventListener('click', () => {
+      if (door === 'account') return;
+      door = 'account'; vibrate(5);
+      accBtn.classList.add('is-on'); shareBtn.classList.remove('is-on');
+      drawLogin();
+    });
+    shareBtn.addEventListener('click', () => {
+      if (door === 'share') return;
+      door = 'share'; vibrate(5);
+      shareBtn.classList.add('is-on'); accBtn.classList.remove('is-on');
+      drawShareLogin();
+    });
+    seg = h('div', { class: 'auth-seg', role: 'tablist' }, accBtn, shareBtn);
+    wrap.append(seg);
+  }
+
   function field(label, type, name, value, autofocus) {
     const input = h('input', { class: 'input', type, name, value, autocomplete: type === 'password' ? (firstRun ? 'new-password' : 'current-password') : 'username', required: true });
-    if (autofocus) setTimeout(() => input.focus(), 60);
+    // autofocus belongs to pointer devices only: on phones, focusing an input
+    // the moment the page opens pops the keyboard and scrolls the page — the
+    // load-moment jump users reported on "some devices"
+    if (autofocus && window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) setTimeout(() => input.focus(), 60);
     return h('div', { class: 'field' }, h('label', {}, label), input);
   }
 
@@ -113,9 +144,29 @@ export function renderLogin(root) {
     const submitBtn = h('button', { class: 'btn btn--primary', type: 'submit', style: { marginTop: '4px' } },
       icon('arrow'), t('login'));
     form.append(submitBtn);
-    form.addEventListener('submit', (e) => { e.preventDefault(); submitLogin(Object.fromEntries(new FormData(form).entries())); });
+    form.addEventListener('submit', (e) => { e.preventDefault(); submitLogin(Object.fromEntries(new FormData(form).entries()), 'account'); });
     card.append(form);
     card.append(recoveryPanel());
+  }
+
+  // ---------- the shared-access door ----------
+  function drawShareLogin() {
+    clear(card);
+    card.append(
+      h('div', { class: 'auth-share__sigil', 'aria-hidden': 'true' }, icon('users')),
+      h('h2', { class: 'auth-title' }, t('shareLoginTitle')),
+      h('p', { class: 'auth-sub' }, t('shareLoginSub')),
+    );
+    form = h('form', { class: 'auth-form' });
+    form.append(field(t('username'), 'text', 'username', '', true));
+    form.append(field(t('password'), 'password', 'password', ''));
+
+    const submitBtn = h('button', { class: 'btn btn--primary', type: 'submit', style: { marginTop: '4px' } },
+      icon('users'), t('shareLoginBtn'));
+    form.append(submitBtn);
+    form.addEventListener('submit', (e) => { e.preventDefault(); submitLogin(Object.fromEntries(new FormData(form).entries()), 'share'); });
+    card.append(form);
+    card.append(h('p', { class: 'auth-note' }, icon('key'), t('shareLoginHint')));
   }
 
   async function submitCreate(fd) {
@@ -134,14 +185,21 @@ export function renderLogin(root) {
     }
   }
 
-  async function submitLogin(fd) {
+  async function submitLogin(fd, fromDoor) {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
       const r = await api.post('/api/auth/login', { username: (fd.username ?? '').trim(), password: fd.password });
       if (r.totp_required) { pending = r.pending; drawTotp(); return; }
       state.user = r.user;
+      // the credential the admin handed out may carry a welcome note — the
+      // guest reads it the second it lands, straight from its own admin
+      if (fromDoor === 'share' && r.user?.share?.note) toast(r.user.share.note, 'info', 6000);
       afterAuth();
+      // an emptied share suspends at the door — the frozen waiting room
+      // answers instead of a broken empty inbox, and melts on its own when
+      // the first new email lands
+      if (fromDoor === 'share' && r.suspended) shareFrozen(r.user?.share ?? null);
     } catch (e) {
       toast(errText(e), 'err');
       shakeCard();
@@ -155,10 +213,16 @@ export function renderLogin(root) {
       h('h2', { class: 'auth-title' }, t('totpTitle')),
       h('p', { class: 'auth-sub' }, t('totpSub')),
     );
-    const codeInput = h('input', { class: 'input mono', style: { textAlign: 'center', fontSize: '22px', letterSpacing: '8px' }, inputmode: 'numeric', maxlength: '8', placeholder: '——————' });
-    const btn = h('button', { class: 'btn btn--primary', style: { width: '100%' } }, icon('shield'), t('verify'));
+    const codeInput = h('input', {
+      class: 'input mono', style: { textAlign: 'center', fontSize: '22px', letterSpacing: '8px' },
+      inputmode: 'numeric', autocomplete: 'one-time-code', name: 'totp', maxlength: '8',
+      placeholder: '••••••', pattern: '[0-9]*',
+    });
+    const btn = h('button', { class: 'btn btn--primary', type: 'submit', style: { width: '100%' } }, icon('shield'), t('verify'));
+    const back = h('button', { class: 'btn btn--ghost', type: 'button', style: { width: '100%' } }, icon('arrow'), t('totpBack'));
     const f = h('form', { class: 'auth-form' },
-      h('div', { class: 'field' }, h('label', {}, t('totpTitle')), codeInput), btn);
+      h('div', { class: 'field' }, h('label', {}, t('totpTitle')), codeInput), btn, back);
+    back.addEventListener('click', () => (door === 'share' ? drawShareLogin() : drawLogin()));
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true;
@@ -170,10 +234,18 @@ export function renderLogin(root) {
         toast(errText(err), 'err');
         shakeCard();
         btn.disabled = false;
+        codeInput.value = '';
+        if (err.code === 'pending_expired') {
+          // the 5-minute window closed — send the user back to the password
+          // step instead of leaving them on a form that can never succeed
+          setTimeout(() => (door === 'share' ? drawShareLogin() : drawLogin()), 900);
+          return;
+        }
+        codeInput.focus();
       }
     });
     card.append(f);
-    setTimeout(() => codeInput.focus(), 60);
+    if (window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) setTimeout(() => codeInput.focus(), 60);
   }
 
   if (firstRun) drawCreate(); else drawLogin();

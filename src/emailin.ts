@@ -98,11 +98,11 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
 
   const emailId = uid('eml_');
   await db.prepare(
-    `INSERT INTO emails (id, address_id, user_id, from_name, from_addr, to_addr, subject, preview, text_body, html_body, size, received_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO emails (id, address_id, user_id, from_name, from_addr, to_addr, subject, preview, text_body, html_body, size, received_at, direction, headers)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in', ?)`
   ).bind(
     emailId, addr.id, addr.user_id, fromName, fromAddr, to, subject, preview, text, html,
-    raw.length, now()
+    raw.length, now(), headerSnapshot(parsed, message)
   ).run();
 
   // attachments (store small ones inline in D1)
@@ -122,6 +122,25 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
 
   await db.prepare('UPDATE addresses SET last_mail_at = ? WHERE id = ?').bind(now(), addr.id).run();
 
+  // auto-file: the account's folders may carry sender rules (comma-separated
+  // fragments) — the first match quietly files the message. A database
+  // without the folders yet must never bounce real mail over it.
+  try {
+    const { results: ruled } = await db.prepare(
+      'SELECT id, sort_from FROM mail_folders WHERE address_id = ? AND sort_from IS NOT NULL'
+    ).bind(addr.id).all<{ id: string; sort_from: string }>();
+    if (ruled?.length) {
+      const hay = `${fromName ?? ''} ${fromAddr ?? ''}`.toLowerCase();
+      for (const f of ruled) {
+        const needles = String(f.sort_from ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+        if (needles.some((n) => hay.includes(n))) {
+          await db.prepare('UPDATE emails SET folder_id = ? WHERE id = ?').bind(f.id, emailId).run();
+          break;
+        }
+      }
+    }
+  } catch { /* older schema — plain inbox is fine */ }
+
   // heartbeat for the health panel ("mail is flowing") — never fail the message over it
   try {
     await db.prepare("INSERT INTO settings (key, value) VALUES ('last_mail_at', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
@@ -135,6 +154,33 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
   }
 
   // auto-reply could be added here later
+}
+
+// a compact header snapshot for the advanced-details panel: the headers a
+// person actually asks about (path, auth results, ids), capped so a mailing
+// list monster can never bloat the row
+function headerSnapshot(
+  parsed: { headers?: { key: string; value: string }[]; messageId?: string; date?: string },
+  message: ForwardableEmailMessage,
+): string {
+  const KEEP = new Set([
+    'from', 'to', 'cc', 'subject', 'date', 'message-id', 'reply-to', 'return-path',
+    'received', 'authentication-results', 'arc-authentication-results',
+    'dkim-signature', 'dkim-filter', 'spf', 'received-spf', 'dmarc',
+    'mime-version', 'content-type', 'user-agent', 'x-mailer', 'x-sender',
+    'list-unsubscribe', 'list-id', 'delivered-to', 'x-original-to',
+  ]);
+  const out: { k: string; v: string }[] = [];
+  for (const h of parsed.headers ?? []) {
+    const k = String(h.key ?? '').toLowerCase().trim();
+    if (!k || !KEEP.has(k)) continue;
+    const v = String(h.value ?? '').replace(/\s+/g, ' ').trim().slice(0, 900);
+    if (v) out.push({ k, v });
+    if (out.length >= 60) break;
+  }
+  if (!out.some((h) => h.k === 'date') && parsed.date) out.push({ k: 'date', v: String(parsed.date) });
+  if (!out.some((h) => h.k === 'received')) out.push({ k: 'received', v: `by Cloudflare Email Routing for ${message.to}; ${new Date().toUTCString()}` });
+  try { return JSON.stringify(out).slice(0, 24_000); } catch { return '[]'; }
 }
 
 function arrToB64(u8: Uint8Array): string {
@@ -171,6 +217,26 @@ export async function scheduledCleanup(env: Env): Promise<void> {
   }
   // stale sessions
   await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(t).run();
+  // expired share credentials leave completely: every live guest session dies,
+  // the mailbox junction rows and the link itself leave the database — the
+  // credential is unreachable from anywhere after this line (v3.0.0).
+  // A share whose countdown the admin FROZE does not burn while suspended:
+  // its effective clock stands at frozen_at, so only a frozen_at already past
+  // its own expiry can end it (0011).
+  try {
+    const expired = await env.DB.prepare(
+      `SELECT id FROM share_links
+        WHERE expires_at IS NOT NULL AND (
+          (time_frozen = 1 AND frozen_at IS NOT NULL AND expires_at < frozen_at)
+          OR ((time_frozen IS NULL OR time_frozen = 0) AND expires_at < ?)
+        )`
+    ).bind(t).all<{ id: string }>();
+    for (const s of expired.results ?? []) {
+      await env.DB.prepare('DELETE FROM sessions WHERE share_id = ?').bind(s.id).run();
+      await env.DB.prepare('DELETE FROM share_addresses WHERE share_id = ?').bind(s.id).run().catch(() => { /* pre-0010 */ });
+      await env.DB.prepare('DELETE FROM share_links WHERE id = ?').bind(s.id).run();
+    }
+  } catch { /* a database without share tables yet */ }
   // old rate-limit rows
   await env.DB.prepare('DELETE FROM auth_attempts WHERE window_start < ?').bind(t - 3600_000).run();
   // heartbeat: the health panel shows "background cleanup ran X ago"

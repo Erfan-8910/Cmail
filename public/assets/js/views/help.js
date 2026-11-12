@@ -11,6 +11,10 @@ export function renderHelp(root) {
   ));
 
   // keyboard shortcuts
+  // the keycaps avoid the risky glyphs: ↵ and the arrow pair are exactly the
+  // characters some device fonts turn into empty boxes (⌘ stays for Mac
+  // users only — that glyph ships with every Apple font)
+  const isMacLike = () => /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent);
   const K = (keys, label) => h('div', { class: 'kb-row' },
     h('span', { class: 'kb-keys' }, keys.map((k) => h('kbd', { class: 'kbd' }, k))),
     h('span', { class: 'kb-lbl' }, label));
@@ -18,10 +22,10 @@ export function renderHelp(root) {
     h('div', { class: 'card-head' }, icon('zap'), h('h3', {}, t('kbTitle'))),
     h('p', { class: 'small muted', style: { margin: '0 0 10px' } }, t('kbSub')),
     h('div', { class: 'kb-grid' },
-      K(['⌘', 'K'], t('kbPalette')),
+      K([isMacLike() ? '⌘' : 'Ctrl', 'K'], t('kbPalette')),
       K(['/'], t('kbSearch')),
       K(['J', 'K'], t('kbNext')),
-      K(['↵'], t('kbOpen')),
+      K(['Enter'], t('kbOpen')),
       K(['X'], t('kbSelect')),
       K(['S'], t('kbStar')),
       K(['esc'], t('kbClose')),

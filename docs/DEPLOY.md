@@ -20,11 +20,25 @@
 
 | Route | Style | Time | What you touch |
 |---|---|---|---|
+| **0 — One click** | browser, button | ~2 min | press the **Deploy to Cloudflare** button below |
 | **1 — One command** | terminal, automated | ~3 min | `bash deploy.sh` does everything |
 | **2 — Fully graphical** | browser only, zero commands | ~7 min | Dashboard: create DB → paste worker → one binding |
 | **3 — Terminal, step by step** | manual, explicit | ~5 min | wrangler commands |
 
 ---
+
+## Route 0 — one click (the Deploy button)
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Erfan-8910/Cmail)
+
+Press the button and Cloudflare does the cloning, provisioning and shipping on its own:
+
+1. **Press Deploy** — Cloudflare copies the repo into your own GitHub, creates a **fresh D1 database**, wires the binding and deploys the Worker. (The repository must be public for the button to see it.)
+2. **Open the app** at the URL Cloudflare shows — `/setup` takes over: create the admin account.
+3. **Connect your domain** — the wizard walks Email Routing on your own zone (mail receiving always lives in your Cloudflare, so the domain must sit in the same account).
+4. Your code, your repo: the button already placed the project in your GitHub with a CI pipeline — every push rebuilds and redeploys.
+
+The routes below still work exactly the same — for hands-on installs and terminal tastes.
 
 ## Route 1 — one command (terminal)
 
@@ -49,7 +63,7 @@ Five steps. No SQL, no folder uploads — only your browser and the Cloudflare d
 
 - **Workers & Pages → Create → Workers → Create Worker**
 - Name it `cmail` and **Deploy** once with the default code.
-- Click **Edit code**, delete the default code, paste the full content of the prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.9.0/worker.js) and **Deploy**.
+- Click **Edit code**, delete the default code, paste the full content of the prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.0/worker.js) and **Deploy**.
 
 **3) The only binding you need: D1**
 

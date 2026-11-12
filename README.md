@@ -8,6 +8,7 @@
 [![Platform](docs/img/badge-platform.svg)](https://workers.cloudflare.com)
 [![Storage](docs/img/badge-storage.svg)](#the-whole-system-one-diagram)
 [![License](docs/img/badge-license.svg)](LICENSE)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Erfan-8910/Cmail)
 
 **A complete mail ecosystem that lives entirely inside your own Cloudflare account — one worker file, one database, zero servers, zero monthly bills.**
 
@@ -30,18 +31,20 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 | | |
 |---|---|
 | ⭕ **The account circle — the only switcher** | Every mailbox is its own account. The circle at the top of the page is the one and only place accounts switch — each account shows its tiny details before you even enter: how many mails it received, how many 2FA codes it holds, what's unread. Add another account from the same panel. Nothing inside the inbox, the sidebar or the folders ever jumps accounts by accident. |
-| 📂 **The identity oval and the one big card** | The inbox reads the way a grown-up mail client reads: the account's **identity oval** — its face, its name and its full address with a one-tap copy button — sits above one living card that holds the entire mailbox. A toolbar with a select-all box, a refresh and a breathing auto-refresh dot; single-line rows (face · sender · subject — preview · star · time); the folder rail beside it with **All · Unread · Starred · Noted** and live counts. |
+| 📂 **The identity oval and the one big card** | The inbox reads the way a grown-up mail client reads: the account's **identity oval** — its face, its name and its full address with a one-tap copy button — sits above one living card that holds the entire mailbox. A toolbar with a select-all box, a refresh and a breathing auto-refresh dot; single-line rows (face · sender · subject — preview · star · time); the folder rail beside it with **All · Unread · Starred · Noted** and live counts — plus **your own folders per account**, each with a color dot, a counter and an optional sender rule that files incoming mail by itself. |
 | 📄 **Every email gets its own page** | Opening a message navigates to a real page of its own — its own URL, its own back button, older/newer arrows — never a popup floating over your list. HTML mail renders sanitized inside a sandboxed frame; plain text has its own toggle. |
 | ⏱️ **The inbox breathes on its own** | Every 10 seconds the inbox quietly pulls for new mail, highlights what just landed and syncs the unread badges — no refresh button rituals. And nothing loads in silence: a thin living progress bar rides the top of the page the moment anything drags, and the inbox's own status strip says what is happening. |
 | 🩺 **System health, on stage** | A full health report in Settings: D1 connection with live latency, every table with its row count and column state, the cron heartbeat, and the mail flow — each with its own fix button. |
 | 🚨 **Problems announce themselves** | When something serious breaks — D1 unreachable, tables missing, schema outdated, mail stalled — a banner appears above the app with the cause and the one-press fix. You hear it from your app first, never from a broken inbox. |
 | 🌐 **Domain connect wizard** | Add a domain and it takes your hand: a crisp connect guide, then a verification code you mail to your own domain. The screen re-checks itself every few seconds until the loop proves itself — and mailboxes unlock. Walked away mid-way? The draft waits in the setup screen and on the domains page with a **Continue** button — nobody ever retypes a domain. |
+| 🏞️ **Scenes behind the glass** | Pick a living backdrop for the whole app: **Green hills** with drifting clouds, **Aurora** ribbons over a starry dark, a warm **Dusk**, or a quiet **Starry night** — five stages, all hand-drawn, all animated gently, all gone the instant your system asks for reduced motion. |
 | 🎨 **A room that matches your color** | The whole environment repaints with the palette you pick — **Green · Blue · Purple · Amber**, each named after its actual color, each one re-tinting the background glow, the glass and every accent in one breath. Three presence modes — **Animated**, **Still**, **Plain** — pick how much life the background has. |
 | 🔎 **D1 inspector** | The setup screen lists every expected table with its row count; build the missing ones with a button, drop the strays, keep your database honest. The health tab carries the same inspector, forever. |
 | 🗒️ **Notes on emails** | A colored personal note under any message — order numbers, tracking links, anything. Search finds it instantly. |
 | 👤 **Every inbox is an account** | Each mailbox behaves like a standalone account: its mail, its private notes and its own 2FA codes stay inside that space. |
 | 🔐 **2FA vault — account by account** | A built-in authenticator: live 6-digit codes with a countdown ring, sealed with AES-256-GCM, 77 built-in marks. The vault always opens on the account you are in — and **folders belong to one account each**, so account B's groupings can never swallow account A's keys. |
 | ❄️ **Frozen until you decide** | The compose button and the temp-address vault wear an icy snowflake-and-padlock badge while their authorization is missing — the logo stays, the badge tells the truth. Grant the responsibility once and the badge flips to an open flame; the dialog never asks twice. |
+| 🤝 **Share a mailbox — or five** | Hand anyone a guest credential for **as many mailboxes as you pick**: its own username/password (always viewable again, **Regenerate** rolls a fresh pair), a permission list (read · star · archive · delete · send · notes), an expiry with presets, a device cap, even a welcome note the guest reads on arrival. Every credential carries its own **device list** and **session list** — disable any of them on the spot — plus live audit, one-press kick, instant revoke and a manual suspension switch with a **freeze-time / keep-counting** choice. Guests sign in through the **Shared access** door on the login card, live under a compact **Dynamic Island**, and see nothing but what you handed over — unauthorized controls never render at all. |
 | 🛡️ **Account 2FA** | Signing in itself can be protected with TOTP. |
 | 📤 **Outgoing mail — optional** | Connect Brevo or Resend with one API key and send from your own domain, with a real test probe. It never gates the rest of the app. |
 | ⌘ **Command palette** | Press <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> anywhere: jump to anything, run actions, search mail live as you type. |
@@ -104,13 +107,44 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 2.9 — the release that rebuilds the inbox like the big clients
+## What's new in 3.0.0 — sharing unleashed, two doors on the sign-in card
+
+- **Sharing, unleashed.** The share system grows back into what it was always meant to be: one guest credential can now hold **as many mailboxes as you like** — not just one. A brand-new mailbox picker (one chip per mailbox) lives in Settings → Sharing; the guest sees exactly the mailboxes you hand over and nothing else of the account. The list, search, star, folders, notes, bulk actions, attachments and even sending (as any one of the shared addresses) all speak the new multi-mailbox world.
+- **The settings the old system had — and then some.** Every credential now carries a **simultaneous device cap** (unlimited / 1 / 2 / 3 — the newest browser politely refuses when the room is full) and a **welcome note**: a short line the guest reads the moment it lands, straight from its admin. Perms, expiry presets + exact date, custom username/password with the dice, live audit (online dot, browsers inside, last seen), kick, revoke, hard delete — all still one pane.
+- **A sign-in card with two doors.** The login page wears a slim segmented control: **My account** for the owner, **Shared access** (بخش ورود اشتراکی) for guests — a clearly marked door with its own sigil that signs a shared credential straight into its mailboxes. The welcome note pops the second a guest lands; a full device cap says so in plain words instead of a generic error.
+- **The guest panel became a Dynamic Island.** The busy explainer banner is gone. A guest now lives under one floating central pill, Apple-style: the mailbox name (or "n mailboxes"), a live D-H-M-S countdown and a single **?**. Tapping **?** morphs the island open with nothing but the essentials — labeled time remaining, the mailbox list (tap a row to copy), the admin's note if there is one, and sign-out. It floats instead of pushing your page around, shows a frozen honest number while suspended, and re-syncs itself quietly every 20 seconds without jumping under your cursor.
+- **The admin got a control room for every credential.** Each share now carries a **device list** and a **session list** — see every browser and every live session and disable any of them with one press. Username and password are always lookable again (sealed AES-256-GCM, same vault as TOTP), and **Regenerate** rolls a fresh username/password pair, optionally signing out every live guest browser in the same breath.
+- **Suspension, done properly.** A shared account with **no mailbox assigned** suspends itself instead of being deleted — assign a mailbox again and it wakes up on its own (an inbox merely empty of mail never suspends). You can suspend any credential manually and choose what its clock does: **keep counting down** or **freeze time**. The suspended guest still signs in but a frozen page answers, showing the remaining time. Deleting a mailbox that is still assigned to guests warns you first — because it leaves them too.
+- **One truth, everywhere.** A 2FA key a guest adds to a shared mailbox is the same row the admin sees — the live code is identical on both sides, and account details (code counts, mailboxes, identity) refresh together in every view. And guests no longer stumble at the vault's door: the D1 parameter-binding bug that broke every guest vault query is fixed at the root.
+- **Nothing unauthorized ever renders.** Guest permission-trimming went from "disabled" to "does not exist": no compose button, no star, no delete, no bulk selection, no settings pages, no manage-folders — and the command palette only knows what the guest may do. Hard-navigating to `#/settings` or `#/domains` folds straight back to the mail view instead of serving a 403 after the fact.
+- **Every icon audited, every glyph replaced.** The whole app's symbols went under the magnifier: the two modal icons that silently fell back to a generic mark (`folder`, `users`) now have real icons, the command palette's text arrows (↑↓) became crisp SVG chevrons that can never turn into tofu boxes, keyboard guides spell `Enter` and `Ctrl`/`⌘` in ASCII-safe keycaps, and the handful of emoji riding in titles gave way to theme-tinted SVG marks that render everywhere.
+- **A dedicated mark for Lock mode, and mascots that follow the mood.** Lock mode earned its own icon — a padlock with a spark in its keyhole — on the toolbar, the lock screen and Settings → Security. The lock screen's guard is now a **clean cutout that floats on the glass** — the white sticker plate is gone; daylight carries a soft shadow, night adds a quiet accent halo. The About ribbon wears the real **Cmail + Climind duo** — the maker's own artwork, trimmed to the two characters with an even margin — and the Climind fellow **re-tints himself into all twelve palettes** through pre-built per-palette cutouts (exact accent hues, no muddy CSS filters), while the Cmail mascot beside him stays exactly himself. The top bar's brand mark stays the classic glyph it always was: white by night, black by day.
+- **The inbox, tightened.** Unread rows now carry a slim accent bar and a faint tint (their time stamp turns accent too), selected rows glow in the mood's color, and the bulk bar springs in. The toolbar tells the truth: counters match the box you are actually in (sent · starred · a folder — not the account totals), outgoing mail no longer counts as unread, switching accounts retires a leftover selection bar, replying to your own sent mail addresses the recipient (never you), `/` jumps straight to search and `Esc` wipes the query.
+- **The send button, repositioned.** The compose footer is now a real **send row**: the send button leads it (the first thing the eye meets, RTL and LTR alike), the quiet cancel follows, the draft note trails at the far end — no more hunting a small send key in the corner. On phones it takes the full width.
+- **One file, updated end to end.** The single-file `worker.js` — the artifact every deployment path uses — is rebuilt from these sources with the version stamped **3.0.0** everywhere: the pillbar, the About page, the badge.
+
+<details>
+<summary><b>What 2.9.5 changed — folders on every account, scenes behind the glass</b></summary>
+
+
+- **Folders on every account.** The folder rail grew a second story: create your own folders **per account** — each folder wears a color dot, holds its own counter, and never mixes two accounts' mail (the same isolation the 2FA vault follows). File a message from its row menu, file a whole selection with the bulk **Move to folder** bar, and give a folder a **sender rule** — comma-separated fragments like `news, bills` — so incoming mail from those senders files itself the moment it lands. The manager (rename, recolor, rule, delete) lives one plus-button away; deleting a folder returns its mail to the plain inbox, nothing is lost.
+- **Scenes behind the glass.** Settings → Appearance gained a **Background scene** picker: five hand-drawn stages that live behind every panel — **Green hills** (a clear nostalgic morning over soft rises, with slow-drifting clouds), **Aurora** (green-violet ribbons breathing over a starry dark), **Dusk** (a low sun sinking into warm haze), **Starry night** (a quiet field of twinkling stars) — or **No scene** for the plain room. All original art, all animated gently, all frozen the moment your system asks for reduced motion.
+- **The writing table, rebuilt.** The compose window now reads like the big clients': inline rows instead of stacked labels, a **body that grows with the message**, the sender shown as a live avatar beside the picker, mistakes said next to the field (invalid recipient, empty body) instead of shouted from a toast, a **send button with its own spinner**, **Ctrl/Command + Enter** to fire — and a **draft that saves itself** and survives a closed tab.
+- **One-click deploy.** The README now carries the official **Deploy to Cloudflare** button: press it, and Cloudflare clones the repo, provisions its own D1 database and ships the Worker — then `/setup` walks you through the rest. The terminal installer (`deploy.sh`) still does the whole job for the command-line route, and now understands both config shapes.
+- **Rapid-fire safety, extended.** Folder loads race-protect with their own sequence tokens, folder switches clear the previous account's set before the new one lands, and the drawer/status machinery only ever paints into the live view.
+
+</details>
+
+<details>
+<summary><b>What 2.9 changed — the release that rebuilds the inbox like the big clients</b></summary>
 
 - **The inbox is rebuilt from zero.** One clear **identity oval** up top — the account's face, its name and its full address with a **one-tap copy button** — then the whole mailbox in **one living card**: a toolbar with a select-all box, a refresh and a breathing auto-refresh dot, and rows that read on a single line, the way grown-up mail clients read: face · sender · subject — preview · star · time. Unread rows show a little dot where the checkbox would be; reach for the row and the checkbox takes its place. The wasted reading column is gone — the list owns the full width, and every email still opens on its own dedicated page.
 - **Loading never lies.** Any request that runs longer than a blink paints a **thin living progress bar** at the very top of the page. When the inbox's own load drags on, a status strip with a spinner and honest words slides in — even during a background refresh. A failed load says what happened and offers a retry; an empty folder, a fruitless search and a missing mailbox each get their own words instead of a blank stare.
 - **The About ribbon learned mobile manners.** On phones the Climind-W band lays itself out as a proper two-row card — mark and text up top, chip and button below — instead of crushing its text into a sliver, and its aurora stops spinning on mobile GPUs.
 - **The app finally boots exactly once.** This release exposed a silent double-boot: the versioned entry script and the bare internal imports loaded the whole shell twice — two routers racing, two hash listeners, an inbox that sometimes painted into a detached view and showed nothing. That was the real face of the “two sections open at once” bug family. Every module import now carries the same version stamp as the entry, so the app is one instance — guaranteed.
 - **Fresh animated hero, version badge and retaken screenshots** for the rebuilt inbox, switcher, palette, daylight and mobile scenes — both languages.
+
+</details>
 
 <details>
 <summary><b>What 2.8 changed — the release that gives switching one home</b></summary>
@@ -199,8 +233,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v2.9.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v2.9.0:** [`CMail-v2.9.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v2.9.0/CMail-v2.9.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v2.9.5:** [`CMail-v3.0.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.0/CMail-v3.0.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 
@@ -237,18 +271,16 @@ One Worker serves the UI, the API, the incoming-mail handler and the hourly clea
 
 ## License
 
-MIT © [Erfan-8910](https://github.com/Erfan-8910)
+GPL-3.0 © [Erfan-8910](https://github.com/Erfan-8910) — Cmail is free software under the [GNU General Public License v3](LICENSE): use it, study it, change it, share it.
 
 ---
 
 <div align="center">
 
-### ☁️ Also from the maker
+[![Climind-W — a modern weather web app from the same maker](docs/img/climind-promo-en.png)](https://github.com/Erfan-8910/Climind-W)
 
 **[Climind-W](https://github.com/Erfan-8910/Climind-W)** — a modern weather web app with the same liquid-glass obsession.
 Same hand, same taste — go give it a star.
-
-[![Climind-W](https://img.shields.io/badge/Climind--W-weather%20web%20app-2563eb?style=flat-square&logo=github&logoColor=white)](https://github.com/Erfan-8910/Climind-W)
 
 </div>
 
@@ -256,7 +288,7 @@ Same hand, same taste — go give it a star.
 
 <div align="center">
 
-**Cmail** — *your mailbox, your rules.* 🌿
+**Cmail** — *your mailbox, your rules.*
 
 [Deploy guide](docs/DEPLOY.md) · [Usage guide](docs/USAGE.md) · [Releases](https://github.com/Erfan-8910/Cmail/releases) · [Climind-W](https://github.com/Erfan-8910/Climind-W) · [فارسی](README.fa.md)
 

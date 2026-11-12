@@ -22,6 +22,26 @@ export async function renderAddresses(root) {
 
   let addresses = [];
 
+  // which mailboxes does an active share hold? deleting one of them takes
+  // the mailbox away from the shared user too — and if it was that
+  // credential's LAST mailbox, the whole share goes suspended until the
+  // admin assigns a mailbox again. The admin hears this BEFORE confirming.
+  let shareMap = null;
+  async function loadShareMap() {
+    if (shareMap) return shareMap;
+    const m = new Map();
+    try {
+      const r = await api.get('/api/share');
+      for (const s of (r.shares ?? [])) {
+        if (!s.active) continue;
+        const ids = (s.address_ids ?? []).map(String).filter(Boolean);
+        for (const aid of ids) m.set(aid, { name: s.label || s.username, multi: ids.length > 1 });
+      }
+    } catch { /* no shares / no permission — the plain confirm stays */ }
+    shareMap = m;
+    return m;
+  }
+
   async function load() {
     try {
       const r = await api.get('/api/addresses');
@@ -89,9 +109,23 @@ export async function renderAddresses(root) {
         h('button', { class: 'btn btn--sm', onclick: (e) => { e.stopPropagation(); forwardModal(a); } }, icon('external'), h('span', { class: 'hide-sm' }, t('forwarding'))),
         a.kind === 'temp' ? h('button', { class: 'btn btn--sm', onclick: async (e) => { e.stopPropagation(); try { await api.patch(`/api/addresses/${a.id}`, { extend_hours: 24 }); toast(t('saved'), 'ok', 1400); load(); } catch (er) { toast(errText(er), 'err'); } } }, icon('clock'), h('span', { class: 'hide-sm' }, t('extend24'))) : '',
         h('button', { class: 'btn btn--sm btn--primary acct-card__open', onclick: (e) => { e.stopPropagation(); state.currentAddressId = a.id; localStorage.setItem('cmail_acct', a.id); location.hash = '#/mail'; } }, icon('inbox'), t('openInbox')),
-        h('button', { class: 'icon-btn', title: t('deleteAddress'), onclick: (e) => { e.stopPropagation(); confirmBox(t('deleteAddressConfirm'), async () => {
-          try { await api.del(`/api/addresses/${a.id}`); toast(t('deletedN'), 'ok', 1500); if (state.currentAddressId === a.id) { state.currentAddressId = null; localStorage.setItem('cmail_acct', ''); } load(); } catch (er) { toast(errText(er), 'err'); }
-        }); } }, icon('trash')),
+        h('button', { class: 'icon-btn', title: t('deleteAddress'), onclick: async (e) => {
+          e.stopPropagation();
+          // the shared-user warning rides BEFORE the confirm — deleting a
+          // mailbox that an active share holds is a two-sided decision
+          const parts = [t('deleteAddressConfirm')];
+          try {
+            const map = await loadShareMap();
+            const sh = map?.get(String(a.id));
+            if (sh) {
+              parts.push(`${t('delAddrSharedWarn')}${sh.name ? ` (${sh.name})` : ''}`);
+              if (!sh.multi) parts.push(t('delAddrSharedLast'));
+            }
+          } catch { /* the plain confirm answers then */ }
+          confirmBox(parts.join(' '), async () => {
+            try { await api.del(`/api/addresses/${a.id}`); toast(t('deletedN'), 'ok', 1500); if (state.currentAddressId === a.id) { state.currentAddressId = null; localStorage.setItem('cmail_acct', ''); } load(); } catch (er) { toast(errText(er), 'err'); }
+          });
+        } }, icon('trash')),
       ));
     return card;
   }

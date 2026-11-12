@@ -70,7 +70,15 @@ node - "$DB_ID" <<'NODE'
 const fs = require('fs');
 const f = 'wrangler.jsonc';
 let s = fs.readFileSync(f, 'utf8');
-s = s.replace(/REPLACE_WITH_D1_ID/g, process.argv[2]);
+if (s.includes('REPLACE_WITH_D1_ID')) {
+  s = s.replace(/REPLACE_WITH_D1_ID/g, process.argv[2]);
+} else {
+  // the committed config ships without a database_id (that is what makes the
+  // one-click Deploy button work — the button provisions its own D1) — the
+  // installer writes the freshly created id in after the database name
+  s = s.replace(/("database_name"\s*:\s*"cmail-db"\s*,?)/, `$1\n      "database_id": "${process.argv[2]}",`);
+}
+fs.writeFileSync(f, 'utf8' === 'utf8' ? s : s);
 fs.writeFileSync(f, s);
 NODE
 good "wrangler.jsonc updated"

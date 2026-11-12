@@ -14,7 +14,9 @@ import authRoutes from './routes/auth';
 import addressRoutes from './routes/addresses';
 import emailRoutes from './routes/emails';
 import totpRoutes from './routes/totp';
+import mailfolderRoutes from './routes/mailfolders';
 import adminRoutes from './routes/admin';
+import shareRoutes from './routes/share';
 
 const app = new Hono<AppEnv>();
 
@@ -50,7 +52,12 @@ function asset(name: string): Response | null {
   const headers: Record<string, string> = {
     'Content-Type': f.type,
     ETag: f.tag,
-    'Cache-Control': f.type.startsWith('image/') ? 'public, max-age=86400' : 'no-cache',
+    // fonts never change → cache them for good. Revalidating them on every
+    // load (the old no-cache) made late font swaps reflow the whole page on
+    // slow networks — one of the real causes of the "page jump" reports.
+    'Cache-Control': f.type === 'font/woff2' ? 'public, max-age=31536000, immutable'
+      : f.type.startsWith('image/') ? 'public, max-age=86400'
+      : 'no-cache',
   };
   const body: BodyInit = f.text !== undefined ? f.text : Uint8Array.from(atob(f.b64!), (ch) => ch.charCodeAt(0));
   return new Response(body, { status: 200, headers });
@@ -86,7 +93,9 @@ app.route('/api/auth', authRoutes);
 app.route('/api/addresses', addressRoutes);
 app.route('/api/emails', emailRoutes);
 app.route('/api/totp', totpRoutes);
+app.route('/api/mail-folders', mailfolderRoutes);
 app.route('/api/admin', adminRoutes);
+app.route('/api/share', shareRoutes);
 
 app.get('/api/health', (c) => c.json({ ok: true, service: 'cmail', time: Date.now() }));
 

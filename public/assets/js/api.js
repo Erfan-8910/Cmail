@@ -8,6 +8,7 @@ export const state = {
   currentAddressId: null,
   setup: null,
   unread: 0,
+  lockMode: 'totp', // what the top padlock asks for: 'totp' | 'password'
 };
 
 const BASE = ''; // same-origin
@@ -95,6 +96,10 @@ export function errText(e) {
     rate_limited: 'rateLimited',
     invalid_secret: 'invalidSecret',
     invalid_uri: 'invalidUri',
+    invalid_code: 'totpBadCode',
+    pending_expired: 'totpPendingExpired',
+    totp_enabled: 'totpAlreadyOn',
+    not_found: 'error',
     name_required: 'nameRequired',
     sending_not_configured: 'sendingNotConfigured',
     empty_body: 'emptyBody',
@@ -102,6 +107,9 @@ export function errText(e) {
     invalid_sender: 'invalidSender',
     cannot_delete_self: 'cannotDeleteSelf',
     domain_not_ready: 'errDomainNotReady',
+    forbidden: 'forbidden',
+    totp_not_enabled: 'totpNotEnabled',
+    device_limit: 'deviceLimit',
   };
   return map[e?.code] ? t(map[e.code]) : (e?.detail ? `${t('error')} — ${e.detail}` : t('error'));
 }

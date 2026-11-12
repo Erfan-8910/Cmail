@@ -476,7 +476,7 @@ export async function renderGate(root) {
     ring.set(0, '—');
     card.append(
       h('div', { class: 'gate__top' },
-        h('div', { class: 'offline-icn' }, icon('globeAm')),
+        h('div', { class: 'illus-plate illus-plate--sm' }, h('img', { src: 'assets/img/offline.webp', alt: '', width: '720', height: '720', decoding: 'async' })),
         h('div', { class: 'gate__top-txt' },
           h('h2', {}, t('offlineTitle')),
           h('p', {}, t('offlineD')),

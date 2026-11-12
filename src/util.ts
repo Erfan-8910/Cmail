@@ -10,12 +10,38 @@ export type Env = {
   APP_VERSION?: string;
 };
 
+// share-session context — rides on SessionUser when the signed-in browser is
+// a guest credential: one permission list, and since v3.0.0 a SET of mailboxes
+// (address_ids/addresses carry the full set; address_id/address stay as the
+// primary first mailbox so older code paths keep answering)
+export type ShareInfo = {
+  id: string;
+  username: string;
+  label: string | null;
+  address_id: string;
+  address: string;
+  address_ids: string[];
+  addresses: string[];
+  owner_id: string;
+  perms: string[];
+  max_devices: number;
+  note: string | null;
+  expires_at: number | null;
+  // lifecycle (v3.0.0 r6): suspension is manual flag OR "no mailbox assigned";
+  // time_frozen/frozen_at let the remaining subscription time stand still
+  // while the share is suspended
+  suspended: boolean;
+  time_frozen: boolean;
+  frozen_at: number | null;
+};
+
 export type SessionUser = {
   id: string;
   username: string;
   role: string;
   display_name: string | null;
   totp_enabled: number;
+  share?: ShareInfo;
 };
 
 export type AppEnv = { Bindings: Env; Variables: { user: SessionUser | null } };
@@ -190,4 +216,49 @@ export function randomLocalPart(): string {
   const w = words[Math.floor(Math.random() * words.length)];
   const n = Math.random().toString(36).slice(2, 8);
   return `${w}.${n}`;
+}
+
+// ---------- share lifecycle (v3.0.0 r6) ----------
+//
+// Suspension has exactly two sources, both honest:
+//   1. manual  — the admin suspended the share by hand (suspended_at stamp);
+//   2. derived — the admin has NOT assigned any mailbox to the credential
+//      (empty junction). Assigning mailboxes again (تنظیم مجدد) returns the
+//      share to normal with no flag to flip. An inbox that is merely empty
+//      of MAIL never suspends anything — mail content is not the admin's
+//      assignment decision.
+// The credential still works and the guest still signs in either way — the
+// frozen page answers instead of an inbox.
+
+export type ShareFlags = {
+  suspended_at?: number | null;
+  time_frozen?: number | null;
+  frozen_at?: number | null;
+  expires_at?: number | null;
+};
+
+// while the countdown is frozen, "now" for every expiry check is frozen_at —
+// a frozen share can never expire under the cron, and the remaining time it
+// advertises is a constant
+export function shareEffectiveNow(s: ShareFlags): number {
+  return s.time_frozen && s.frozen_at ? Number(s.frozen_at) : Date.now();
+}
+
+export function shareExpired(s: ShareFlags): boolean {
+  if (!s.expires_at) return false;
+  return Number(s.expires_at) < shareEffectiveNow(s);
+}
+
+export function shareNoMailbox(addressIds: (string | null | undefined)[] | null | undefined): boolean {
+  return !(addressIds ?? []).filter(Boolean).length;
+}
+
+export function shareSuspended(s: ShareFlags, addressIds: (string | null | undefined)[] | null | undefined): boolean {
+  return !!s.suspended_at || shareNoMailbox(addressIds);
+}
+
+// remaining subscription time in ms (null = no limit at all)
+export function shareRemainingMs(s: ShareFlags): number | null {
+  if (!s.expires_at) return null;
+  return Number(s.expires_at) - shareEffectiveNow(s);
 }
