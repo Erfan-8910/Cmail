@@ -30,7 +30,7 @@ export function openCmdk() {
     h('div', { class: 'cmdk__in' }, icon('search'), input, esc),
     listEl = h('div', { class: 'cmdk__list', role: 'listbox' }),
     h('div', { class: 'cmdk__foot' },
-      hint('↑↓', t('cmdkNavHint')), hint('↵', t('cmdkOpen')), hint('esc', t('cmdkClose'))),
+      navHint(t('cmdkNavHint')), hint('Enter', t('cmdkOpen')), hint('esc', t('cmdkClose'))),
   );
   back.append(panel);
   document.body.append(back);
@@ -69,6 +69,15 @@ function cmdkGlobalKey(e) {
 function hint(key, label) {
   return h('span', {}, h('kbd', { class: 'kbd' }, key), label);
 }
+// the ↑↓ pair the old foot drew as text glyphs — those are exactly the
+// characters several device fonts turn into tofu boxes; two crisp SVG
+// chevrons can never fail
+function navHint(label) {
+  return h('span', { class: 'cmdk__navhint' },
+    h('kbd', { class: 'kbd kbd--icn' }, icon('chevron', 'flip-v')),
+    h('kbd', { class: 'kbd kbd--icn' }, icon('chevron')),
+    label);
+}
 
 // ---------- sources ----------
 function buildSources(q) {
@@ -85,10 +94,20 @@ function buildSources(q) {
 
   // --- navigation (auth-aware) ---
   const ready = !!state.setup?.ready;
+  const isShare = state.user?.role === 'share';
   const navs = [];
   if (!ready) {
     navs.push({ icn: 'spark', label: t('navStatus'), run: () => { location.hash = '#/status?stay'; } });
     navs.push({ icn: 'user', label: t('login'), run: () => { location.hash = '#/login'; } });
+  } else if (isShare) {
+    // the guest's palette holds only the rooms its credential grants —
+    // addresses, settings and domains simply do not exist here
+    navs.push(
+      { icn: 'inbox', label: t('navMail'), run: () => { location.hash = '#/mail'; } },
+      { icn: 'key', label: t('navVault'), run: () => { location.hash = '#/vault'; } },
+      { icn: 'help', label: t('navHelp'), run: () => { location.hash = '#/help'; } },
+      { icn: 'heart', label: t('navAbout'), run: () => { location.hash = '#/about'; } },
+    );
   } else {
     navs.push(
       { icn: 'inbox', label: t('navMail'), run: () => { location.hash = '#/mail'; } },
@@ -110,12 +129,15 @@ function buildSources(q) {
 
   // --- actions ---
   const acts = [];
+  const canCompose = !!state.user && (!state.user.share || (state.user.share.perms || []).includes('compose'));
   if (state.user) {
-    if (state.setup?.sending_ready !== false) {
+    if (state.setup?.sending_ready !== false && canCompose) {
       acts.push({ icn: 'send', label: t('cmdkCompose'), kw: 'compose new mail', run: () => openCompose() });
     }
-    acts.push(
+    if (!isShare) acts.push(
       { icn: 'plus', label: t('cmdkNewAlias'), kw: 'alias inbox address create', run: () => createAddressModal(() => window.dispatchEvent(new CustomEvent('cmail:refresh-mail'))) },
+    );
+    acts.push(
       { icn: 'refresh', label: t('refresh'), kw: 'reload inbox sync', run: () => { window.dispatchEvent(new CustomEvent('cmail:refresh-mail')); toast(t('refresh'), 'ok', 1200); } },
     );
   }

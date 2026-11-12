@@ -31,6 +31,7 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.webp': 'image/webp',
   '.ico': 'image/x-icon',
   '.map': 'application/json; charset=utf-8',
   '.woff2': 'font/woff2',
@@ -186,6 +187,10 @@ for (const m of [
   'migrations/0003_vault_folders.sql',
   'migrations/0005_domain_lifecycle.sql',
   'migrations/0006_vault_folder_scope.sql',
+  'migrations/0007_mail_folders.sql',
+  'migrations/0008_sent_mail.sql',
+  'migrations/0009_share_access.sql',
+  'migrations/0011_share_control.sql',
 ]) {
   let sql;
   try { sql = readFileSync(join(ROOT, m), 'utf8'); } catch { continue; }

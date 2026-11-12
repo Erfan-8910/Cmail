@@ -44,6 +44,18 @@ Star from the row, from the row's ⋮ menu, or with the keyboard. Multi-select w
 
 A real authenticator inside the panel: add a key by name (paste an `otpauth://` secret or import a QR), pick one of the 77 built-in marks, organize into folders. Codes refresh every 30 seconds with a visible countdown and copy with one tap. Sealed at rest with AES-256-GCM. Bind a key to a specific inbox and it lives inside that account only.
 
+## Sharing a mailbox — guests
+
+Hand someone limited access to one or several of your inboxes — their own username and password, your rules. Everything lives in **Settings → Sharing**.
+
+- **Create a credential:** pick the mailbox(es) one chip at a time, choose the permission list (read · star · archive · delete · send · notes), set an expiry (presets or an exact date), a simultaneous device cap, and an optional welcome note the guest reads on arrival. The dice rolls a username or password whenever you would rather not invent one.
+- **The guest's door:** guests sign in through **Shared access** on the sign-in card and land in a compact panel crowned by a floating **Dynamic Island** — the mailbox name (or a count) with a live countdown, and nothing else. Tapping **?** morphs it open with the essentials only: labeled time left, the mailbox list (tap a row to copy its address), the admin's note if there is one, and sign-out.
+- **Only what you authorized:** controls the guest has no permission for never render — not even greyed out. Compose, star, delete, bulk selection, the settings pages and the command palette all trim themselves to the granted list, and a typed-in URL like `#/settings` folds straight back to the mail view.
+- **Run the room:** the audit strip shows the online dot, the browsers inside and last seen; one press kicks the guest, revokes or hard-deletes the credential. Every credential also carries a **device list** and a **session list** — see each one and disable it on the spot.
+- **Credentials you can always look up:** open a credential to read its username and password again (sealed with the same AES-256-GCM as the vault), or press **Regenerate** — a fresh username and password in one tap, optionally signing out every live guest browser.
+- **Suspension, on your terms:** suspend any credential manually and choose what its clock does — **Freeze time** (nothing burns while suspended) or **Keep counting down** (suspension eats the remaining time). A suspended guest can still sign in but the frozen page answers, showing the remaining time. A credential left with **no mailbox assigned** suspends itself instead of vanishing — assign a mailbox again and it wakes up on its own. Deleting an inbox that is still shared warns you first, because it also leaves every guest who holds it.
+- **One truth for 2FA codes:** a key the guest adds to a shared mailbox is the same row you see — the live code on your side and on theirs is always identical.
+
 ## ⌘K — the command palette
 
 Press <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> anywhere: jump to any page, switch inboxes (All inboxes included), run actions like cleanup or logout, and search your mail live while you type.

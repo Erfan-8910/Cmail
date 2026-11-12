@@ -96,6 +96,7 @@ export async function renderDomains(root) {
     );
 
     const actions = h('div', { class: 'dom-card__actions' },
+      h('button', { class: 'btn btn--sm', onclick: () => dnsCheckModal(d) }, icon('zap'), h('span', { class: 'hide-sm' }, t('dnsCheckBtn'))),
       h('button', { class: 'btn btn--sm', onclick: () => dnsModal(d.name) }, icon('help'), h('span', { class: 'hide-sm' }, t('dnsGuide'))),
       h('span', { style: { flex: '1' } }),
       h('button', { class: 'icon-btn', title: t('delete'), onclick: () => confirmBox(t('confirm'), async () => {
@@ -170,6 +171,44 @@ export async function renderDomains(root) {
     catchAll.addEventListener('click', () => catchAll.classList.toggle('is-on'));
   }
 
+  // the live reality-check: the worker asks a real resolver (DNS-over-HTTPS)
+  // whether MX and SPF actually exist right now — no guessing, no refresh
+  function dnsCheckModal(d) {
+    const box = h('div', { class: 'dns-check' }, h('div', { class: 'small muted', style: { padding: '10px 2px' } }, t('loading')));
+    const m = modal({
+      wide: true,
+      title: `${t('dnsCheckT')} — ${d.name}`, iconName: 'zap',
+      body: [box],
+      footer: [
+        h('button', { class: 'btn', onclick: () => run() }, icon('refresh'), t('gateRecheck')),
+        h('button', { class: 'btn btn--primary', onclick: () => m.close() }, t('done')),
+      ],
+    });
+
+    const verdict = (ok, okTxt, badTxt, warmTxt) => {
+      const cls = ok ? 'is-ok' : (warmTxt ? 'is-warm' : 'is-bad');
+      return h('div', { class: `dns-line ${cls}` },
+        h('span', { class: 'dns-line__icn' }, icon(ok ? 'check' : 'x')),
+        h('div', {}, h('b', {}, ok ? okTxt : (warmTxt || badTxt)), ok || !warmTxt ? h('span', { class: 'small muted' }, badTxt) : ''));
+    };
+
+    async function run() {
+      clear(box).append(h('div', { class: 'small muted', style: { padding: '10px 2px' } }, t('loading')));
+      let r;
+      try { r = await api.get(`/api/addresses/domains/${d.id}/dns-check`); }
+      catch (e) { clear(box).append(h('div', { class: 'dns-line is-bad' }, h('span', { class: 'dns-line__icn' }, icon('x')), h('div', {}, h('b', {}, t('error')), h('span', { class: 'small muted' }, errText(e))))); return; }
+      const c = r.check;
+      clear(box).append(
+        verdict(c.mx_cloudflare, t('dnsMxOk'), t('dnsMxBad'), c.mx_ok ? t('dnsMxOther') : ''),
+        c.mx_records?.length ? h('div', { class: 'dns-records mono' }, c.mx_records.map((x) => h('div', {}, x))) : '',
+        verdict(c.spf_cloudflare, t('dnsSpfOk'), t('dnsSpfBad'), c.spf_ok ? t('dnsSpfOther') : ''),
+        c.spf_record ? h('div', { class: 'dns-records mono' }, h('div', {}, c.spf_record)) : '',
+        h('p', { class: 'small faint', style: { margin: '10px 2px 0' } }, t('dnsCheckNote')),
+      );
+    }
+    run();
+  }
+
   function dnsModal(domain) {
     const m = modal({
       wide: true,
@@ -185,14 +224,14 @@ export async function renderDomains(root) {
           )),
         h('div', { class: 'step-list' },
           step(lang === 'fa'
-            ? 'در داشبورد Cloudflare روی دامنه برو و Email Routing را فعال کن.'
-            : 'Open the domain in the Cloudflare dashboard and enable Email Routing.'),
+            ? 'در داشبورد Cloudflare دامنه را باز کن و از منوی Email گزینهٔ Email Routing را روشن کن — رکوردهای MX را خودش می‌سازد.'
+            : 'Open the domain in the Cloudflare dashboard and enable Email Routing from the Email menu — the MX records are created for you.'),
           step(lang === 'fa'
-            ? 'در تب Routing → Catch-all address، اقدام (Action) را روی Send to Worker بگذار و Worker به نام cmail را انتخاب کن.'
-            : 'In Routing → Catch-all address, set the Action to Send to Worker and pick the cmail worker.'),
+            ? 'در تب Routing → Catch-all address، اقدام (Action) را روی Send to Worker بگذار و ورکر Cmail را انتخاب کن؛ این همان چیزی است که نامه‌ها را به پنل می‌آورد.'
+            : 'In Routing → Catch-all address, set the Action to Send to Worker and pick the Cmail worker — this is what brings the mail into the panel.'),
           step(lang === 'fa'
-            ? 'برای آدرس‌های خاص می‌توانی Custom address هم تعریف کنی؛ ولی Catch-all همه چیز را پوشش می‌دهد.'
-            : 'You can define custom addresses too, but Catch-all covers everything.'),
+            ? 'بعد از ذخیره، دکمهٔ «بررسی DNS» روی کارت دامنه واقعیت رکوردها را همان لحظه نشان می‌دهد؛ اگر بعد از چند دقیقه هنوز MX ندیدی، DNS هنوز پخش نشده است، صبور باش.'
+            : 'Once saved, the domain card’s “DNS check” button shows the live record truth; if MX is still missing minutes later, DNS is still propagating — give it a moment.'),
         ),
       ],
       footer: [h('button', { class: 'btn', onclick: () => m.close() }, t('cancel'))],
@@ -208,8 +247,8 @@ export async function renderDomains(root) {
       h('summary', {}, icon('info'), lang === 'fa' ? 'چطور چند دامنه اضافه کنم؟' : 'How do I add multiple domains?'),
       h('p', { class: 'small muted' },
         lang === 'fa'
-          ? 'هر دامنه (یا ساب‌دامنه) را باید در Cloudflare ثبت کرده باشی. برای هر کدام: ۱) Email Routing را فعال کن ۲) دامنه را همین‌جا اضافه کن ۳) ویزاردِ وصل کردن را تا صحت‌سنجی جلو ببر. ثبتِ ناتمام در همین صفحه می‌ماند و از همان‌جا ادامه پیدا می‌کند؛ تا وقتی کامل نشده، برایش صندوق ساخته نمی‌شود.'
-          : 'Each domain (or subdomain) must be on your Cloudflare account. For each one: 1) enable Email Routing, 2) add the domain here, 3) walk the connect wizard through verification. An unfinished registration stays right here on this page and resumes from where it stopped — mailboxes stay locked until it completes.'));
+          ? 'هر دامنه (یا ساب‌دامنه) باید روی همان اکانت Cloudflare ثبت باشد. برای هر کدام سه قدم کافی است: ۱) Email Routing را روشن کن ۲) دامنه را همین‌جا اضافه کن ۳) ویزارد وصل‌کردن را تا تأیید جلو ببر. اگر وسط کار ببینی و بروی، ثبتِ ناتمام در همین صفحه می‌ماند و از همان‌جا ادامه پیدا می‌کند؛ تا وقتی کامل نشده، برایش صندوق ساخته نمی‌شود. بعد از تأیید هم دکمهٔ «بررسی DNS» روی هر کارت، سلامت رکوردها را زنده نشان می‌دهد.'
+          : 'Each domain (or subdomain) must live on your Cloudflare account. Three steps per domain: 1) enable Email Routing, 2) add the domain here, 3) walk the connect wizard through verification. Leave mid-way and the unfinished registration stays right here, resuming where it stopped — mailboxes stay locked until it completes. After verification, each card’s “DNS check” button shows the live health of its records.'));
   }
 
   await load();

@@ -1,16 +1,19 @@
-// Cmail — settings view (appearance, security, admin: health/general/sending/users)
+// Cmail — settings view (appearance, security, share, admin: health/general/sending/users)
 import { api, state, errText } from '../api.js';
 import { t, lang, setLang } from '../i18n.js';
-import { h, clear, icon, toast, modal, confirmBox, copyText, fmtBytes, fmtDate } from '../ui.js';
-import { setTheme, setAccent, setBg } from '../app.js';
+import { h, clear, icon, toast, modal, confirmBox, copyText, fmtBytes, fmtDate, timeAgo, vibrate } from '../ui.js';
+import { setTheme, setAccent, setBg, updateLockBadge, refreshLockBadge } from '../app.js';
 import { healthPane } from '../health.js';
-import { vibrate } from '../ui.js';
+import { sharePane } from './share.js';
 
 // the active settings tab survives re-renders (mood switching redraws the pane)
 let settingsTab = '';
 
-export async function renderSettings(root) {
+export async function renderSettings(root, arg) {
   clear(root);
+  // a deep link (#/settings/security) opens its tab directly — the 2FA padlock
+  // at the top of the page lands exactly on the security room
+  if (arg && ['health', 'appearance', 'security', 'general', 'sending', 'share'].includes(arg)) settingsTab = arg;
   // self-heal the admin gate: a stale session snapshot (an old tab, a restored
   // cache) must never hide the admin panes — the role is re-checked right here
   if (state.user && state.user.role !== 'admin') {
@@ -26,7 +29,7 @@ export async function renderSettings(root) {
 
   const isAdmin = state.user?.role === 'admin';
   const tabs = isAdmin
-    ? [['health', t('health'), 'zap'], ['appearance', t('appearance'), 'sun'], ['security', t('security'), 'shield'], ['general', t('general'), 'settings'], ['sending', t('sending'), 'send']]
+    ? [['health', t('health'), 'zap'], ['appearance', t('appearance'), 'sun'], ['security', t('security'), 'shield'], ['share', t('shareTab'), 'user'], ['general', t('general'), 'settings'], ['sending', t('sending'), 'send']]
     : [['appearance', t('appearance'), 'sun'], ['security', t('security'), 'shield']];
 
   const tabBar = h('div', { class: 'filters', style: { padding: 0, marginBottom: '14px' } });
@@ -54,6 +57,7 @@ export async function renderSettings(root) {
     if (current === 'appearance') pane = await appearancePane();
     else if (current === 'security') pane = await securityPane();
     else if (isAdmin && current === 'health') pane = await healthPane();
+    else if (isAdmin && current === 'share') pane = await sharePane();
     else if (isAdmin && current === 'general') pane = await generalPane();
     else if (isAdmin && current === 'sending') pane = await sendingPane();
     if (seq !== paneSeq || current !== want) return; // a newer tab already won
@@ -105,16 +109,24 @@ async function appearancePane() {
   return pane;
 }
 
-// ---------- mood picker — the four palettes, named by their color ----------
+// ---------- mood picker — twelve palettes, named by their color ----------
 function paletteCard() {
   const palettes = [
     { key: 'green', name: () => t('paletteGreen'), light: '#b4cda3', deep: '#4f8f60' },
     { key: 'blue', name: () => t('paletteBlue'), light: '#9ec8dd', deep: '#3f7f9e' },
     { key: 'purple', name: () => t('palettePurple'), light: '#c2a7e2', deep: '#7e5fa6' },
     { key: 'amber', name: () => t('paletteAmber'), light: '#eec27e', deep: '#a06a24' },
+    { key: 'rose', name: () => t('paletteRose'), light: '#f0b6c4', deep: '#bf5470' },
+    { key: 'cyan', name: () => t('paletteCyan'), light: '#8fd8d2', deep: '#2f8f8a' },
+    { key: 'orange', name: () => t('paletteOrange'), light: '#f0b084', deep: '#c06a2a' },
+    { key: 'lime', name: () => t('paletteLime'), light: '#cfe39a', deep: '#7ba03a' },
+    { key: 'teal', name: () => t('paletteTeal'), light: '#9ad4c0', deep: '#2e8570' },
+    { key: 'indigo', name: () => t('paletteIndigo'), light: '#aab3ee', deep: '#5560c0' },
+    { key: 'slate', name: () => t('paletteSlate'), light: '#b3c0cf', deep: '#5d7285' },
+    { key: 'crimson', name: () => t('paletteCrimson'), light: '#eda9a4', deep: '#bb4a42' },
   ];
   const cur = document.documentElement.dataset.accent || 'green';
-  const grid = h('div', { class: 'palette-grid palette-grid--4' });
+  const grid = h('div', { class: 'palette-grid' });
   for (const p of palettes) {
     grid.append(h('button', { class: `palette-card ${cur === p.key ? 'is-on' : ''}` },
       h('span', { class: 'palette-card__swatch', style: { background: `linear-gradient(125deg, ${p.light}, ${p.deep})` } },
@@ -136,6 +148,7 @@ function paletteCard() {
 // ---------- security (account) ----------
 async function securityPane() {
   const pane = h('div', { class: 'settings-grid' });
+  const isAdmin = state.user?.role === 'admin';
 
   // access — how signing in works (single user)
   let s = null;
@@ -170,10 +183,60 @@ async function securityPane() {
   const btn = h('button', { class: `btn ${on ? 'btn--danger' : 'btn--primary'}` }, on ? t('disable2fa') : t('enable2fa'));
   btn.addEventListener('click', () => (on ? disableFlow() : enableFlow()));
 
-  pane.append(h('div', { class: 'glass card' },
+  const twoFaCard = h('div', { class: 'glass card' },
     h('h3', { style: { margin: '0 0 6px', fontSize: '15px' } }, t('twoFa')),
     h('div', { class: 'set-row' }, h('div', {}, h('div', { class: 'set-row__t' }, t('twoFaRow')), h('div', { class: 'set-row__d' }, t('vaultSub'))), h('div', { class: 'row' }, statusChip, btn)),
-  ));
+    // the honest preview: what the padlock at the top will do once this is on
+    !on ? h('p', { class: 'small muted', style: { margin: '10px 0 0', display: 'flex', gap: '6px', alignItems: 'flex-start' } }, icon('lock'), h('span', {}, t('twoFaLockHint'))) : '',
+  );
+
+  // the re-ask timer — minutes after the last verified code during which a
+  // fresh password sign-in skips the code step (admin: this is a global setting)
+  if (isAdmin && s) {
+    const grace = h('input', { class: 'input ltr', type: 'number', min: 0, max: 1440, value: String(s.totp_grace_min ?? 0), style: { width: '110px' } });
+    twoFaCard.append(h('div', { class: 'set-row', style: { marginTop: '4px' } },
+      h('div', {}, h('div', { class: 'set-row__t' }, t('graceT')), h('div', { class: 'set-row__d' }, t('graceD'))),
+      h('div', { class: 'row' },
+        grace,
+        h('button', { class: 'btn btn--sm btn--primary', onclick: async () => {
+          try {
+            await api.put('/api/admin/settings', { totp_grace_min: Math.max(0, parseInt(grace.value, 10) || 0) });
+            toast(t('settingsSaved'), 'ok');
+          } catch (e) { toast(errText(e), 'err'); }
+        } }, t('save')))));
+  }
+  pane.append(twoFaCard);
+
+  // the padlock at the top — what it asks for when it locks the panel.
+  // 'totp' (default) shows the padlock only with 2FA on; 'password' works
+  // with 2FA off, so the padlock can live on the toolbar either way
+  if (isAdmin && s) {
+    const lockCur = s.lock_mode === 'password' ? 'password' : 'totp';
+    const chipTotp = h('button', { class: `chip ${lockCur === 'totp' ? 'is-on' : ''}` }, icon('shield'), t('lockModeTotp'));
+    const chipPw = h('button', { class: `chip ${lockCur === 'password' ? 'is-on' : ''}` }, icon('key'), t('lockModePw'));
+    const note = h('p', { class: 'small muted', style: { margin: '8px 0 0' } },
+      lockCur === 'totp' ? (on ? t('lockModeTotpD') : t('lockModeTotpNeed')) : t('lockModePwD'));
+    const pick = (mode) => {
+      vibrate(5);
+      chipTotp.classList.toggle('is-on', mode === 'totp');
+      chipPw.classList.toggle('is-on', mode === 'password');
+      note.textContent = mode === 'totp' ? (on ? t('lockModeTotpD') : t('lockModeTotpNeed')) : t('lockModePwD');
+      state.lockMode = mode;
+      refreshLockBadge();
+      api.put('/api/admin/settings', { lock_mode: mode })
+        .then(() => toast(t('saved'), 'ok', 1400))
+        .catch((e) => toast(errText(e), 'err'));
+    };
+    chipTotp.addEventListener('click', () => pick('totp'));
+    chipPw.addEventListener('click', () => pick('password'));
+    pane.append(h('div', { class: 'glass card' },
+      h('h3', { style: { margin: '0 0 6px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' } }, t('lockCard'), h('span', { class: 'icon-btn lock-badge', style: { pointerEvents: 'none' } }, icon('lockMode'))),
+      h('p', { class: 'small muted', style: { margin: '0 0 10px' } }, t('lockCardSub')),
+      h('div', { class: 'set-row' },
+        h('div', {}, h('div', { class: 'set-row__t' }, t('lockAsk')), h('div', { class: 'set-row__d', style: { maxWidth: '460px' } }, note)),
+        h('div', { class: 'row' }, chipTotp, chipPw)),
+    ));
+  }
 
   // password
   const cur = h('input', { class: 'input', type: 'password', autocomplete: 'current-password' });
@@ -190,6 +253,9 @@ async function securityPane() {
       } catch (e) { toast(errText(e), 'err'); }
     } }, t('changePassword')),
   ));
+
+  // devices & sessions — the remote kill switch (admin)
+  if (isAdmin) pane.append(await devicesCard());
 
   async function enableFlow() {
     try {
@@ -218,7 +284,8 @@ async function securityPane() {
               toast(t('saved'), 'ok');
               m.close();
               state.user.totp_enabled = 1;
-              renderSettings(document.getElementById('app'));
+              updateLockBadge(true);
+              renderSettings(document.getElementById('app'), 'security');
             } catch (e) { toast(errText(e), 'err'); }
           } }, t('verify')),
         ],
@@ -239,7 +306,8 @@ async function securityPane() {
             toast(t('saved'), 'ok');
             m.close();
             state.user.totp_enabled = 0;
-            renderSettings(document.getElementById('app'));
+            updateLockBadge(false);
+            renderSettings(document.getElementById('app'), 'security');
           } catch (e) { toast(errText(e), 'err'); }
         } }, t('disable2fa')),
       ],
@@ -247,6 +315,70 @@ async function securityPane() {
   }
 
   return pane;
+}
+
+// ---------- devices & sessions: every signed-in gadget, one kick each ----------
+async function devicesCard() {
+  const card = h('div', { class: 'glass card' },
+    h('h3', { style: { margin: '0 0 4px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' } }, t('devTitle'),
+      h('button', { class: 'icon-btn', title: t('refresh'), 'aria-label': t('refresh'), onclick: () => fill() }, icon('refresh'))),
+    h('p', { class: 'small muted', style: { margin: '0 0 12px' } }, t('devSub')));
+  const list = h('div', { class: 'dev-list' }, h('div', { class: 'small muted', style: { padding: '6px 2px' } }, t('loading')));
+  card.append(list,
+    h('div', { class: 'row mt-2' },
+      h('button', { class: 'btn btn--danger-ghost', onclick: () => confirmBox(t('devKickOthersConfirm'), async () => {
+        try {
+          const r = await api.post('/api/admin/sessions/revoke-others', {});
+          toast(`${r.removed ?? 0} ${t('devKickedN')}`, 'ok', 2000);
+          fill();
+        } catch (e) { toast(errText(e), 'err'); }
+      }) }, icon('logout'), t('devKickOthers'))));
+
+  // the friendliest name a user-agent can give up
+  function deviceInfo(ua) {
+    const s = String(ua ?? '');
+    let icn = 'monitor', name = lang === 'fa' ? 'دستگاه ناشناس' : 'Unknown device';
+    if (/iphone/i.test(s)) { icn = 'phone'; name = 'iPhone'; }
+    else if (/ipad/i.test(s)) { icn = 'phone'; name = 'iPad'; }
+    else if (/android/i.test(s)) { icn = 'phone'; name = 'Android'; }
+    else if (/windows/i.test(s)) { icn = 'monitor'; name = 'Windows'; }
+    else if (/mac os x|macintosh/i.test(s)) { icn = 'monitor'; name = 'macOS'; }
+    else if (/linux/i.test(s)) { icn = 'monitor'; name = 'Linux'; }
+    let browser = lang === 'fa' ? 'مرورگر' : 'Browser';
+    if (/edg\//i.test(s)) browser = 'Edge';
+    else if (/chrome|crios/i.test(s)) browser = 'Chrome';
+    else if (/firefox|fxios/i.test(s)) browser = 'Firefox';
+    else if (/safari/i.test(s)) browser = 'Safari';
+    return { icn, name: `${name} · ${browser}` };
+  }
+
+  async function fill() {
+    clear(list);
+    list.append(h('div', { class: 'small muted', style: { padding: '6px 2px' } }, t('loading')));
+    let rows = [];
+    try { rows = (await api.get('/api/admin/sessions')).sessions ?? []; }
+    catch (e) { clear(list).append(h('div', { class: 'small muted', style: { padding: '6px 2px' } }, errText(e))); return; }
+    clear(list);
+    if (!rows.length) { list.append(h('div', { class: 'small muted', style: { padding: '6px 2px' } }, t('devEmpty'))); return; }
+    for (const s of rows) {
+      const d = deviceInfo(s.ua);
+      list.append(h('div', { class: `dev-row ${s.current ? 'is-current' : ''}` },
+        h('span', { class: 'dev-row__icn' }, icon(d.icn)),
+        h('div', { class: 'dev-row__body' },
+          h('div', { class: 'dev-row__name' }, d.name,
+            s.current ? h('span', { class: 'chip is-on dev-row__chip' }, t('devThis')) : ''),
+          h('div', { class: 'dev-row__meta mono' }, `${s.ip || '—'} · ${timeAgo(s.created_at, t)}`)),
+        s.current ? '' : h('button', { class: 'btn btn--sm btn--danger-ghost', onclick: () => confirmBox(t('devKickConfirm'), async () => {
+          try {
+            await api.post('/api/admin/sessions/revoke', { created_at: s.created_at, ip: s.ip });
+            toast(t('devKicked'), 'ok', 1800);
+            fill();
+          } catch (e) { toast(errText(e), 'err'); }
+        }) }, icon('logout'), t('devKick'))));
+    }
+  }
+  await fill();
+  return card;
 }
 
 // ---------- admin: general ----------

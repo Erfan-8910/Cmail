@@ -9,7 +9,7 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 export function renderAbout(root) {
   const app = root;
   const FA = (n) => lang === 'fa' ? String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : String(n);
-  const VERSION = state.setup?.version || '2.9.0';
+  const VERSION = state.setup?.version || '3.0.0';
 
   // ---------- hero ----------
   const hero = h('section', { class: 'ab-hero glass' },
@@ -28,15 +28,15 @@ export function renderAbout(root) {
 
   // ---------- the sibling-project ribbon: Climind-W ----------
   // a slow aurora band advertising the maker's other project — living,
-  // glassy, one press away from the repository
+  // glassy, one press away from the repository. The sky mark reads the sky.
   const ribbon = h('a', {
     class: 'ab-ribbon', href: 'https://github.com/Erfan-8910/Climind-W', target: '_blank', rel: 'noopener',
     'aria-label': t('ribbonClimindCta'),
   },
     h('span', { class: 'ab-ribbon__aurora', 'aria-hidden': 'true' }),
-    h('span', { class: 'ab-ribbon__mark', 'aria-hidden': 'true' }, icon('cloud')),   // the sky mark — this one reads the sky
+    h('span', { class: 'ab-ribbon__mark', 'aria-hidden': 'true' }, icon('cloud')),
     h('span', { class: 'ab-ribbon__txt' },
-      h('b', {}, 'Climind-W'),
+      h('b', {}, h('span', { class: 'ab-ribbon__sigil', 'aria-hidden': 'true' }, icon('climind')), 'Climind-W'),
       h('span', { class: 'ab-ribbon__d' }, t('ribbonClimindDesc'))),
     h('span', { class: 'ab-ribbon__chip' }, t('ribbonClimindTag')),
     h('span', { class: 'ab-ribbon__cta' }, t('ribbonClimindCta'), icon('external')),
@@ -100,7 +100,7 @@ export function renderAbout(root) {
       )),
   );
 
-  const made = h('p', { class: 'ab-made' }, t('madeBy'), h('span', { class: 'version-pill' }, `Cmail v${VERSION} · ${FA(2025)}`));
+  const made = h('p', { class: 'ab-made' }, t('madeBy'), h('span', { class: 'ab-made__heart', 'aria-label': 'heart' }, icon('heart')), t('madeByTail'), h('span', { class: 'version-pill' }, `Cmail v${VERSION} · ${FA(2025)}`));
 
   app.append(
     h('div', { class: 'page-head' },

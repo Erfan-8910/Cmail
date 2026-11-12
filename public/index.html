@@ -7,6 +7,11 @@
   <meta name="description" content="Cmail — پلتفرم ایمیل روی Cloudflare: ایمیل موقت و دائمی، یادداشت‌گذاری روی ایمیل‌ها، گاوصندوق کدهای 2FA و پشتیبانی چند دامنه." />
   <meta name="theme-color" content="#141a15" />
   <link rel="manifest" href="manifest.json" />
+  <!-- the two webfonts start loading with the HTML itself — when the CSS
+       lands the fonts are already (almost) there, so text never reflows
+       from the fallback into the real face (the “page jump” on slow devices) -->
+  <link rel="preload" href="assets/fonts/Vazirmatn-var.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/DMSans-var.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="assets/img/favicon-64.png" />
   <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png" />
@@ -14,14 +19,14 @@
 </head>
 <body>
   <!-- the ambient stage behind everything (mood-tinted, three presence modes) -->
-  <div class="bg-stage" aria-hidden="true"><i></i><div class="grain"></div></div>
+  <div class="bg-stage" aria-hidden="true"><i></i><b></b><div class="grain"></div><div class="vig"></div></div>
 
   <!-- floating pill navigation — brand · pages · search / theme / language / account -->
   <header class="pillbar" id="pillbar" hidden>
     <a class="pillbar__brand" href="#/mail">
       <img class="pillbar__logo" src="assets/img/icon-white.png" alt="Cmail" />
       <span class="pillbar__name">Cmail</span>
-      <span class="pillbar__ver" id="pb-ver">2.6</span>
+      <span class="pillbar__ver" id="pb-ver">3.0</span>
     </a>
     <nav class="pillbar__nav" id="pb-nav" aria-label="main"></nav>
     <div class="pillbar__end" id="pb-end"></div>

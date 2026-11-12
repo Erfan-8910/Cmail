@@ -26,12 +26,16 @@
   --spring: cubic-bezier(.34, 1.42, .4, 1);      /* gentle spring */
   --speed: .32s;
 
+  /* the vertical scrollbar is reserved from the start — a list that grows
+     past one screen no longer squeezes the layout sideways (classic jump) */
+  scrollbar-gutter: stable;
+
   --font-fa: 'Vazirmatn', 'DM Sans', 'Segoe UI', Tahoma, sans-serif;
   --font-en: 'DM Sans', 'Vazirmatn', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
 
   --pill-h: 52px;
-  --shell-top: 86px;   /* pillbar offset + height + breathing room */
+  --shell-top: 76px;   /* pillbar bottom + one breath */
 
   /* accent palettes (switch via html[data-accent]) */
   --acc-l: #aed890;  --acc-d: #4f8f60;  --acc-ink: #172b1b;
@@ -47,16 +51,16 @@ html[data-accent='amber']  { --acc-l: #eec27e; --acc-d: #a06a24; --acc-ink: #2d1
 html[data-accent='sage'], html[data-accent='emerald'], html[data-accent='ocean'],
 html[data-accent='midnight'], html[data-accent='ice'] { --acc-l: #9ec8dd; --acc-d: #3f7f9e; --acc-ink: #0c2430; --mood-bg: #131b21; --mood-bg-l: #eff4f6; }
 html[data-accent='serene'] { --acc-l: #9ec8dd; --acc-d: #3f7f9e; --acc-ink: #0c2430; --mood-bg: #131b21; --mood-bg-l: #eff4f6; }
-html[data-accent='violet'], html[data-accent='sakura'], html[data-accent='rose'],
+html[data-accent='violet'], html[data-accent='sakura'],
 html[data-accent='wine'], html[data-accent='coral'] { --acc-l: #c2a7e2; --acc-d: #7e5fa6; --acc-ink: #221635; --mood-bg: #181522; --mood-bg-l: #f4f1f7; }
 html[data-accent='gold'] { --acc-l: #eec27e; --acc-d: #a06a24; --acc-ink: #2d1f0c; --mood-bg: #1d1812; --mood-bg-l: #f7f3ea; }
 
 /* ---------- moods ---------- */
 html[data-theme='dark'] {
   --bg: var(--mood-bg, #161c17);
-  --bg-glow-1: color-mix(in srgb, var(--acc-l) 34%, transparent);
-  --bg-glow-2: color-mix(in srgb, var(--acc-l) 19%, transparent);
-  --bg-glow-3: color-mix(in srgb, var(--acc-d) 26%, transparent);
+  --bg-glow-1: color-mix(in srgb, var(--acc-l) 52%, transparent);
+  --bg-glow-2: color-mix(in srgb, var(--acc-l) 33%, transparent);
+  --bg-glow-3: color-mix(in srgb, var(--acc-d) 44%, transparent);
 
   --fg: #edf1ea;
   --muted: #94a091;
@@ -88,9 +92,9 @@ html[data-theme='dark'] {
 
 html[data-theme='light'] {
   --bg: var(--mood-bg-l, #f3f6ef);
-  --bg-glow-1: color-mix(in srgb, var(--acc-d) 26%, transparent);
-  --bg-glow-2: color-mix(in srgb, var(--acc-d) 14%, transparent);
-  --bg-glow-3: color-mix(in srgb, var(--acc-l) 34%, transparent);
+  --bg-glow-1: color-mix(in srgb, var(--acc-d) 38%, transparent);
+  --bg-glow-2: color-mix(in srgb, var(--acc-l) 54%, transparent);
+  --bg-glow-3: color-mix(in srgb, var(--acc-d) 24%, transparent);
 
   --fg: #1e251f;
   --muted: #6e796c;
@@ -152,7 +156,8 @@ img { max-width: 100%; }
 
 /* ---------- the stage (ambient environment behind the whole app) ----------
    the room the app lives in: big soft glows tinted by the active mood, a
-   slow drift, film grain. Three presence modes via html[data-bg]:
+   slow light-beam sweeping the room, a gentle drift, film grain. Three
+   presence modes via html[data-bg]:
    aurora = alive · halo = still glow · pure = flat */
 .bg-stage { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
 .bg-stage::before, .bg-stage::after, .bg-stage i {
@@ -160,34 +165,70 @@ img { max-width: 100%; }
   animation: bgDrift 26s ease-in-out infinite alternate;
 }
 .bg-stage::before {
-  width: 58vmax; height: 58vmax; top: -24vmax; inset-inline-start: -14vmax;
+  width: 66vmax; height: 66vmax; top: -26vmax; inset-inline-start: -16vmax;
   background: radial-gradient(circle at 50% 50%, var(--bg-glow-1), transparent 65%);
 }
 .bg-stage::after {
-  width: 52vmax; height: 52vmax; bottom: -22vmax; inset-inline-end: -12vmax;
+  width: 58vmax; height: 58vmax; bottom: -24vmax; inset-inline-end: -14vmax;
   background: radial-gradient(circle at 50% 50%, var(--bg-glow-2), transparent 62%);
   animation-duration: 34s;
   animation-delay: -12s;
 }
 .bg-stage i {
-  width: 40vmax; height: 40vmax; bottom: -18vmax; inset-inline-start: 22vw;
+  width: 46vmax; height: 46vmax; bottom: -20vmax; inset-inline-start: 20vw;
   background: radial-gradient(circle at 50% 50%, var(--bg-glow-3), transparent 60%);
   animation-duration: 40s; animation-delay: -20s;
 }
+/* the beam — two soft sectors of accent light turning around the room once
+   a minute; the whole stage slowly revolves instead of just breathing */
+.bg-stage b {
+  position: absolute; left: 50%; top: 50%;
+  width: 145vmax; height: 145vmax; margin: -72.5vmax 0 0 -72.5vmax;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg,
+    transparent 0deg 34deg, var(--bg-glow-1) 84deg, transparent 138deg 196deg,
+    var(--bg-glow-2) 262deg, transparent 318deg 360deg);
+  filter: blur(90px);
+  opacity: .62;
+  animation: bgBeam 64s linear infinite;
+}
+/* the second beam — narrower, faster, turning against the first one; the
+   two sweeps cross each other and the room never sits still */
+.bg-stage b::before {
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 105vmax; height: 105vmax; margin: -52.5vmax 0 0 -52.5vmax;
+  border-radius: 50%;
+  background: conic-gradient(from 140deg,
+    transparent 0deg 20deg, var(--bg-glow-2) 62deg, transparent 108deg 236deg,
+    var(--bg-glow-1) 288deg, transparent 334deg 360deg);
+  opacity: .8;
+  animation: bgBeamR 44s linear infinite;
+}
+@keyframes bgBeam { to { transform: rotate(1turn); } }
+@keyframes bgBeamR { to { transform: rotate(-1turn); } }
 @keyframes bgDrift {
   from { transform: translate3d(0, 0, 0) scale(1); }
   to   { transform: translate3d(3.5vmax, 2.5vmax, 0) scale(1.07); }
 }
 /* presence modes */
-html[data-bg='halo'] .bg-stage::before, html[data-bg='halo'] .bg-stage::after, html[data-bg='halo'] .bg-stage i { animation: none; }
-html[data-bg='pure'] .bg-stage::before, html[data-bg='pure'] .bg-stage::after, html[data-bg='pure'] .bg-stage i { opacity: 0; }
+html[data-bg='halo'] .bg-stage::before, html[data-bg='halo'] .bg-stage::after,
+html[data-bg='halo'] .bg-stage i, html[data-bg='halo'] .bg-stage b, html[data-bg='halo'] .bg-stage b::before { animation: none; }
+html[data-bg='pure'] .bg-stage::before, html[data-bg='pure'] .bg-stage::after,
+html[data-bg='pure'] .bg-stage i, html[data-bg='pure'] .bg-stage b { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .bg-stage::before, .bg-stage::after, .bg-stage i { animation: none; }
+  .bg-stage::before, .bg-stage::after, .bg-stage i, .bg-stage b, .bg-stage b::before { animation: none; }
 }
 .bg-stage .grain {
   position: absolute; inset: 0; opacity: .45;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.035'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
+/* the vignette — plain-mood mode only; scenes carry their own light */
+.bg-stage .vig {
+  position: absolute; inset: 0; opacity: 0; transition: opacity .5s;
+  box-shadow: inset 0 0 20vmax rgba(3, 8, 5, .42);
+}
+.bg-stage .vig { opacity: 1; }
+html[data-theme='light'] .bg-stage .vig { box-shadow: inset 0 0 18vmax rgba(46, 64, 48, .16); }
 
 /* ---------- glass primitives ---------- */
 .glass {
@@ -311,7 +352,11 @@ input[type='range']::-moz-range-thumb { width: 18px; height: 18px; border: 0; bo
   border-radius: 999px; transition: opacity .2s;
 }
 .pillbar__brand:hover { opacity: .85; text-decoration: none; }
-.pillbar__logo { width: 29px; height: 29px; object-fit: contain; border-radius: 9px; }
+/* the brand mark stays itself: the real Cmail glyph, white by night and
+   black by day — reverted after the mask-tint experiment read badly */
+.pillbar__logo {
+  width: 29px; height: 29px; object-fit: contain; border-radius: 9px;
+}
 html[data-theme='dark'] .pillbar__logo { content: url('../img/icon-white.png'); }
 html[data-theme='light'] .pillbar__logo { content: url('../img/icon-black.png'); }
 .pillbar__name { font-weight: 800; font-size: 16.5px; letter-spacing: .2px; }
@@ -537,10 +582,10 @@ button.avatar:hover { transform: scale(1.08); box-shadow: 0 0 0 3px var(--acc-so
 /* ---------- generic view layout ---------- */
 .view { padding: var(--shell-top) 20px 40px; max-width: 1200px; width: 100%; margin-inline: auto; animation: viewFade .35s var(--ease); }
 @keyframes viewFade { from { opacity: 0; } to { opacity: 1; } }
-.view--full { display: flex; flex-direction: column; height: calc(100dvh - var(--shell-top) - 14px); min-height: 0 !important; padding-bottom: 16px !important; max-width: none !important; }
+.view--full { display: flex; flex-direction: column; height: calc(100vh - var(--shell-top) - 14px); height: calc(100svh - var(--shell-top) - 14px); min-height: 0 !important; padding-bottom: 16px !important; max-width: none !important; }
 /* when serious-issue banners take the top zone, content slides right under them */
 body.has-alert .view { padding-top: 14px; }
-body.has-alert .view--full { height: calc(100dvh - 150px); }
+body.has-alert .view--full { height: calc(100vh - 150px); height: calc(100svh - 150px); }
 
 /* page header: eyebrow · big title · sub */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin: 2px 2px 14px; flex-wrap: wrap; }
@@ -556,10 +601,11 @@ body.has-alert .view--full { height: calc(100dvh - 150px); }
 .page-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 /* ---------- toasts ---------- */
-.toasts { position: fixed; bottom: 22px; inset-inline-end: 22px; z-index: 200; display: flex; flex-direction: column; gap: 10px; }
+.toasts { position: fixed; bottom: 22px; inset-inline-end: 22px; z-index: 300; display: flex; flex-direction: column; gap: 10px; }
 .toast {
+  position: relative; overflow: hidden;
   display: flex; align-items: center; gap: 10px;
-  padding: 9px 10px 9px 14px;
+  padding-block: 9px 11px; padding-inline: 14px 10px;
   background: var(--panel-2);
   border: 1px solid var(--stroke);
   backdrop-filter: blur(20px) saturate(1.5);
@@ -567,9 +613,17 @@ body.has-alert .view--full { height: calc(100dvh - 150px); }
   border-radius: 13px;
   box-shadow: var(--shadow), var(--inset);
   font-size: 13px; font-weight: 600;
-  animation: toastIn .45s var(--spring);
-  max-width: 340px;
+  animation: toastIn .5s var(--spring) both;
+  max-width: 360px;
 }
+.toast__icn {
+  flex: none; display: grid; place-items: center;
+  width: 30px; height: 30px; border-radius: 10px; color: #fff;
+}
+.toast__icn svg { width: 15px; height: 15px; }
+.toast--ok .toast__icn { background: linear-gradient(135deg, var(--ok), color-mix(in srgb, var(--ok) 58%, #1c3326)); box-shadow: 0 6px 16px -7px color-mix(in srgb, var(--ok) 85%, transparent); }
+.toast--err .toast__icn { background: linear-gradient(135deg, var(--danger), color-mix(in srgb, var(--danger) 58%, #43201f)); box-shadow: 0 6px 16px -7px color-mix(in srgb, var(--danger) 85%, transparent); }
+.toast--info .toast__icn { background: linear-gradient(135deg, var(--acc-l), var(--acc-d)); box-shadow: 0 6px 16px -7px color-mix(in srgb, var(--acc) 85%, transparent); }
 .toast__msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .toast .toast__x {
   flex: none; width: 24px; height: 24px; border-radius: 8px;
@@ -579,12 +633,22 @@ body.has-alert .view--full { height: calc(100dvh - 150px); }
 .toast .toast__x:hover { color: var(--fg); background: var(--hover); }
 .toast .toast__x:active { transform: scale(.85); }
 .toast .toast__x svg { width: 13px; height: 13px; color: var(--faint); }
-.toast--ok svg { color: var(--ok); }
-.toast--err svg { color: var(--danger); }
-.toast--info svg { color: var(--acc); }
+.toast__bar {
+  position: absolute; inset-inline: 0; bottom: 0; height: 2.5px;
+  background: linear-gradient(90deg, var(--acc-l), var(--acc-d));
+  opacity: .85;
+  animation: toastDrain linear forwards;
+  transform-origin: left center;
+}
+html[dir='rtl'] .toast__bar { transform-origin: right center; }
+.toast--ok .toast__bar { background: linear-gradient(90deg, var(--ok), color-mix(in srgb, var(--ok) 30%, transparent)); }
+.toast--err .toast__bar { background: linear-gradient(90deg, var(--danger), color-mix(in srgb, var(--danger) 30%, transparent)); }
+.toast.hold .toast__bar { animation-play-state: paused; }
 .toast.leaving { animation: toastOut .3s var(--ease) forwards; }
-@keyframes toastIn { from { transform: translateY(20px) scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes toastIn { from { transform: translateY(20px) scale(.92); opacity: 0; } 62% { transform: translateY(-2px) scale(1.012); } to { transform: none; opacity: 1; } }
 @keyframes toastOut { to { transform: translateY(10px) scale(.95); opacity: 0; } }
+@keyframes toastDrain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 
 /* ---------- modal ---------- */
 .modal-back {
@@ -621,7 +685,7 @@ body.has-alert .view--full { height: calc(100dvh - 150px); }
 /* ---------- auth ---------- */
 /* robust centering: flex + margin auto keeps the form centered when it fits
    and lets the page scroll from the top when the viewport is short — never clipped */
-.view--auth { display: flex; overflow-y: auto; overflow-x: hidden; padding: max(20px, env(safe-area-inset-top)) 16px 28px; min-height: 100dvh; position: relative; max-width: none; }
+.view--auth { display: flex; overflow-y: auto; overflow-x: hidden; padding: max(20px, env(safe-area-inset-top)) 16px 28px; min-height: 100vh; min-height: 100svh; position: relative; max-width: none; }
 .auth-wrap { width: min(440px, 100%); text-align: center; margin: auto; padding: 12px 0; }
 
 /* live aurora behind the sign-in card — the stage breathes */
@@ -659,9 +723,44 @@ body.has-alert .view--full { height: calc(100dvh - 150px); }
   -webkit-mask-composite: xor; mask-composite: exclude;
   pointer-events: none;
 }
-.auth-logo { width: clamp(88px, 11vw, 112px); height: auto; margin-bottom: 4px; animation: floaty 6s ease-in-out infinite; }
+.auth-logo { width: clamp(88px, 11vw, 112px); height: auto; aspect-ratio: 494 / 644; margin-bottom: 4px; animation: floaty 6s ease-in-out infinite; filter: drop-shadow(0 10px 26px color-mix(in srgb, var(--acc) 30%, transparent)); }
 html[data-theme='dark'] .auth-logo { content: url('../img/logo-light.png'); }
 html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
+
+/* v3.0.0 — the two doors of the sign-in card: the owner's account door and
+   the shared-access door. A slim segmented control rides above the card; the
+   active door carries the accent pill that slides between the two. */
+.auth-seg {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; position: relative;
+  width: min(100%, 340px); margin: 2px 0 12px; padding: 4px;
+  border-radius: 14px; background: color-mix(in srgb, var(--field) 72%, transparent);
+  border: 1px solid var(--field-line); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .12);
+}
+.auth-seg__btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 8.5px 10px; border-radius: 10.5px; border: 0; cursor: pointer;
+  background: transparent; color: var(--muted);
+  font: inherit; font-size: 12.5px; font-weight: 750;
+  transition: color .2s, background .25s var(--spring), box-shadow .25s;
+}
+.auth-seg__btn svg { width: 15px; height: 15px; }
+.auth-seg__btn:hover { color: var(--fg); }
+.auth-seg__btn.is-on {
+  color: var(--acc-ink);
+  background: linear-gradient(135deg, var(--acc-l), var(--acc-d));
+  box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--acc) 65%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 32%, transparent);
+}
+/* the sigil above the shared door — two heads under one accent glass */
+.auth-share__sigil {
+  display: grid; place-items: center; width: 46px; height: 46px;
+  margin: 0 auto 8px; border-radius: 15px;
+  color: var(--acc-ink);
+  background: linear-gradient(135deg, var(--acc-l), var(--acc-d));
+  box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--acc) 70%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 35%, transparent);
+}
+.auth-share__sigil svg { width: 22px; height: 22px; }
 @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 .auth-card { padding: clamp(20px, 2.2vw, 26px) clamp(18px, 2vw, 24px) 20px; margin-top: 10px; text-align: start; }
 .auth-title { font-size: clamp(19px, 1.1vw + 13px, 22px); font-weight: 700; margin: 0 0 4px; letter-spacing: -.3px; }
@@ -859,14 +958,17 @@ html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
 }
 @keyframes autobreath { 0%, 100% { opacity: .3; transform: scale(.82); } 50% { opacity: .95; transform: scale(1.15); } }
 
-/* bulk actions — a quiet strip that appears over the toolbar's shadow */
+/* bulk actions — a quiet strip that springs in over the toolbar's shadow */
 .inbox-bulk {
   display: flex; gap: 6px; padding: 7px 12px; flex-wrap: wrap; flex: none;
   border-bottom: 1px solid var(--stroke);
   background: color-mix(in srgb, var(--acc-soft) 55%, transparent);
-  animation: fadeIn .22s var(--ease);
+  animation: bulkIn .28s var(--spring);
 }
-.inbox-bulk .chip { padding: 4px 11px; font-size: 11.5px; white-space: nowrap; font-weight: 700; }
+@keyframes bulkIn { from { opacity: 0; transform: translateY(-9px); } to { opacity: 1; transform: none; } }
+.inbox-bulk .chip { padding: 4px 11px; font-size: 11.5px; white-space: nowrap; font-weight: 700; transition: transform .18s var(--spring), filter .15s; }
+.inbox-bulk .chip:hover { transform: translateY(-1.5px); filter: brightness(1.05); }
+.inbox-bulk .chip:active { transform: scale(.94); }
 
 /* the slow-load strip: a spinner and honest words, only when it really drags */
 .inbox-status {
@@ -912,6 +1014,18 @@ html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
 .email-row.is-cursor { background: var(--panel-2); }
 .email-row.is-new { animation: newMailFlash 1.6s var(--ease); }
 @keyframes newMailFlash { 0% { background: color-mix(in srgb, var(--acc) 22%, transparent); } 100% { background: transparent; } }
+/* unread rows carry the room's accent: a slim bar on the speaking edge and
+   a faint tint — the list reads like a checklist that knows what matters */
+.email-row.is-unread { background: color-mix(in srgb, var(--acc) 4.5%, transparent); }
+.email-row.is-unread::before {
+  content: ''; position: absolute; inset-inline-start: 0; top: 9px; bottom: 9px;
+  width: 3px; border-radius: 0 4px 4px 0; background: var(--acc); opacity: .8;
+}
+[dir='rtl'] .email-row.is-unread::before { border-radius: 4px 0 0 4px; }
+.email-row.is-unread:hover { background: color-mix(in srgb, var(--acc) 7%, transparent); }
+.email-row.is-unread .email-row__time { color: var(--acc); font-weight: 800; }
+.email-row.is-selected { background: color-mix(in srgb, var(--acc) 8%, transparent); }
+.email-row.is-selected::before { opacity: 0; }
 
 /* the big-client trick: unread rows show a dot where the checkbox would
    be — reach for the row and the checkbox appears in its place */
@@ -1178,7 +1292,7 @@ html[data-theme='dark'] .mail-frame { background: #fbfcfa; }
    would clip the header */
 .gate { width: min(680px, 100%); margin-inline: auto; margin-block: max(20px, env(safe-area-inset-top)) 28px; }
 .gate__head { text-align: center; margin-bottom: 16px; }
-.gate__logo { width: 72px; animation: floaty 6s ease-in-out infinite; margin-bottom: 8px; }
+.gate__logo { width: 72px; height: auto; aspect-ratio: 494 / 644; animation: floaty 6s ease-in-out infinite; margin-bottom: 8px; filter: drop-shadow(0 10px 26px color-mix(in srgb, var(--acc) 30%, transparent)); }
 html[data-theme='dark'] .gate__logo { content: url('../img/logo-light.png'); }
 html[data-theme='light'] .gate__logo { content: url('../img/logo-dark.png'); }
 .gate__eyebrow {
@@ -1333,7 +1447,14 @@ html[data-theme='light'] .term { background: #17211a; border-color: transparent;
 }
 .ab-ribbon__mark svg { width: 21px; height: 21px; }
 .ab-ribbon__txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.ab-ribbon__txt b { font-size: 14.5px; font-weight: 800; letter-spacing: .2px; }
+.ab-ribbon__txt b { font-size: 14.5px; font-weight: 800; letter-spacing: .2px; display: inline-flex; align-items: center; gap: 6px; }
+/* v3.0.0 — the little Climind-W mark beside the ribbon's name: drawn on
+   currentColor so it re-tints with the mood (deep accent by day, light by
+   night) — the sibling logo the About section was missing */
+.ab-ribbon__sigil { display: inline-flex; color: var(--acc-d); }
+.ab-ribbon__sigil svg { width: 15px; height: 15px; }
+html[data-theme='dark'] .ab-ribbon__sigil { color: var(--acc-l); }
+html[data-theme='dark'] .ab-ribbon__sigil svg { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--acc-l) 55%, transparent)); }
 .ab-ribbon__d { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
 .ab-ribbon__chip {
   font-size: 9.5px; font-weight: 800; letter-spacing: .5px;
@@ -1376,7 +1497,7 @@ html[data-theme='light'] .term { background: #17211a; border-color: transparent;
 .ab-hero { position: relative; overflow: hidden; text-align: center; padding: 28px 20px 22px; animation: fadeUp .5s var(--ease) both; }
 .ab-hero__glow { position: absolute; inset: -30%; background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--acc) 15%, transparent), transparent 55%); pointer-events: none; }
 .ab-hero > * { position: relative; }
-.ab-logo { width: 82px; margin-bottom: 8px; animation: floaty 6s ease-in-out infinite; filter: drop-shadow(0 14px 34px color-mix(in srgb, var(--acc) 38%, transparent)); }
+.ab-logo { width: 82px; height: auto; aspect-ratio: 494 / 644; margin-bottom: 8px; animation: floaty 6s ease-in-out infinite; filter: drop-shadow(0 14px 34px color-mix(in srgb, var(--acc) 38%, transparent)); }
 html[data-theme='dark'] .ab-logo { content: url('../img/logo-light.png'); }
 html[data-theme='light'] .ab-logo { content: url('../img/logo-dark.png'); }
 .ab-title { font-size: 30px; font-weight: 800; letter-spacing: -.8px; margin: 0 0 8px; }
@@ -1436,6 +1557,10 @@ html[data-theme='light'] .ab-logo { content: url('../img/logo-dark.png'); }
 .ab-creator__txt p { margin: 7px 0 12px; color: var(--muted); font-size: 12.5px; line-height: 1.85; max-width: 62ch; }
 .ab-creator__links { display: flex; gap: 8px; flex-wrap: wrap; }
 .ab-made { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--faint); font-size: 12px; margin: 18px 0 6px; flex-wrap: wrap; }
+/* the heart in “made with <3 and a bit of obsession” — an SVG glyph, not an
+   emoji: it inherits the accent and never collapses into a tofu box */
+.ab-made__heart { display: inline-flex; color: var(--acc); }
+.ab-made__heart svg { width: 13px; height: 13px; fill: color-mix(in srgb, var(--acc) 42%, transparent); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--acc) 45%, transparent)); }
 .version-pill { display: inline-flex; padding: 4px 14px; border-radius: 99px; background: var(--field); border: 1px solid var(--field-line); font-size: 11.5px; font-weight: 700; color: var(--muted); font-family: var(--font-mono); }
 
 @media (max-width: 860px) {
@@ -1532,14 +1657,14 @@ details.guide pre { background: var(--field); padding: 12px 14px; border-radius:
 }
 
 @media (max-width: 860px) {
-  :root { --pill-h: 48px; --shell-top: 72px; }
+  :root { --pill-h: 48px; --shell-top: 66px; }
   .pillbar { top: 10px; }
   .pillbar__name { display: none; }
   .pillbar__ver { display: none; }
   .pillbar__brand { padding-inline: 6px; }
   .tabbar { display: block; }
   .view { padding: var(--shell-top) 12px 92px; }
-  .view--full { padding-bottom: 0 !important; height: calc(100dvh - var(--shell-top) - 66px); }
+  .view--full { padding-bottom: 0 !important; height: calc(100vh - var(--shell-top) - 66px); height: calc(100svh - var(--shell-top) - 66px); }
   [data-mobile='menu'] { display: inline-flex; }
 
   .mail { grid-template-columns: minmax(0, 1fr); }
@@ -1770,6 +1895,14 @@ html[dir='rtl'] .cmdk__enter svg { transform: scaleX(-1); }
   background: color-mix(in srgb, var(--panel) 60%, transparent);
 }
 .cmdk__foot .kbd { margin-inline-end: 5px; }
+/* v3.0.0 — the nav hint's arrows are SVG chevrons now: text arrows (↑↓)
+   were exactly the glyphs several device fonts render as tofu boxes */
+.cmdk__navhint { display: inline-flex; align-items: center; gap: 3px; }
+.cmdk__navhint .kbd { margin-inline-end: 5px; }
+.kbd--icn { display: inline-grid; place-items: center; padding: 2px 4px; }
+.kbd--icn .icn { display: inline-flex; }
+.kbd--icn svg { width: 11px; height: 11px; display: block; }
+.icn.flip-v { transform: rotate(180deg); }
 
 /* ---------- toasts: island style ---------- */
 .toast {
@@ -1877,9 +2010,12 @@ html[dir='rtl'] .cmdk__enter svg { transform: scaleX(-1); }
   .mail { gap: 16px; }
 }
 
-/* laptop ≤ 1280 (desktop range only — never fight the mobile layout) */
+/* laptop ≤ 1280 (desktop range only — never fight the mobile layout).
+   the old three-track template here was a leftover of the retired reading
+   pane — it squeezed the list to a sliver and left a dead column of air on
+   common 1025–1280 laptops ("the jump on some devices") */
 @media (max-width: 1280px) and (min-width: 861px) {
-  .mail { grid-template-columns: 224px minmax(280px, .9fr) minmax(0, 1.3fr); gap: 12px; }
+  .mail { grid-template-columns: 224px minmax(0, 1fr); gap: 12px; }
 }
 
 /* small desktop / landscape tablet ≤ 1024 */
@@ -1890,8 +2026,10 @@ html[dir='rtl'] .cmdk__enter svg { transform: scaleX(-1); }
   .main .view { padding: 14px 16px 36px; }
 }
 
-/* touch devices: bigger targets (≥ 44px) */
+/* touch devices: bigger targets (≥ 44px) + iOS refuses to auto-zoom inputs
+   sized ≥ 16px — the zoom-on-focus was another reported "jump" on iPhones */
 @media (hover: none) {
+  .input, textarea.input, select.input { font-size: 16px; }
   .icon-btn { width: 42px; height: 42px; }
   .btn { padding: 10px 18px; min-height: 40px; }
   .btn--sm { padding: 8px 14px; min-height: 36px; }
@@ -2588,7 +2726,7 @@ button.note-panel__head { cursor: pointer; }
   background: radial-gradient(circle at 50% -30%, color-mix(in srgb, var(--acc) 14%, transparent), transparent 70%);
 }
 .addr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 13px; }
-.acct-card { padding: 16px 16px 13px; position: relative; display: flex; flex-direction: column; gap: 12px; transition: transform .3s var(--spring), box-shadow .3s, border-color .3s; }
+.acct-card { padding: 16px 16px 13px; position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 0; transition: transform .3s var(--spring), box-shadow .3s, border-color .3s; }
 .acct-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
 .acct-card.is-live { border-color: var(--acc-line); box-shadow: 0 0 0 3px var(--acc-soft), var(--shadow-soft); }
 .acct-card__live {
@@ -2606,10 +2744,8 @@ button.note-panel__head { cursor: pointer; }
 .acct-card__addr {
   font-size: 14px; font-weight: 700; letter-spacing: .1px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  display: flex; align-items: center; gap: 6px;
+  display: block; max-width: 100%;
 }
-.acct-card__addr svg { width: 13px; height: 13px; color: var(--faint); flex: none; transition: color .2s; }
-.acct-card__addr:hover svg { color: var(--acc); }
 .acct-card__tags { display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
 .kind-tag--label { background: var(--panel-2); color: var(--muted); border: 1px solid var(--stroke); }
 .acct-card__nums { display: flex; gap: 0; border-top: 1px solid var(--stroke); padding-top: 11px; }
@@ -2635,7 +2771,7 @@ button.note-panel__head { cursor: pointer; }
 .dom-stat.is-ok .dom-stat__icn { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
 .dom-stat.is-warm .dom-stat__icn { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
 .dom-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 13px; }
-.dom-card { padding: 15px 17px 13px; display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden; transition: transform .3s var(--spring), box-shadow .3s, border-color .3s; }
+.dom-card { min-width: 0; padding: 15px 17px 13px; display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden; transition: transform .3s var(--spring), box-shadow .3s, border-color .3s; }
 .dom-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
 /* a living aurora wash behind healthy domains — the page breathes */
 .dom-card::after {
@@ -2740,6 +2876,9 @@ button.note-panel__head { cursor: pointer; }
   .addr-stats, .dom-stats { grid-template-columns: repeat(2, 1fr); gap: 9px; }
   .menu--accts { position: fixed; top: 60px; inset-inline: 10px; width: auto; }
   .acct-card__actions .btn:not(.acct-card__open):not(.btn--primary) span { display: none; }
+  .acct-card__addr { font-size: 13px; }
+  .acct-card.is-live .acct-card__id { padding-inline-end: 84px; }
+  .addr-grid > *, .dom-grid > *, .stat-tile { min-width: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pill-glider { transition: opacity .3s; }
@@ -2751,3 +2890,695 @@ button.note-panel__head { cursor: pointer; }
 /* the inbox account switcher floats above everything, attached to <body> */
 .acct-switch-pop { position: fixed; inset: 0; z-index: 130; pointer-events: none; }
 .acct-switch-pop .menu--accts { position: fixed; pointer-events: auto; }
+
+/* ============================================================
+   v2.9.5 — per-account mail folders (rail + manager + row flag)
+   ============================================================ */
+.mfolders-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 12px 6px 4px; padding-top: 10px; border-top: 1px dashed var(--stroke);
+  font-size: 10.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted);
+}
+.mfolders-head .icon-btn { width: 24px; height: 24px; border-radius: 8px; }
+.mfolders-head .icon-btn svg { width: 13px; height: 13px; }
+.mfolder--ghost { border: 1px dashed var(--stroke); border-radius: 11px; opacity: .75; }
+.mfolder--ghost:hover { opacity: 1; }
+.mail-folders--sub { margin-top: 2px; }
+.mfolder .fdot { flex: none; }
+
+/* folder color dots — tiny, warm, never loud */
+.fdot {
+  width: 9px; height: 9px; border-radius: 50%;
+  display: inline-block; flex: none;
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--panel) 70%, transparent);
+}
+.fdot--amber { background: #dcb567; } .fdot--mint { background: #93c793; }
+.fdot--sky { background: #8fb8d8; } .fdot--rose { background: #dd9a9a; }
+.fdot--violet { background: #b3a1d1; }
+.fdot--btn { width: 22px; height: 22px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--stroke-2); transition: transform .2s var(--spring); }
+.fdot--btn:hover { transform: scale(1.12); }
+.email-row__flags .flag-folder { width: 8px; height: 8px; box-shadow: none; opacity: .85; }
+
+/* folder manager rows */
+.fm-list { display: flex; flex-direction: column; gap: 10px; max-height: 46vh; overflow: auto; padding: 2px; }
+.fm-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  border: 1px solid var(--stroke); border-radius: 14px; padding: 11px 12px;
+  background: var(--panel-2);
+}
+.fm-row__fields { flex: 1; min-width: 0; }
+.fm-row__line { display: flex; align-items: center; gap: 8px; }
+.fm-row__line .input { flex: 1; min-width: 0; }
+.fm-row__n { font-size: 10.5px; font-weight: 700; color: var(--muted); white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+
+/* the little label above folder entries inside action menus */
+.menu-act__label {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); padding: 7px 4px 1px; border-top: 1px dashed var(--stroke);
+  margin-top: 4px;
+}
+.menu-stack .menu-act .fdot { margin-inline-end: 2px; }
+
+/* ============================================================
+   v2.9.5 — compose, rebuilt: inline rows, growing body, honest errors
+   ============================================================ */
+.compose { display: flex; flex-direction: column; }
+.compose__line {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 2px; border-bottom: 1px solid var(--stroke);
+}
+.compose__k {
+  flex: none; width: 52px; padding-top: 9px;
+  font-size: 11px; font-weight: 800; color: var(--muted); text-align: end;
+}
+.compose__v { flex: 1; min-width: 0; }
+.compose__fromrow { display: flex; align-items: center; gap: 8px; }
+.compose__fromrow .compose__sel { flex: 1; min-width: 0; }
+.compose__sel { border: 0; background: transparent; box-shadow: none; padding-inline-start: 2px; font-weight: 650; }
+.compose__sel:focus { outline: none; }
+.compose__in { border: 0; background: transparent; box-shadow: none; padding-inline-start: 2px; font-weight: 600; }
+.compose__in:focus { outline: none; box-shadow: none; }
+.compose__body {
+  border: 0; background: transparent; box-shadow: none;
+  margin-top: 8px; min-height: 170px; max-height: 380px;
+  resize: none; line-height: 1.75; padding-inline-start: 2px;
+}
+.compose__body:focus { outline: none; box-shadow: none; }
+.compose__err {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+  font-size: 11.5px; font-weight: 700; color: var(--danger);
+}
+.compose__err svg { width: 13px; height: 13px; flex: none; }
+.compose__err.hidden { display: none; }
+.compose__draft { font-size: 11px; font-weight: 650; color: var(--muted); align-self: center; }
+.compose__send .spin--inline { display: inline-flex; }
+.spin--inline svg { animation: spinOnce .9s linear infinite; }
+@keyframes spinOnce { to { transform: rotate(360deg); } }
+.modal--compose .modal__body { padding-bottom: 6px; }
+.modal--compose .modal__foot { align-items: center; }
+/* v3.0.0 — the compose footer is the SEND row: the send button LEADS the
+   row (the first thing the eye meets, RTL and LTR alike), the quiet cancel
+   follows, the draft note trails at the far end. A hairline separates the
+   row from the message body so it reads as its own piece of furniture. */
+.compose__foot {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding-top: 12px; margin-top: 4px;
+  border-top: 1px solid var(--stroke);
+}
+.compose__foot-note { margin-inline-start: auto; display: inline-flex; min-width: 0; }
+.compose__send {
+  min-width: 132px; justify-content: center; padding-block: 10px; font-size: 14.5px;
+  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--acc) 60%, transparent);
+}
+
+/* ============================================================
+   v2.9.5 — the living color room · soft controls · dynamic island
+   ============================================================ */
+
+/* ---------- eight more palettes — twelve in all, named after their
+   colors; switching one repaints the whole room: stage glows, beams,
+   glass tints and highlights all follow ---------- */
+html[data-accent='rose']    { --acc-l: #f0b6c4; --acc-d: #bf5470; --acc-ink: #33111d; --mood-bg: #1f1419; --mood-bg-l: #f9f1f4; }
+html[data-accent='cyan']    { --acc-l: #8fd8d2; --acc-d: #2f8f8a; --acc-ink: #0c2b29; --mood-bg: #101c1b; --mood-bg-l: #eef6f5; }
+html[data-accent='orange']  { --acc-l: #f0b084; --acc-d: #c06a2a; --acc-ink: #2d180a; --mood-bg: #1f1712; --mood-bg-l: #f9f3ec; }
+html[data-accent='lime']    { --acc-l: #cfe39a; --acc-d: #7ba03a; --acc-ink: #1c2409; --mood-bg: #191d10; --mood-bg-l: #f5f8ea; }
+html[data-accent='teal']    { --acc-l: #9ad4c0; --acc-d: #2e8570; --acc-ink: #0a2620; --mood-bg: #111d18; --mood-bg-l: #eff6f2; }
+html[data-accent='indigo']  { --acc-l: #aab3ee; --acc-d: #5560c0; --acc-ink: #12142e; --mood-bg: #14161f; --mood-bg-l: #f0f1f8; }
+html[data-accent='slate']   { --acc-l: #b3c0cf; --acc-d: #5d7285; --acc-ink: #101820; --mood-bg: #14181c; --mood-bg-l: #f1f4f6; }
+html[data-accent='crimson'] { --acc-l: #eda9a4; --acc-d: #bb4a42; --acc-ink: #2d0e0c; --mood-bg: #1f1413; --mood-bg-l: #f9f1f0; }
+
+/* ---------- soft, springy controls — every press has a feel ---------- */
+.btn, .chip, .icon-btn, .pill-nav, .tab, .inbox-selbox, .fdot--btn, .note-dot,
+.palette-card, .seg button, .acct-oval__copy, .att-chip, .dom-card__globe {
+  transition: transform .16s var(--spring), box-shadow .28s var(--ease),
+    background .22s var(--ease), border-color .22s var(--ease),
+    color .18s var(--ease), opacity .2s var(--ease);
+}
+.btn:hover { transform: translateY(-1.5px); }
+.btn:active { transform: translateY(0) scale(.965); }
+.chip:hover { transform: translateY(-1px); }
+.chip:active { transform: scale(.94); }
+.icon-btn:hover { transform: translateY(-1px) scale(1.06); }
+.icon-btn:active { transform: scale(.92); }
+.tab:active, .pill-nav:active { transform: scale(.96); }
+.btn:disabled, .btn.is-locked, .btn.is-frozen { transform: none !important; }
+.btn--primary:hover:not(:disabled) {
+  box-shadow: 0 12px 30px -12px color-mix(in srgb, var(--acc) 72%, transparent), var(--inset);
+}
+/* a light sweep crosses primary buttons on hover — soft, never loud */
+.btn--primary:not(:has(.lockbadge)) { position: relative; overflow: hidden; }
+.btn--primary:not(:has(.lockbadge))::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, .26) 50%, transparent 68%);
+  transform: translateX(-130%);
+  transition: transform .7s var(--ease);
+}
+.btn--primary:not(:has(.lockbadge)):hover:not(:disabled)::after { transform: translateX(130%); }
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--acc) 62%, transparent); outline-offset: 2px; }
+@media (hover: none) {
+  .btn:hover, .chip:hover, .icon-btn:hover { transform: none; }
+}
+
+/* ---------- the dynamic island — live word of every send & arrival ---------- */
+.dyn-island {
+  position: fixed; top: calc(var(--pill-h) + 22px); left: 50%;
+  z-index: 160;
+  transform: translateX(-50%) translateY(-18px) scale(.88);
+  opacity: 0; pointer-events: none;
+  display: flex; align-items: center; gap: 10px;
+  width: max-content; max-width: min(440px, calc(100vw - 20px));
+  padding: 8px 11px; border-radius: 20px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  border: 1px solid var(--stroke-2);
+  backdrop-filter: blur(26px) saturate(1.6);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  box-shadow: 0 22px 46px -18px rgba(0, 0, 0, .5), var(--inset);
+  transition: transform .5s var(--spring), opacity .28s var(--ease);
+  cursor: pointer; user-select: none; -webkit-user-select: none;
+  font-size: 12.5px; font-weight: 700; color: var(--fg);
+}
+.dyn-island.is-in { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+.dyn-island__icn {
+  width: 30px; height: 30px; border-radius: 11px; flex: none;
+  display: grid; place-items: center;
+  background: var(--acc-soft); color: var(--acc);
+  position: relative; overflow: hidden;
+}
+.dyn-island__icn svg { width: 15px; height: 15px; }
+.dyn-island__icn.is-ok { background: color-mix(in srgb, var(--ok) 17%, transparent); color: var(--ok); }
+.dyn-island__icn.is-warn { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+/* a soft halo breathes behind the icon while something is in flight */
+.dyn-island.is-busy .dyn-island__icn::after {
+  content: ''; position: absolute; inset: -5px; border-radius: 14px;
+  border: 1.5px solid color-mix(in srgb, var(--acc) 55%, transparent);
+  animation: islandHalo 1.6s ease-in-out infinite;
+}
+@keyframes islandHalo { 0%, 100% { opacity: .25; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.04); } }
+.dyn-island__txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.dyn-island__t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dyn-island__d {
+  font-size: 10.5px; color: var(--muted); font-weight: 650;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 230px;
+}
+.dyn-island__act {
+  flex: none; border: 0; cursor: pointer;
+  background: var(--acc); color: var(--acc-text);
+  font-size: 11px; font-weight: 800; border-radius: 99px; padding: 5.5px 13px;
+  font-family: inherit;
+  transition: transform .16s var(--spring), filter .2s;
+}
+.dyn-island__act:hover { transform: scale(1.05); filter: brightness(1.06); }
+.dyn-island__act:active { transform: scale(.94); }
+.dyn-island .spin--inline { display: inline-flex; }
+.dyn-island .spin--inline svg { animation: spinOnce .9s linear infinite; }
+@media (max-width: 860px) {
+  .dyn-island { top: calc(var(--pill-h) + 16px); }
+  .dyn-island__d { max-width: 150px; }
+}
+
+/* ---------- advanced details: the message's paperwork ---------- */
+.mailx { border-top: 1px solid var(--stroke); }
+.mailx > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 24px; font-size: 12px; font-weight: 800; color: var(--muted);
+  transition: color .2s, background .2s;
+  user-select: none;
+}
+.mailx > summary::-webkit-details-marker { display: none; }
+.mailx > summary:hover { color: var(--acc); background: var(--hover); }
+.mailx > summary > svg { width: 14px; height: 14px; }
+.mailx > summary .mailx__chev { margin-inline-start: auto; display: inline-flex; transition: transform .3s var(--ease); }
+.mailx > summary .mailx__chev svg { width: 13px; height: 13px; }
+.mailx[open] > summary .mailx__chev { transform: rotate(90deg); }
+.mailx__in { padding: 2px 24px 16px; display: flex; flex-direction: column; gap: 7px; }
+.mailx__row { display: flex; gap: 12px; align-items: baseline; }
+.mailx__k {
+  flex: none; width: 128px;
+  color: var(--muted); font-weight: 800;
+  font-family: var(--font-mono); font-size: 10.5px;
+}
+.mailx__v {
+  flex: 1; min-width: 0;
+  direction: ltr; text-align: start; word-break: break-word;
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.6; opacity: .92;
+}
+.mailx__auth { display: flex; gap: 6px; flex-wrap: wrap; }
+.mailx__copy { margin-inline-start: auto; flex: none; }
+@media (max-width: 640px) {
+  .mailx > summary { padding: 10px 16px; }
+  .mailx__in { padding: 2px 16px 14px; }
+  .mailx__row { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; }
+  .mailx__k { width: auto; }
+  .mailx__row .mailx__copy { grid-column: 2; grid-row: 1; }
+  .mailx__v { grid-column: 1 / -1; }
+  .mailx__copy { margin-inline-start: 0; }
+}
+
+/* ---------- sent mail wears its own quiet flag ---------- */
+.flag-sent { display: inline-flex; align-items: center; color: var(--acc); opacity: .8; }
+.flag-sent svg { width: 11.5px; height: 11.5px; }
+/* the one-tap select mode is a touch tool — pointer devices already hover */
+.mail__selmode { display: none; }
+@media (max-width: 640px) { .mail__selmode { display: inline-flex; } }
+.flag-sent.is-out { color: var(--acc-d); }
+
+/* ---------- the room sits a breath higher — the list leads ---------- */
+.mail__main { gap: 8px; }
+.inbox-card { border-radius: 17px; }
+@media (min-width: 861px) {
+  .mail__ovalrow { margin-bottom: -1px; }
+  .mail__search { padding-block: 8px !important; }
+}
+
+/* ---------- mobile: the reader, the compose table, the account cards —
+   nothing piles up, nothing overflows ---------- */
+@media (max-width: 640px) {
+  /* reader top bar: icon-first, one clean row */
+  .reader__top { gap: 6px; }
+  .reader__navbtns { margin-inline-start: auto; }
+  .reader__top .btn { padding: 7px 9px !important; }
+  /* the head block wraps honestly instead of squeezing */
+  .viewer__head { padding: 15px 16px 12px; }
+  .viewer__meta { gap: 9px; }
+  .viewer__meta .avatar { width: 32px !important; height: 32px !important; border-radius: 10px !important; }
+  .viewer__actions { width: 100%; order: 3; margin-inline-start: 0; justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+  .viewer__actions::-webkit-scrollbar { display: none; }
+  .viewer__actions .btn { flex: none; }
+  .reader__card .viewer__head { padding: 15px 16px 12px; }
+  .reader__card .mtools { padding: 10px 16px 0; flex-wrap: wrap; gap: 7px; }
+  .reader__card .mail-frame-wrap { padding: 8px 12px 12px; }
+  .reader__card .attachments { padding: 8px 16px; }
+  .reader__subj { font-size: 17px; }
+  /* compose: labels step above their fields — no more crush */
+  .compose__line { flex-direction: column; align-items: stretch; gap: 4px; padding: 7px 2px; }
+  .compose__k { width: auto; padding-top: 0; text-align: start; }
+  .compose__body { min-height: 130px; }
+  .modal--compose .modal__foot { flex-wrap: wrap; gap: 8px; }
+  .modal--compose .compose__foot { flex-wrap: wrap; }
+  .modal--compose .compose__send { flex: 1 1 100%; justify-content: center; }
+  .modal--compose .compose__foot-note { width: 100%; justify-content: center; }
+  /* bulk actions become a thumb-reachable bottom bar */
+  .inbox-bulk {
+    position: sticky; bottom: 0; z-index: 5;
+    padding: 9px 12px calc(9px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid var(--stroke);
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+  }
+  .inbox-bulk::-webkit-scrollbar { display: none; }
+  .inbox-bulk .chip { flex: none; padding: 9px 14px; font-size: 12.5px; }
+}
+
+/* ---------- palette wall: twelve swatches, breathing on hover ---------- */
+.palette-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 9px; }
+.palette-card__swatch {
+  height: 46px; border-radius: 12px; position: relative; overflow: hidden;
+  transition: transform .35s var(--spring);
+}
+.palette-card:hover .palette-card__swatch { transform: scale(1.045); }
+.palette-card__swatch::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(115deg, transparent 34%, rgba(255, 255, 255, .35) 50%, transparent 66%);
+  transform: translateX(-130%);
+  transition: transform .8s var(--ease);
+}
+.palette-card:hover .palette-card__swatch::before { transform: translateX(130%); }
+
+/* ============================================================
+   round 4 — 2FA padlock · devices · 404/offline art · dns check
+   + the mobile inbox making itself beautiful
+   ============================================================ */
+
+/* ---------- the 2FA padlock at the top ---------- */
+.icon-btn.lock-badge { color: var(--acc); position: relative; }
+.icon-btn.lock-badge svg { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--acc) 55%, transparent)); }
+.icon-btn.lock-badge::after {
+  content: ''; position: absolute; inset: 4px; border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--acc) 35%, transparent);
+  animation: lockPulse 2.6s var(--ease) infinite;
+}
+@keyframes lockPulse {
+  0%, 100% { opacity: .25; transform: scale(.86); }
+  50% { opacity: .8; transform: scale(1.06); }
+}
+
+/* ---------- mascot illustration plate (offline gate + 404) ---------- */
+.illus-plate {
+  width: clamp(180px, 30vw, 236px); aspect-ratio: 1; margin-inline: auto;
+  border-radius: 30px; background: #fdfdfc; overflow: hidden;
+  box-shadow: 0 22px 54px -20px rgba(8, 14, 9, .55), 0 4px 14px -6px rgba(8, 14, 9, .25);
+  animation: floaty 6s ease-in-out infinite;
+}
+.illus-plate img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.illus-plate--sm { width: clamp(150px, 26vw, 190px); border-radius: 26px; animation: none; }
+.nf404 { min-height: calc(100svh - var(--shell-top) - 40px); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; }
+.nf404__t { font-size: 24px; font-weight: 800; margin: 18px 0 0; }
+.nf404__d { color: var(--muted); max-width: 380px; line-height: 1.9; margin: 0 0 16px; }
+
+/* ---------- devices & sessions ---------- */
+.dev-list { display: flex; flex-direction: column; gap: 8px; }
+.dev-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--stroke); border-radius: var(--radius-sm); background: var(--panel);
+}
+.dev-row.is-current { border-color: var(--acc-line); background: color-mix(in srgb, var(--acc) 7%, var(--panel)); }
+.dev-row__icn { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--field); color: var(--acc); box-shadow: var(--inset); }
+.dev-row__icn svg { width: 19px; height: 19px; }
+.dev-row__body { min-width: 0; flex: 1; }
+.dev-row__name { font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dev-row__chip { font-size: 11px; padding: 2px 9px; }
+.dev-row__meta { color: var(--muted); font-size: 11.5px; direction: ltr; text-align: left; unicode-bidi: embed; }
+.dev-row .btn--danger-ghost { flex: none; }
+
+/* ---------- live dns check ---------- */
+.dns-check { display: flex; flex-direction: column; gap: 10px; }
+.dns-line {
+  display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px;
+  border-radius: var(--radius-sm); border: 1px solid var(--stroke); background: var(--panel);
+}
+.dns-line b { display: block; font-size: 13.5px; }
+.dns-line__icn {
+  width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 10px; margin-top: 2px;
+}
+.dns-line__icn svg { width: 16px; height: 16px; }
+.dns-line.is-ok .dns-line__icn { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.dns-line.is-warm .dns-line__icn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.dns-line.is-bad .dns-line__icn { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+.dns-records {
+  direction: ltr; text-align: left; font-size: 12px; color: var(--muted);
+  background: var(--field); border-radius: 10px; padding: 8px 12px; overflow-wrap: anywhere;
+  box-shadow: var(--inset); display: flex; flex-direction: column; gap: 3px;
+}
+
+/* ============================================================
+   mobile inbox — خفن و خفن‌تر
+   ============================================================ */
+
+/* rows arrive with a tiny stagger — only on the first paint of the list,
+   never on the silent background refreshes (a class is added then removed) */
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(9px) scale(.992); }
+  to { opacity: 1; transform: none; }
+}
+.inbox-card__list.animate-in .email-row {
+  animation: rowIn .38s var(--ease) both;
+  animation-delay: calc(min(var(--i, 0), 11) * 26ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .inbox-card__list.animate-in .email-row { animation: none; }
+}
+
+/* unread rows wear their accent on their edge — glanceable at arm's length */
+.email-row.is-unread { position: relative; }
+.email-row.is-unread::before {
+  content: ''; position: absolute; inset-inline-start: 0; top: 14%; bottom: 14%;
+  width: 3px; border-radius: 99px;
+  background: linear-gradient(to bottom, var(--acc), color-mix(in srgb, var(--acc) 40%, transparent));
+  opacity: .85;
+}
+
+/* the pull-to-refresh spring that lives above the list */
+.ptr {
+  position: absolute; inset-inline: 0; top: 4px; height: 40px;
+  display: grid; place-items: center; color: var(--acc); pointer-events: none;
+  opacity: 0; transform: translateY(0); z-index: 3;
+}
+.ptr svg { width: 21px; height: 21px; transition: transform .2s var(--ease); }
+.ptr.is-armed { opacity: 1; }
+.ptr.is-ready { color: var(--ok); }
+.ptr.is-spin svg { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* compose button breathes — the one thing the thumb is always hunting for */
+.compose-fab { position: relative; }
+.compose-fab::before {
+  content: ''; position: absolute; inset: -3px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--acc) 45%, transparent), transparent 70%);
+  opacity: 0; z-index: -1;
+}
+.compose-fab:not(.is-locked)::before { animation: fabBreath 3.2s var(--ease) infinite; }
+@keyframes fabBreath { 0%, 100% { opacity: .25; transform: scale(.9); } 50% { opacity: .75; transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .compose-fab:not(.is-locked)::before { animation: none; opacity: .4; } }
+
+/* the active tab lands with a spring */
+.tab.is-on svg { animation: tabPop .34s var(--spring); }
+@keyframes tabPop { 0% { transform: scale(.82); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .tab.is-on svg { animation: none; } }
+
+/* ============================================================
+   Lock screen — the padlock really locks
+   ============================================================ */
+.lock {
+  position: fixed; inset: 0; z-index: 400;
+  display: grid; place-items: center; padding: 20px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  opacity: 0; transition: opacity .32s var(--ease);
+}
+.lock.is-on { opacity: 1; }
+.lock__card {
+  width: min(380px, 100%); text-align: center;
+  padding: 30px 26px 24px; border-radius: 24px;
+  animation: lock-card .5s var(--spring) both;
+}
+@keyframes lock-card { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
+.lock__logo { width: 64px; height: auto; margin-bottom: 12px; }
+/* v3.0.0 — the lock-mode sigil: the dedicated lock-mode mark floating above
+   the card, tinted by the accent and breathing with it */
+.lock__sigil {
+  display: grid; place-items: center; width: 44px; height: 44px;
+  margin: 0 auto 10px; border-radius: 14px;
+  color: var(--acc-ink);
+  background: linear-gradient(135deg, var(--acc-l), var(--acc-d));
+  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--acc) 70%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 35%, transparent);
+  animation: floaty 6s ease-in-out infinite;
+}
+.lock__sigil svg { width: 21px; height: 21px; }
+.lock__title { margin: 0 0 4px; font-size: 20px; }
+.lock__sub { margin: 0 0 16px; color: var(--muted); font-size: 13.5px; }
+.lock__card .auth-form { display: grid; gap: 10px; }
+
+/* ============================================================
+   Share access — the guest's Dynamic Island + admin list
+   ============================================================ */
+/* v3.0.0 r7 — the guest's Dynamic Island: one compact floating pill hangs
+   under the navigation and morphs open into the honest details. It never
+   pushes the page around: fixed, centered, pointer-events only on itself. */
+.sisland {
+  position: fixed; top: calc(var(--shell-top) - 12px); inset-inline: 0;
+  z-index: 92;
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: none;
+}
+.sisland__pill {
+  pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 9px;
+  height: 37px; padding-inline: 12px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--acc) 36%, transparent);
+  background: color-mix(in srgb, var(--acc) 13%, color-mix(in srgb, var(--bg) 76%, transparent));
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  color: var(--fg); font-size: 12.5px; font-weight: 650;
+  cursor: pointer; white-space: nowrap;
+  box-shadow: 0 10px 28px -14px color-mix(in srgb, var(--acc) 70%, transparent), var(--inset);
+  transition: border-radius .4s var(--spring), background .3s var(--ease);
+}
+.sisland.is-open .sisland__pill {
+  border-start-start-radius: 20px; border-start-end-radius: 20px;
+  border-end-start-radius: 0; border-end-end-radius: 0;
+}
+.sisland__icn { display: inline-flex; color: var(--acc); }
+.sisland__icn svg { width: 15px; height: 15px; }
+.sisland__label { max-width: 30vw; overflow: hidden; text-overflow: ellipsis; }
+.sisland__clock { display: inline-flex; align-items: center; gap: 5px; color: var(--acc); font-size: 12px; }
+.sisland__clock svg { width: 13px; height: 13px; }
+.sisland__cd { font-variant-numeric: tabular-nums; letter-spacing: .4px; font-weight: 700; }
+.sisland__q {
+  width: 25px; height: 25px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--acc) 24%, transparent);
+  color: var(--acc);
+  transition: transform .35s var(--spring);
+}
+.sisland__q svg { width: 14px; height: 14px; }
+.sisland.is-open .sisland__q { transform: rotate(90deg); }
+/* the morph: the details panel unfolds beneath the pill as one blob */
+.sisland__body {
+  pointer-events: auto;
+  width: min(360px, calc(100vw - 28px));
+  max-height: 0; opacity: 0; overflow: hidden;
+  transform: translateY(-8px) scale(.96);
+  border-radius: 0 0 20px 20px;
+  border-inline: 1px solid transparent; border-bottom: 1px solid transparent;
+  background: color-mix(in srgb, var(--acc) 9%, color-mix(in srgb, var(--bg) 82%, transparent));
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  transition: max-height .42s var(--spring), opacity .28s var(--ease), transform .38s var(--spring),
+    border-color .3s var(--ease);
+}
+.sisland.is-open .sisland__body {
+  max-height: 460px; opacity: 1; transform: none;
+  border-color: color-mix(in srgb, var(--acc) 36%, transparent);
+  box-shadow: 0 18px 44px -18px color-mix(in srgb, var(--acc) 55%, transparent);
+}
+.sisland__in { padding: 4px 14px 13px; display: flex; flex-direction: column; gap: 8px; }
+.sisland__row {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--muted); padding-top: 2px;
+}
+.sisland__row svg { width: 13px; height: 13px; opacity: .75; }
+.sisland__row b { color: var(--fg); font-weight: 700; font-size: 12.5px; }
+.sisland__boxes { display: flex; flex-direction: column; gap: 5px; }
+.sisland__box {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 11px; border-radius: 12px; text-align: start;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+  color: var(--fg); font-size: 12.5px; cursor: pointer;
+  transition: border-color .2s var(--ease), background .2s var(--ease);
+}
+.sisland__box:hover { border-color: color-mix(in srgb, var(--acc) 45%, transparent); }
+.sisland__box .mono { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: ltr; text-align: start; }
+.sisland__box-icn { display: inline-flex; color: var(--acc); flex: none; }
+.sisland__box-icn svg { width: 13px; height: 13px; }
+.sisland__box-copy { display: inline-flex; color: var(--muted); flex: none; opacity: .7; }
+.sisland__box-copy svg { width: 12.5px; height: 12.5px; }
+.sisland__note {
+  display: flex; align-items: flex-start; gap: 7px;
+  font-size: 12px; line-height: 1.8; color: var(--muted);
+  padding: 7px 11px; border-radius: 12px;
+  background: color-mix(in srgb, var(--acc) 7%, transparent);
+}
+.sisland__note svg { width: 13px; height: 13px; flex: none; margin-top: 4px; opacity: .8; }
+.sisland__acts { display: flex; justify-content: flex-end; }
+
+.share-list { display: flex; flex-direction: column; gap: 10px; }
+/* v3.0.0 — the mailbox picker: one chip per mailbox, tap to add or remove
+   it from the credential's world; the count badge carries the domain so
+   ten lookalike boxes stay tellable apart */
+.share-addrgrid { display: flex; flex-wrap: wrap; gap: 7px; }
+.share-addr { max-width: 100%; }
+.share-addr .icn { width: 13px; height: 13px; flex: none; }
+.share-addr__t { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-addr__n { font-size: 9.5px; opacity: .62; }
+.share-cred-box { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.share-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 12px 14px; border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+}
+.share-row.is-off { opacity: .62; }
+.share-row__main { min-width: 0; flex: 1; }
+.share-row__name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: 14px; }
+.share-row__live {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  background: var(--acc); position: relative;
+}
+.share-row__live::after {
+  content: ''; position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid var(--acc); opacity: 0;
+  animation: alert-ping 1.8s ease-out infinite;
+}
+.share-row__meta { margin-top: 3px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.share-row__perms { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px; }
+.share-row__perms .chip { font-size: 11px; padding: 3px 9px; }
+.share-row__acts { display: flex; flex-direction: column; gap: 6px; flex: none; align-items: stretch; }
+@media (max-width: 640px) {
+  .share-row { flex-direction: column; }
+  .share-row__acts { flex-direction: row; flex-wrap: wrap; }
+  .share-row__acts .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ============================================================
+   v3.0.0 r5 — the suspended share: an icy, honest waiting room.
+   An emptied share suspends; the guest still signs in but this
+   frozen page answers until the first new email lands — then it
+   melts away on its own, no reload needed.
+   ============================================================ */
+.share-frozen {
+  position: fixed; inset: 0; z-index: 240; display: grid; place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, #0a1424 42%, color-mix(in srgb, var(--acc) 14%, transparent));
+  backdrop-filter: blur(18px) saturate(1.15) brightness(.9);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15) brightness(.9);
+  opacity: 0; transition: opacity .45s var(--ease);
+}
+.share-frozen.is-on { opacity: 1; }
+.share-frozen.leaving { opacity: 0; transition: opacity .38s var(--ease); }
+.share-frozen__card {
+  width: min(430px, 94vw); text-align: center;
+  padding: 30px 26px 24px; border-radius: 26px;
+  animation: frostIn .6s var(--spring) both;
+}
+.share-frozen__sigil {
+  display: grid; place-items: center; width: 58px; height: 58px; margin: 0 auto 14px;
+  border-radius: 18px; color: var(--acc-ink);
+  background: linear-gradient(135deg, var(--acc-l), var(--acc-d));
+  box-shadow: 0 14px 30px -12px color-mix(in srgb, var(--acc) 75%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent);
+  animation: floaty 6s ease-in-out infinite;
+}
+.share-frozen__sigil svg { width: 26px; height: 26px; }
+.share-frozen__title { font-size: 19px; font-weight: 800; margin: 0 0 8px; color: var(--fg); }
+.share-frozen__desc { font-size: 13.5px; line-height: 1.9; color: var(--muted); margin: 0 0 14px; }
+/* the remaining time rides on the frozen card too — ticking, or standing
+   perfectly still when the admin froze the countdown */
+.share-frozen__clock {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  margin: 0 0 18px; font-size: 12.5px; color: var(--muted);
+}
+.share-frozen__clock .icn { width: 14px; height: 14px; opacity: .75; }
+.share-frozen__left {
+  font-size: 14px; font-weight: 700; color: var(--fg);
+  letter-spacing: .3px;
+  padding: 3px 12px; border-radius: 999px;
+  background: color-mix(in srgb, var(--acc) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--acc) 30%, transparent);
+}
+.share-frozen__acts { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+@keyframes frostIn { from { opacity: 0; transform: translateY(16px) scale(.94); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+@media (prefers-reduced-motion: reduce) { .share-frozen__card, .share-frozen__sigil { animation: none; } }
+
+/* ============================================================
+   v3.0.0 r6 — share control: viewable credentials, device rows,
+   the suspension box. All inside the edit modal + the audit rows.
+   ============================================================ */
+.share-cred {
+  padding: 12px 14px; border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+}
+.share-cred .chip { max-width: 100%; }
+.share-cred .chip .mono { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-devs { display: flex; flex-direction: column; gap: 8px; }
+.share-dev {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+}
+.share-dev__ic {
+  display: grid; place-items: center; width: 34px; height: 34px; flex: none;
+  border-radius: 10px; color: var(--acc-ink);
+  background: linear-gradient(135deg, var(--acc-l), var(--acc-d));
+  box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--acc) 70%, transparent);
+}
+.share-dev__ic .icn { width: 15px; height: 15px; }
+.share-dev__t { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.share-dev__t b { font-size: 12.5px; font-weight: 700; color: var(--fg); }
+.share-dev__t .small { font-size: 11px; }
+.share-dev .btn { flex: none; }
+@media (max-width: 640px) {
+  .share-cred .chip .mono { max-width: 150px; }
+  .share-dev__t .small { display: none; }
+}

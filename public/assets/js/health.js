@@ -95,6 +95,14 @@ function issueBanners(health) {
         actions: [{ label: t('navDomains'), icon: 'globe', fn: () => { location.hash = '#/domains'; } }],
       });
     }
+    if (is.code === 'expired_shares') {
+      out.push({
+        code: is.code, severity: 'warn',
+        title: t('alertExpShares').replace('{n}', n(is.detail)),
+        desc: t('alertExpSharesDesc'),
+        actions: [{ label: t('shareTab'), icon: 'users', fn: () => { location.hash = '#/settings/share'; } }],
+      });
+    }
   }
   return out;
 }
@@ -136,16 +144,27 @@ export async function renderInto(host, force = false) {
 // ---------- Settings → Health tab ----------
 export async function healthPane() {
   const pane = h('div', { class: 'health' });
-  const loading = h('div', { class: 'empty' }, h('div', { class: 'skel', style: { height: '90px', width: '100%' } }));
-  pane.append(loading);
 
-  const draw = async (hp) => {
-    const health = await getHealth(true);
-    clear(hp);
+  // warm cache paints the whole panel instantly — the skeleton only shows
+  // on a cold first visit, and fresh data lands quietly on top of it
+  let lastSig = '';
+  const paint = async (hp, force) => {
+    const health = await getHealth(force);
+    if (!document.body.contains(hp)) return;
     if (!health) {
+      clear(hp);
       hp.append(h('div', { class: 'empty' }, icon('info'), h('div', { class: 'empty__t' }, t('error')), h('div', { class: 'empty__d' }, t('healthAdminOnly'))));
       return;
     }
+    // identical report → leave the pixels alone (no flicker, no lost focus)
+    const sig = JSON.stringify(health);
+    if (sig === lastSig) return;
+    lastSig = sig;
+    draw(hp, health);
+  };
+
+  function draw(hp, health) {
+    clear(hp);
 
     // ----- hero state -----
     const st = health.status;
@@ -180,7 +199,7 @@ export async function healthPane() {
           try {
             await api.post('/api/admin/health/repair');
             toast(t('healthRepaired'), 'ok');
-            invalidateHealth(); draw(pane);
+            invalidateHealth(); paint(pane, true);
           } catch (err) { toast(errText(err), 'err'); e.currentTarget && (e.currentTarget.disabled = false); }
         },
       }, icon('refresh'), t('healthRepairAll')) : '');
@@ -201,7 +220,7 @@ export async function healthPane() {
             try {
               await api.post(`/api/setup/tables/${encodeURIComponent(tb.name)}/create`);
               toast(t('d1Built'), 'ok');
-              invalidateHealth(); draw(pane);
+              invalidateHealth(); paint(pane, true);
             } catch (err) { toast(errText(err), 'err'); e.currentTarget.disabled = false; }
           },
         }, icon('plus'), state === 'missing' ? t('d1CreateOne') : t('alertRepair')) : '');
@@ -221,7 +240,7 @@ export async function healthPane() {
               try {
                 await api.del(`/api/setup/tables/${encodeURIComponent(name)}`);
                 toast(t('d1Dropped'), 'ok');
-                invalidateHealth(); draw(pane);
+                invalidateHealth(); paint(pane, true);
               } catch (err) { toast(errText(err), 'err'); }
             }),
           }, icon('trash'), t('d1Drop'))));
@@ -260,13 +279,21 @@ export async function healthPane() {
 
     hp.append(grid);
     hp.append(h('p', { class: 'small muted', style: { margin: '10px 2px 0', opacity: .8 } }, icon('refresh'), ' ', t('healthAutoRefresh')));
-  };
+  }
 
-  await draw(pane);
+  // cold visit: a tiny skeleton, then the report — warm visit: the panel is
+  // simply there, and fresh numbers land quietly behind it
+  if (cache && Date.now() - cacheAt < TTL) {
+    await paint(pane, false);
+    paint(pane, true);
+  } else {
+    pane.append(h('div', { class: 'empty' }, h('div', { class: 'skel', style: { height: '90px', width: '100%' } })));
+    await paint(pane, true);
+  }
   const iv = setInterval(() => {
     if (!document.body.contains(pane)) { clearInterval(iv); return; }
     if (document.hidden || document.querySelector('.modal-back')) return;
-    draw(pane);
+    paint(pane, true);
   }, 30_000);
   return pane;
 }

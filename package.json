@@ -1,6 +1,6 @@
 {
   "name": "cmail",
-  "version": "2.9.0",
+  "version": "3.0.0",
   "description": "Cmail \u2014 Liquid-glass email platform on Cloudflare Workers: temporary & permanent inboxes, notes, 2FA codes vault, multi-domain.",
   "private": true,
   "type": "module",

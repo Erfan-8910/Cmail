@@ -9,7 +9,7 @@
 --    · Cloudflare dashboard → Storage & Databases → D1 → cmail-db → Console
 --    · npx wrangler d1 execute cmail-db --remote --file=schema.sql
 --
---  Shape: 11 tables · 15 indexes — the final form of every migration
+--  Shape: 13 tables · 20 indexes — the final form of every migration
 --  (0001 → 0005) merged, so fresh installs skip the chain entirely.
 --  Console-safe by design: comments carry no semicolons, every statement
 --  is IF NOT EXISTS, and nothing here can ever error on a re-run.
@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS sessions (
   token      TEXT PRIMARY KEY,
   user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  share_id   TEXT REFERENCES share_links(id) ON DELETE CASCADE,  -- NULL = the owner's own session
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
   ua         TEXT,
@@ -111,7 +112,11 @@ CREATE TABLE IF NOT EXISTS emails (
   is_read     INTEGER NOT NULL DEFAULT 0,
   starred     INTEGER NOT NULL DEFAULT 0,
   has_note    INTEGER NOT NULL DEFAULT 0,
-  received_at INTEGER NOT NULL
+  received_at INTEGER NOT NULL,
+  folder_id   TEXT,                                   -- the mail folder this message lives in (NULL = plain inbox)
+  direction   TEXT NOT NULL DEFAULT 'in',             -- 'in' received · 'out' sent from this account
+  headers     TEXT,                                   -- JSON snapshot of the message headers (advanced details)
+  provider    TEXT                                    -- how a sent mail left (brevo / resend)
 );
 
 -- Attachments are stored base64 inside the row — one database, no buckets.
@@ -172,6 +177,68 @@ CREATE TABLE IF NOT EXISTS totp_folders (
   created_at INTEGER NOT NULL
 );
 
+-- User-managed mail folders. Every folder belongs to ONE mailbox account —
+-- sorting never mixes two accounts' mail. sort_from holds comma-separated
+-- sender fragments; incoming mail matching one of them files itself.
+CREATE TABLE IF NOT EXISTS mail_folders (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  address_id TEXT NOT NULL,                           -- the account this folder belongs to
+  name       TEXT NOT NULL,
+  icon       TEXT,
+  color      TEXT,
+  sort_from  TEXT,
+  created_at INTEGER NOT NULL
+);
+
+-- ----------------------------------------------------------------------------
+--  Share access (sub-account sharing)
+-- ----------------------------------------------------------------------------
+
+-- One row per guest credential the admin hands out. Since v3.0.0 a
+-- credential can hold SEVERAL mailboxes at once: share_addresses carries the
+-- full set, share_links.address_id stays the primary (the one older code
+-- paths read). The guest signs in with this username/password at the normal
+-- login, lands directly in the shared mailboxes, and every action is gated
+-- by the perms list (csv of: read star archive delete compose notes).
+-- max_devices caps concurrent signed-in browsers (0 = unlimited) and
+-- guest_note is the welcome line the guest sees right after signing in.
+-- suspended_at is a MANUAL suspension (admin's hand, optional time freeze);
+-- a share with no mailbox assigned stays derived-suspended with no flag.
+-- time_frozen/frozen_at stop the subscription countdown while suspended —
+-- frozen_at becomes the effective "now" for every expiry check, and the
+-- frozen span is added back to expires_at on unsuspend. password_enc keeps
+-- the guest password AES-GCM-sealed so the admin can view/regenerate it.
+-- Revocation = deleting the row → the guest's very next request answers
+-- 401 → auto logout.
+CREATE TABLE IF NOT EXISTS share_links (
+  id            TEXT PRIMARY KEY,
+  owner_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  address_id    TEXT NOT NULL REFERENCES addresses(id) ON DELETE CASCADE,
+  username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  password_hash TEXT NOT NULL,
+  label         TEXT,
+  perms         TEXT NOT NULL DEFAULT ('read,star,archive'),
+  max_devices   INTEGER NOT NULL DEFAULT 0,
+  guest_note    TEXT,
+  expires_at    INTEGER,
+  revoked_at    INTEGER,
+  suspended_at  INTEGER,
+  time_frozen   INTEGER NOT NULL DEFAULT 0,
+  frozen_at     INTEGER,
+  password_enc  TEXT,
+  created_at    INTEGER NOT NULL,
+  last_seen_at  INTEGER
+);
+
+-- The junction: one row per (share, address) pair — the full mailbox set of
+-- a credential. share_addresses rows die with their share (CASCADE).
+CREATE TABLE IF NOT EXISTS share_addresses (
+  share_id   TEXT NOT NULL REFERENCES share_links(id) ON DELETE CASCADE,
+  address_id TEXT NOT NULL REFERENCES addresses(id) ON DELETE CASCADE,
+  PRIMARY KEY (share_id, address_id)
+);
+
 -- ----------------------------------------------------------------------------
 --  Settings
 -- ----------------------------------------------------------------------------
@@ -199,6 +266,7 @@ CREATE INDEX IF NOT EXISTS idx_addresses_domain ON addresses(domain_id);
 CREATE INDEX IF NOT EXISTS idx_addresses_exp    ON addresses(kind, expires_at);
 CREATE INDEX IF NOT EXISTS idx_emails_addr      ON emails(address_id, received_at DESC);
 CREATE INDEX IF NOT EXISTS idx_emails_user      ON emails(user_id, received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_emails_direction ON emails(user_id, direction, received_at);
 CREATE INDEX IF NOT EXISTS idx_emails_unread    ON emails(address_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_emails_expir     ON emails(received_at);
 CREATE INDEX IF NOT EXISTS idx_att_email        ON attachments(email_id);
@@ -207,3 +275,10 @@ CREATE INDEX IF NOT EXISTS idx_totp_addr        ON totp_entries(address_id);
 CREATE INDEX IF NOT EXISTS idx_totp_folder      ON totp_entries(folder_id);
 CREATE INDEX IF NOT EXISTS idx_folders_user     ON totp_folders(user_id);
 CREATE INDEX IF NOT EXISTS idx_folders_addr     ON totp_folders(address_id);
+CREATE INDEX IF NOT EXISTS idx_mailf_addr       ON mail_folders(address_id);
+CREATE INDEX IF NOT EXISTS idx_mailf_user       ON mail_folders(user_id);
+CREATE INDEX IF NOT EXISTS idx_shares_owner     ON share_links(owner_id);
+CREATE INDEX IF NOT EXISTS idx_shares_addr      ON share_links(address_id);
+CREATE INDEX IF NOT EXISTS idx_share_addr_addr  ON share_addresses(address_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_share   ON sessions(share_id);
+CREATE INDEX IF NOT EXISTS idx_emails_folder    ON emails(folder_id);
