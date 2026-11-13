@@ -50,38 +50,78 @@ else
   good "authenticated with Cloudflare"
 fi
 
-# ---------- d1 ----------
-DB_NAME="cmail-db"
-say "Creating D1 database “${DB_NAME}”…"
-CREATE_OUT=$(npx wrangler d1 create "$DB_NAME" 2>&1 || true)
-DB_ID=$(echo "$CREATE_OUT" | grep -oE 'database_id *= *"[a-f0-9-]+"' | head -1 | grep -oE '[a-f0-9-]{36}' || true)
+# ---------- instance identity (multi-install safe) ----------
+# Every install owns its own Worker AND its own D1 database — nothing is
+# shared between instances, so their data can never mix. The names can also
+# be injected for scripted installs: CMAIL_WORKER_NAME / CMAIL_DB_NAME.
+WORKER_NAME="${CMAIL_WORKER_NAME:-}"
+DB_NAME="${CMAIL_DB_NAME:-}"
 
-if [ -z "$DB_ID" ]; then
-  if echo "$CREATE_OUT" | grep -q "already exists"; then
-    say "Database exists — fetching its id…"
-    DB_ID=$(npx wrangler d1 list 2>/dev/null | grep -E "${DB_NAME}" | grep -oE '[a-f0-9-]{36}' | head -1 || true)
+if [ -z "$WORKER_NAME" ]; then
+  if [ -t 0 ]; then
+    echo -e "${DIM}Second (or third…) install on this account? Give it a distinct name —${R}"
+    echo -e "${DIM}the Worker and the database are both named after the instance, so no two${R}"
+    echo -e "${DIM}installs can ever touch each other's data.${R}"
+    read -r -p "Instance name [cmail]: " ANSWER || ANSWER=""
+    WORKER_NAME="${ANSWER:-cmail}"
+  else
+    WORKER_NAME="cmail"
   fi
 fi
-[ -n "$DB_ID" ] || fail "Could not create/find the D1 database. Output was:\n$CREATE_OUT"
-good "D1 database: $DB_ID"
+echo "$WORKER_NAME" | grep -qE '^[a-z][a-z0-9-]{0,57}$' \
+  || fail "Instance name must be lowercase letters/digits/dashes starting with a letter (max 58) — got “$WORKER_NAME”"
 
-# write id into wrangler config (jsonc)
-node - "$DB_ID" <<'NODE'
+if [ -z "$DB_NAME" ]; then
+  if [ "$WORKER_NAME" = "cmail" ]; then
+    DB_NAME="cmail-db"
+  elif [ -t 0 ]; then
+    read -r -p "Database name [$WORKER_NAME-db]: " ANSWER || ANSWER=""
+    DB_NAME="${ANSWER:-$WORKER_NAME-db}"
+  else
+    DB_NAME="$WORKER_NAME-db"
+  fi
+fi
+echo "$DB_NAME" | grep -qE '^[a-zA-Z][a-zA-Z0-9_-]{0,62}$' \
+  || fail "Database name must be letters/digits/underscore/dash (max 63) — got “$DB_NAME”"
+
+say "This install deploys as:"
+echo -e "  ${BRAND}Worker${R}    $WORKER_NAME  →  https://$WORKER_NAME.<your-subdomain>.workers.dev"
+echo -e "  ${BRAND}Database${R} $DB_NAME  (owned by this instance alone)"
+
+# write the instance identity into the working-copy config (never committed):
+# Worker name, database name — and the database id is reset to the placeholder
+# so the resolver below always binds the database that BELONGS to this name
+# (a stale id from a previous run on this folder must never survive a switch).
+node - "$WORKER_NAME" "$DB_NAME" <<'NODE'
 const fs = require('fs');
 const f = 'wrangler.jsonc';
 let s = fs.readFileSync(f, 'utf8');
-if (s.includes('REPLACE_WITH_D1_ID')) {
-  s = s.replace(/REPLACE_WITH_D1_ID/g, process.argv[2]);
+// `node -` keeps a "-" placeholder in argv[1] — real args start at argv[2]
+const [, , worker, db] = process.argv;
+// the Worker name — the top-level "name" key only (bindings use "binding")
+s = s.replace(/(^|\n)(\s*)"name"\s*:\s*"[^"]*"/, `$1$2"name": "${worker}"`);
+// the database name — every D1 binding in this config follows the instance
+s = s.replace(/"database_name"\s*:\s*"[^"]*"/g, `"database_name": "${db}"`);
+// reset the id so the resolver re-resolves for THIS name, not a stale one
+if (/"database_id"\s*:\s*"[^"]*"/.test(s)) {
+  s = s.replace(/"database_id"\s*:\s*"[^"]*"/, '"database_id": "REPLACE_WITH_D1_ID"');
 } else {
-  // the committed config ships without a database_id (that is what makes the
-  // one-click Deploy button work — the button provisions its own D1) — the
-  // installer writes the freshly created id in after the database name
-  s = s.replace(/("database_name"\s*:\s*"cmail-db"\s*,?)/, `$1\n      "database_id": "${process.argv[2]}",`);
+  s = s.replace(/("database_name"\s*:\s*"[^"]*"\s*),?/, `$1\n      "database_id": "REPLACE_WITH_D1_ID",`);
 }
-fs.writeFileSync(f, 'utf8' === 'utf8' ? s : s);
 fs.writeFileSync(f, s);
 NODE
-good "wrangler.jsonc updated"
+good "wrangler.jsonc → worker “$WORKER_NAME”, database “$DB_NAME”"
+
+# ---------- d1 ----------
+# find-or-create is deploy-resolve.mjs's job — the very same code the Deploy
+# button's CI runs: resolves every D1 binding by database_name, creates the
+# database when it truly does not exist, patches the working copy. No deploy
+# happens here yet (CMAIL_RESOLVE_ONLY) — migrations run first below.
+say "Creating (or finding) the D1 database “${DB_NAME}”…"
+CMAIL_RESOLVE_ONLY=1 node scripts/deploy-resolve.mjs || fail "Could not resolve the D1 database"
+DB_ID=$(grep -oE '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}' wrangler.jsonc | head -1)
+[ -n "$DB_ID" ] || fail "database_id missing after resolve"
+good "D1 database: $DB_ID"
 
 # ---------- migrations + secret ----------
 say "Applying database migrations…"
@@ -118,7 +158,7 @@ if [[ "${ANSWER:-n}" =~ ^[Yy]$ ]]; then
     export CLOUDFLARE_API_TOKEN="$TOKEN"
   fi
   read -r -p "Domain to configure (e.g. mail.example.com): " DOMAIN
-  bash scripts/configure-email-routing.sh "$DOMAIN" && good "Email Routing configured for $DOMAIN" \
+  bash scripts/configure-email-routing.sh "$DOMAIN" "$WORKER_NAME" && good "Email Routing configured for $DOMAIN" \
     || echo -e "${ERR}automatic routing failed — follow the manual steps below${R}"
 fi
 

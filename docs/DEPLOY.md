@@ -54,6 +54,16 @@ bash deploy.sh
 
 The installer handles everything: creates the D1 database, applies the schema, generates a strong random `APP_SECRET`, deploys the Worker, and prints your panel URL. When it finishes, open the URL — the setup screen takes over from there.
 
+## Several instances on one account
+
+Cmail is fully multi-install: **every instance is one Worker + one D1 database with its own `APP_SECRET`** — nothing is shared between installs, so two instances can never see each other's mail, domains or accounts.
+
+- **Route 1 asks the instance name.** Answer e.g. `cmail-shop` and the install deploys Worker `cmail-shop` on database `cmail-shop-db` (press Enter for the default single install: `cmail` on `cmail-db`). Scripted installs skip the prompts with `CMAIL_WORKER_NAME` / `CMAIL_DB_NAME`.
+- **Updating an instance** = re-run `deploy.sh` and answer the same names — the resolver always binds the database that belongs to the chosen name.
+- **The Deploy button matches databases by name** — on an account that already runs Cmail, use Route 1 for a second instance (see the Route 0 note).
+- **Free plan:** up to 10 D1 databases per account — that is the instance cap; paid plans raise it massively.
+- **Removing an instance:** delete its Worker and its D1 database in the dashboard (or `npx wrangler delete` + `npx wrangler d1 delete <name>`) — nothing else references them.
+
 ## Route 2 — fully graphical, zero commands
 
 Five steps. No SQL, no folder uploads — only your browser and the Cloudflare dashboard.
