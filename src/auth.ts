@@ -34,91 +34,133 @@ export function clearSessionCookie(c: Context) {
 
 export async function getUserFromToken(env: Env, token: string | undefined): Promise<SessionUser | null> {
   if (!token) return null;
-  const row = await env.DB.prepare(
-    `SELECT u.id, u.username, u.role, u.display_name, u.totp_enabled, s.expires_at, s.share_id,
-            sl.username AS share_username, sl.label AS share_label, sl.address_id AS share_address_id,
-            sl.perms AS share_perms, sl.expires_at AS share_expires, sl.revoked_at AS share_revoked,
-            sl.suspended_at AS share_susp, sl.time_frozen AS share_frozen, sl.frozen_at AS share_frozen_at,
-            sl.owner_id AS share_owner, a.address AS share_address, sl.last_seen_at AS share_seen,
-            sl.max_devices AS share_maxdev, sl.guest_note AS share_note
+  // ---------------------------------------------------------------------------
+  //  Stage 1 — the session + the user it belongs to. This query touches ONLY
+  //  tables and columns that exist since 0001/0002, never share_links: the
+  //  owner's session must never die because a share column is missing.
+  //  (Issue #2: databases built through the migration chain lacked two share
+  //  columns, the old single query threw for EVERY request, attachUser
+  //  swallowed it as "no user" and the panel bounced straight back to the
+  //  login form right after a successful sign-in — the password was fine,
+  //  the schema was not.)
+  // ---------------------------------------------------------------------------
+  const base = await env.DB.prepare(
+    `SELECT u.id, u.username, u.role, u.display_name, u.totp_enabled, s.expires_at, s.share_id
        FROM sessions s
        JOIN users u ON u.id = s.user_id
-       LEFT JOIN share_links sl ON sl.id = s.share_id
-       LEFT JOIN addresses a ON a.id = sl.address_id
       WHERE s.token = ?`
-  ).bind(token).first<SessionUser & {
-    expires_at: number; share_id: string | null;
-    share_username: string | null; share_label: string | null; share_address_id: string | null;
-    share_perms: string | null; share_expires: number | null; share_revoked: number | null;
-    share_susp: number | null; share_frozen: number | null; share_frozen_at: number | null;
-    share_owner: string | null; share_address: string | null; share_seen: number | null;
-    share_maxdev: number | null; share_note: string | null;
-    share_addr_ids?: string[]; share_addrs?: string[];
-  }>().then(async (r) => {
-    if (!r || !r.share_id) return r;
-    // the mailbox set lives in the junction (0010) — a database the migration
-    // has not reached yet falls back to the primary column alone
-    try {
-      const jn = await env.DB.prepare(
-        `SELECT sa.address_id, a.address FROM share_addresses sa
-           JOIN addresses a ON a.id = sa.address_id
-          WHERE sa.share_id = ? ORDER BY a.created_at`
-      ).bind(r.share_id).all<{ address_id: string; address: string }>();
-      if (jn.results?.length) {
-        r.share_addr_ids = jn.results.map((x) => x.address_id);
-        r.share_addrs = jn.results.map((x) => x.address);
-      } else if (r.share_address_id) {
-        // junction empty but a primary exists (or the junction is missing):
-        // repair the junction silently so the guest keeps seeing their mailbox
-        try { await env.DB.prepare('INSERT OR IGNORE INTO share_addresses (share_id, address_id) VALUES (?, ?)').bind(r.share_id, r.share_address_id).run(); } catch { /* pre-0010 database */ }
-      }
-    } catch { /* pre-0010 database keeps answering with the primary column */ }
-    return r;
-  });
-  if (!row) return null;
-  if (row.expires_at < now()) {
+  ).bind(token).first<{ id: string; username: string; role: string; display_name: string | null; totp_enabled: number; expires_at: number; share_id: string | null }>();
+  if (!base) return null;
+  if (base.expires_at < now()) {
     await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
     return null;
   }
 
-  // a share session lives only while its credential does: revoked or expired
-  // → the row (and by cascade this session) is gone → 401 → the shell logs
-  // the guest out with an honest message instead of a silent dead session.
-  // While the admin froze the remaining time, expiry checks run against
-  // frozen_at — a frozen share can never time out under the cron.
-  if (row.share_id) {
-    const flags = { suspended_at: row.share_susp, time_frozen: row.share_frozen, frozen_at: row.share_frozen_at, expires_at: row.share_expires };
-    if (!row.share_username || row.share_revoked || shareExpired(flags)) {
+  // ---------------------------------------------------------------------------
+  //  Stage 2 — share context, fetched separately and defensively. A share
+  //  session lives only while its credential does (revoked/expired → the
+  //  row is gone → 401 → the shell logs the guest out with an honest
+  //  message). While the admin froze the remaining time, expiry checks run
+  //  against frozen_at — a frozen share can never time out under the cron.
+  //  Databases from before a migration simply get neutral defaults for the
+  //  columns they never had (no device cap, no suspension, no freeze).
+  // ---------------------------------------------------------------------------
+  type ShareRow = {
+    id: string; owner_id: string; username: string; label: string | null;
+    address_id: string | null; perms: string; expires_at: number | null;
+    revoked_at: number | null; suspended_at: number | null; time_frozen: number | null;
+    frozen_at: number | null; last_seen_at: number | null; max_devices: number | null;
+    guest_note: string | null;
+  };
+  let sh: ShareRow | null = null;
+  let shareAddress: string | null = null;
+  if (base.share_id) {
+    try {
+      sh = await env.DB.prepare(
+        `SELECT id, owner_id, username, label, address_id, perms, expires_at, revoked_at,
+                suspended_at, time_frozen, frozen_at, last_seen_at, max_devices, guest_note
+           FROM share_links WHERE id = ?`
+      ).bind(base.share_id).first<ShareRow>() ?? null;
+    } catch {
+      // an older share_links shape (pre-0011/0012 columns) — fall back to the
+      // base set the first share release (0009) already had
+      try {
+        sh = await env.DB.prepare(
+          `SELECT id, owner_id, username, label, address_id, perms, expires_at, revoked_at, last_seen_at
+             FROM share_links WHERE id = ?`
+        ).bind(base.share_id).first<ShareRow>() ?? null;
+        if (sh) {
+          sh.suspended_at = null;
+          sh.time_frozen = 0;
+          sh.frozen_at = null;
+          sh.max_devices = 0;
+          sh.guest_note = null;
+        }
+      } catch { sh = null; }
+    }
+    if (sh) {
+      try {
+        const a = await env.DB.prepare('SELECT address FROM addresses WHERE id = ?').bind(sh.address_id ?? '').first<{ address: string }>();
+        shareAddress = a?.address ?? null;
+      } catch { /* the primary mailbox line stays empty */ }
+    }
+  }
+
+  if (base.share_id) {
+    const flags = { suspended_at: sh?.suspended_at ?? null, time_frozen: sh?.time_frozen ?? 0, frozen_at: sh?.frozen_at ?? null, expires_at: sh?.expires_at ?? null };
+    if (!sh?.username || sh.revoked_at || shareExpired(flags)) {
       await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
       return null;
     }
     // live audit: “last seen” moves at most once a minute — a heartbeat, not
     // a write per request
-    if (!row.share_seen || now() - row.share_seen > 60_000) {
-      try { await env.DB.prepare('UPDATE share_links SET last_seen_at = ? WHERE id = ?').bind(now(), row.share_id).run(); } catch { /* never block auth */ }
+    if (!sh.last_seen_at || now() - sh.last_seen_at > 60_000) {
+      try { await env.DB.prepare('UPDATE share_links SET last_seen_at = ? WHERE id = ?').bind(now(), sh.id).run(); } catch { /* never block auth */ }
     }
-    const shareAddrIds = row.share_addr_ids ?? [row.share_address_id ?? ''].filter(Boolean);
+    // the mailbox set lives in the junction (0010) — a database the migration
+    // has not reached yet falls back to the primary column alone
+    let shareAddrIds: string[] = [];
+    let shareAddrs: string[] = [];
+    try {
+      const jn = await env.DB.prepare(
+        `SELECT sa.address_id, a.address FROM share_addresses sa
+           JOIN addresses a ON a.id = sa.address_id
+          WHERE sa.share_id = ? ORDER BY a.created_at`
+      ).bind(sh.id).all<{ address_id: string; address: string }>();
+      if (jn.results?.length) {
+        shareAddrIds = jn.results.map((x) => x.address_id);
+        shareAddrs = jn.results.map((x) => x.address);
+      } else if (sh.address_id) {
+        // junction empty but a primary exists (or the junction is missing):
+        // repair the junction silently so the guest keeps seeing their mailbox
+        try { await env.DB.prepare('INSERT OR IGNORE INTO share_addresses (share_id, address_id) VALUES (?, ?)').bind(sh.id, sh.address_id).run(); } catch { /* pre-0010 database */ }
+      }
+    } catch { /* pre-0010 database keeps answering with the primary column */ }
+    if (!shareAddrIds.length && sh.address_id) {
+      shareAddrIds = [sh.address_id];
+      if (shareAddress) shareAddrs = [shareAddress];
+    }
     const share: ShareInfo = {
-      id: row.share_id,
-      username: row.share_username,
-      label: row.share_label,
-      address_id: row.share_addr_ids?.[0] ?? row.share_address_id ?? '',
-      address: row.share_addrs?.[0] ?? row.share_address ?? '',
+      id: sh.id,
+      username: sh.username,
+      label: sh.label,
+      address_id: shareAddrIds[0] ?? sh.address_id ?? '',
+      address: shareAddrs[0] ?? shareAddress ?? '',
       address_ids: shareAddrIds,
-      addresses: row.share_addrs ?? [row.share_address ?? ''].filter(Boolean),
-      owner_id: row.share_owner ?? row.id,
-      perms: (row.share_perms ?? 'read').split(',').map((p) => p.trim()).filter(Boolean),
-      max_devices: Number(row.share_maxdev ?? 0) || 0,
-      note: row.share_note ?? null,
-      expires_at: row.share_expires,
+      addresses: shareAddrs,
+      owner_id: sh.owner_id,
+      perms: (sh.perms ?? 'read').split(',').map((p) => p.trim()).filter(Boolean),
+      max_devices: Number(sh.max_devices ?? 0) || 0,
+      note: sh.guest_note ?? null,
+      expires_at: sh.expires_at,
       suspended: shareSuspended(flags, shareAddrIds),
-      time_frozen: !!(row.share_frozen && row.share_frozen_at),
-      frozen_at: row.share_frozen && row.share_frozen_at ? Number(row.share_frozen_at) : null,
+      time_frozen: !!(sh.time_frozen && sh.frozen_at),
+      frozen_at: sh.time_frozen && sh.frozen_at ? Number(sh.frozen_at) : null,
     };
-    return { id: row.id, username: row.share_username, role: 'share', display_name: row.share_label ?? row.share_username, totp_enabled: 0, share };
+    return { id: base.id, username: sh.username, role: 'share', display_name: sh.label ?? sh.username, totp_enabled: 0, share };
   }
 
-  return { id: row.id, username: row.username, role: row.role, display_name: row.display_name, totp_enabled: row.totp_enabled };
+  return { id: base.id, username: base.username, role: base.role, display_name: base.display_name, totp_enabled: base.totp_enabled };
 }
 
 export function tokenFrom(c: Context): string | undefined {

@@ -60,4 +60,6 @@ export const SCHEMA: SchemaStatement[] = [
   { name: "heal_16", optional: true, sql: "ALTER TABLE share_links ADD COLUMN time_frozen INTEGER NOT NULL DEFAULT 0" },
   { name: "heal_17", optional: true, sql: "ALTER TABLE share_links ADD COLUMN frozen_at INTEGER" },
   { name: "heal_18", optional: true, sql: "ALTER TABLE share_links ADD COLUMN password_enc TEXT" },
+  { name: "heal_19", optional: true, sql: "ALTER TABLE share_links ADD COLUMN max_devices INTEGER NOT NULL DEFAULT 0" },
+  { name: "heal_20", optional: true, sql: "ALTER TABLE share_links ADD COLUMN guest_note TEXT" },
 ];

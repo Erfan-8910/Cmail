@@ -191,6 +191,7 @@ for (const m of [
   'migrations/0008_sent_mail.sql',
   'migrations/0009_share_access.sql',
   'migrations/0011_share_control.sql',
+  'migrations/0012_share_columns.sql',
 ]) {
   let sql;
   try { sql = readFileSync(join(ROOT, m), 'utf8'); } catch { continue; }

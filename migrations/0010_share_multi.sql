@@ -8,11 +8,12 @@
 --  one older code paths read) — the junction is the source of truth for the
 --  full set.
 --
---  Two new columns ride on share_links and are added conditionally by the
---  deploy script (SQLite has no idempotent ALTER):
---    max_devices INTEGER NOT NULL DEFAULT 0   -- 0 = unlimited browsers
---    guest_note  TEXT                          -- the welcome line a guest
---                                              -- sees right after signing in
+--  Two new columns ride on share_links: max_devices and guest_note. SQLite
+--  has no idempotent ALTER, so they were originally deferred to "the deploy
+--  script" — which never ran them, leaving every migrations-built database
+--  without them (the root cause of issue #2). They now have their own
+--  migration: 0012_share_columns.sql. Do not rely on deploy scripts for
+--  schema changes; the chain (or the worker's heal list) owns the shape.
 --
 --  CLI users:  npx wrangler d1 migrations apply cmail-db --remote
 -- ============================================================================

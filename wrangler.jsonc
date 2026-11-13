@@ -13,7 +13,7 @@
   "workers_dev": true,
 
   "vars": {
-    "APP_VERSION": "3.0.2"
+    "APP_VERSION": "3.0.3"
   },
 
   "d1_databases": [
