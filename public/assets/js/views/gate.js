@@ -175,11 +175,15 @@ export async function renderGate(root) {
   }
 
   function tutAdmin() {
-    return tutPanel(t('tutAdminTitle'), 'user',
-      h('p', { class: 'tut__d' }, t('tutAdminD')),
-      h('div', { class: 'tut__cta' },
+    const kids = [h('p', { class: 'tut__d' }, state.setup?.tables ? t('tutAdminD') : t('setupNeedDbSub'))];
+    // the create/login CTA only makes sense once the tables exist — on an
+    // empty database the message above is the whole story
+    if (state.setup?.tables) {
+      kids.push(h('div', { class: 'tut__cta' },
         h('button', { class: 'btn btn--primary', onclick: () => { location.hash = '#/login'; } },
           icon('arrow'), state.setup?.admin_created && !state.user ? t('login') : t('goMakeAccess'))));
+    }
+    return tutPanel(t('tutAdminTitle'), 'user', ...kids);
   }
 
   function tutDomain() {
@@ -382,8 +386,11 @@ export async function renderGate(root) {
           // the database step is public on purpose: a fresh deployment has no
           // session yet, and the one-click table setup must be reachable then.
           // same for the account step on a fresh install — someone has to be
-          // able to reach the "create access" form in the first place.
-          const freshAdmin = def.id === 'admin' && !state.setup?.admin_created;
+          // able to reach the "create access" form in the first place. but the
+          // form only exists once the tables do: offering it on an empty D1
+          // used to strand Deploy-button users on a password form that could
+          // never succeed.
+          const freshAdmin = def.id === 'admin' && !state.setup?.admin_created && !!state.setup?.tables;
           const body = isAdmin() || def.id === 'database' || freshAdmin
             ? tutorials[def.id]?.() ?? memberNote()
             : memberNote();

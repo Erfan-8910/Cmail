@@ -110,6 +110,7 @@ export function errText(e) {
     forbidden: 'forbidden',
     totp_not_enabled: 'totpNotEnabled',
     device_limit: 'deviceLimit',
+    tables_missing: 'setupNeedDbToast',
   };
   return map[e?.code] ? t(map[e.code]) : (e?.detail ? `${t('error')} — ${e.detail}` : t('error'));
 }

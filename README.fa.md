@@ -232,8 +232,8 @@ Cmail پاسخ یک سؤال ساده است: **چرا برای یک صندوق 
 
 ## دانلود — بدون کلون کردن
 
-- **[`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.0/worker.js) آماده** — کل برنامه در یک فایل (حدود ۱٫۳ مگابایت، ~۴۷۰ کیلوبایت gzip). برای نصب گرافیکی همین یک فایل کافی است.
-- **بستهٔ کامل v2.9.5:** [`CMail-v3.0.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.0/CMail-v3.0.0.zip) — سورس‌ها، [`schema.sql`](schema.sql)، [`migrations/`](migrations) و اسکریپت‌ها.
+- **[`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.1/worker.js) آماده** — کل برنامه در یک فایل (حدود ۱٫۳ مگابایت، ~۴۷۰ کیلوبایت gzip). برای نصب گرافیکی همین یک فایل کافی است.
+- **بستهٔ کامل v3.0.1:** [`CMail-v3.0.1.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.1/CMail-v3.0.1.zip) — سورس‌ها، [`schema.sql`](schema.sql)، [`migrations/`](migrations) و اسکریپت‌ها.
 - همهٔ نسخه‌ها: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - فقط شکل دیتابیس را می‌خواهی؟ یک فایل است: [`schema.sql`](schema.sql) — آمادهٔ کنسول و قابل اجرای دوباره.
 

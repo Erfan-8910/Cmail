@@ -257,7 +257,16 @@ app.post('/admin', async (c) => {
   const ip = clientIp(c);
   if (!(await rateLimit(c.env, ip, 'setup', 5))) return c.json({ ok: false, error: 'rate_limited' }, 429);
 
-  const existing = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>();
+  // Deploy-button flow: the database is provisioned EMPTY (no migrations are
+  // applied by the deploy pipeline) until the gate's one-click builder runs.
+  // A raw D1_ERROR here used to strand that install on a form that can never
+  // succeed — say plainly what is missing instead.
+  let existing: { n: number } | null = null;
+  try {
+    existing = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>();
+  } catch {
+    return c.json({ ok: false, error: 'tables_missing' }, 409);
+  }
   if ((existing?.n ?? 0) > 0) return c.json({ ok: false, error: 'already_setup' }, 409);
 
   const body = await c.req.json<{ username?: string; password?: string; display_name?: string }>().catch(() => null);

@@ -233,8 +233,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v2.9.5:** [`CMail-v3.0.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.0/CMail-v3.0.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.1/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v3.0.1:** [`CMail-v3.0.1.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.1/CMail-v3.0.1.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 
