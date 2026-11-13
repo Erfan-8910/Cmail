@@ -262,9 +262,9 @@ Cmail پاسخ یک سؤال ساده است: **چرا برای یک صندوق 
 
 ## دانلود — بدون کلون کردن
 
-- **[`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.2/worker.js) آماده** — کل برنامه در یک فایل (حدود ۱٫۳ مگابایت، ~۴۷۰ کیلوبایت gzip). برای نصب گرافیکی همین یک فایل کافی است.
-- **بستهٔ کامل v3.0.2:** [`CMail-v3.0.2.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.2/CMail-v3.0.2.zip) — سورس‌ها، [`schema.sql`](schema.sql)، [`migrations/`](migrations) و اسکریپت‌ها.
-- بستهٔ زیپ مطابق تگ v3.0.2 است — تازه‌ترین بهبودهای نصب‌کننده (مرحلهٔ دیپلویِ خودترمیم و نام‌گذاری چندنسخه‌ای) در خود ریپو زندگی می‌کنند؛ دکمهٔ Deploy و یک کلونِ تازه همیشه همان‌ها را دارند.
+- **[`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.3/worker.js) آماده** — کل برنامه در یک فایل (حدود ۱٫۳ مگابایت، ~۴۷۰ کیلوبایت gzip). برای نصب گرافیکی همین یک فایل کافی است.
+- **بستهٔ کامل v3.0.3:** [`CMail-v3.0.3.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.3/CMail-v3.0.3.zip) — سورس‌ها، [`schema.sql`](schema.sql)، [`migrations/`](migrations) و اسکریپت‌ها.
+- بستهٔ زیپ مطابق تگ v3.0.3 است — رفعِ حلقهٔ ورود (ایشوی #۲) هم داخلش است؛ دکمهٔ Deploy و یک کلونِ تازه هم همیشه تازه‌ترین بهبودهای نصب‌کننده را دارند.
 - همهٔ نسخه‌ها: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - فقط شکل دیتابیس را می‌خواهی؟ یک فایل است: [`schema.sql`](schema.sql) — آمادهٔ کنسول و قابل اجرای دوباره.
 

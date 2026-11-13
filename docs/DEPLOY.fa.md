@@ -78,7 +78,7 @@ Cmail کاملاً چندنصبیه است: **هر نسخه یک Worker + یک �
 
 - **Workers & Pages → Create → Workers → Create Worker**
 - اسمش را بگذار `cmail` و یک بار با کد پیش‌فرض **Deploy** کن.
-- **Edit code** را بزن، کد پیش‌فرض را پاک کن، محتوای کامل [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.1/worker.js) آماده را جای‌گذاری کن و **Deploy** بزن.
+- **Edit code** را بزن، کد پیش‌فرض را پاک کن، محتوای کامل [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.3/worker.js) آماده را جای‌گذاری کن و **Deploy** بزن.
 
 **۳) تنها Binding مورد نیاز: D1**
 
