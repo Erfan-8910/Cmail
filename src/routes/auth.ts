@@ -80,11 +80,19 @@ app.post('/login', async (c) => {
   if (!user || !(await verifyPassword(password, user.password_hash))) {
     // not the owner — maybe a share guest. The same login form answers both:
     // the credential is looked up in share_links too, and a match opens the
-    // shared mailboxes with exactly the permissions the admin handed out
+    // shared mailboxes with exactly the permissions the admin handed out.
+    // The lookup is defensive by design: a database whose share_links is
+    // missing columns (old migration chain — issue #2) must degrade to an
+    // honest "wrong username or password" (401), never to a 500.
     if (username) {
-      const sh = await c.env.DB.prepare(
-        'SELECT id, owner_id, username, password_hash, expires_at, revoked_at, max_devices, suspended_at, time_frozen, frozen_at FROM share_links WHERE username = ?'
-      ).bind(username).first<{ id: string; owner_id: string; username: string; password_hash: string; expires_at: number | null; revoked_at: number | null; max_devices: number | null; suspended_at: number | null; time_frozen: number | null; frozen_at: number | null }>();
+      let sh: { id: string; owner_id: string; username: string; password_hash: string; expires_at: number | null; revoked_at: number | null; max_devices: number | null; suspended_at: number | null; time_frozen: number | null; frozen_at: number | null } | null = null;
+      try {
+        sh = await c.env.DB.prepare(
+          'SELECT id, owner_id, username, password_hash, expires_at, revoked_at, max_devices, suspended_at, time_frozen, frozen_at FROM share_links WHERE username = ?'
+        ).bind(username).first() ?? null;
+      } catch {
+        sh = null; // share table missing or drifted — treat as "no share match"
+      }
       if (sh && !sh.revoked_at && !shareExpired(sh) && (await verifyPassword(password, sh.password_hash))) {
         // the device cap is enforced at the door: too many live browsers for
         // this credential → the newest is refused, not the oldest kicked

@@ -196,6 +196,16 @@ UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvV
 
 > ⚠️ **Never run `DELETE FROM users`** — deleting the user cascades and wipes all of their inboxes and mail. The UPDATE above is all you need, and change the temporary password right away.
 
+> ⚠️ **Terminal users — mind the shell.** The hash contains `$` characters. Pasting the command in **double quotes** lets bash/zsh silently expand them and store a corrupt hash (`pbkdf2$100000$…` becomes `pbkdf200000==/c=`) — the reset then *looks* successful but sign-in still fails. Use the **D1 Console in the dashboard** (no shell involved — recommended), or wrap the command in **single quotes**:
+>
+> ```bash
+> npx wrangler d1 execute cmail-db --remote --command 'UPDATE users SET password_hash = '"'"'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c='"'"' WHERE role = '"'"'admin'"'"''
+> ```
+>
+> …or write the SQL to a file and run `npx wrangler d1 execute cmail-db --remote --file=recover.sql` — files never touch the shell.
+
+> 💠 **Sign-in still loops back to the form after a correct password?** That was a schema defect on installs created through the terminal migrations before v3.0.3 (two share columns were missing, so every signed-in request failed silently). Update the worker to v3.0.3, then either press **Repair** in Settings → System health, or run `npx wrangler d1 migrations apply cmail-db --remote` once — the login loop is gone immediately, and the fix no longer depends on the repair.
+
 ## Updating to a newer version
 
 - **Route 2 (graphical):** paste the new `worker.js` into Edit Code and Deploy. If the database shape moved forward, the health panel (Settings → System health) flags it and its **Repair** button adds the missing columns and tables in one press — it never touches your data. The incoming-mail handler also keeps delivering on older databases while you get to the repair, so nothing bounces in between.

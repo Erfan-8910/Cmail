@@ -129,6 +129,18 @@ npx wrangler d1 migrations apply "$DB_NAME" --remote
 good "schema applied"
 echo -e "${DIM}  (CLI users just got every table; dashboard users get a one-click\n   “Create tables automatically” button in the setup wizard instead.)${R}"
 
+# ---------- schema heal pass (tolerant) ----------
+# Migration 0012 owns these two columns in the chain, but databases created
+# BEFORE it (or built from schema.sql) may still miss columns the worker's
+# auth code SELECTs — the exact root cause of issue #2 ("cannot login"). Each
+# ALTER below is idempotent-by-tolerance: "duplicate column" simply means the
+# column already exists. None of the statements contain "$", so they are safe
+# to paste in any shell.
+say "Healing pass for older databases…"
+npx wrangler d1 execute "$DB_NAME" --remote --command 'ALTER TABLE share_links ADD COLUMN max_devices INTEGER NOT NULL DEFAULT 0' >/dev/null 2>&1 || true
+npx wrangler d1 execute "$DB_NAME" --remote --command 'ALTER TABLE share_links ADD COLUMN guest_note TEXT' >/dev/null 2>&1 || true
+good "schema heal pass done"
+
 say "Setting APP_SECRET…"
 if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
   SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")

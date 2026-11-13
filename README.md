@@ -107,12 +107,22 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 3.0.2 — the button install, finished properly
+## What's new in 3.0.3 — the sign-in loop, dead at the root
+
+- **A correct password could still bounce you straight back to the sign-in form — issue #2, fixed for good.** The report: create your account, then the panel refuses every later sign-in as "wrong username or password", and even the SQL password reset changes nothing. The password was never wrong: on installs built through the **terminal migration chain** (`deploy.sh`, `npm run setup`, `wrangler d1 migrations apply`), the `share_links` table was missing two columns — migration 0010 handed them to the deploy script, which never ran them — and the session lookup that answers **every** signed-in request touched exactly those columns. It threw, the error was swallowed as "no user", and the panel bounced back to the login form right after a successful sign-in: an invisible loop that no password reset could ever fix. Three layers now bury it: the missing columns got their own **migration 0012**; the worker's session reader no longer **depends** on them (a two-stage lookup that works on any database shape, old or new); and the health panel's **Repair** button (plus the setup gate and `deploy.sh`'s new healing pass) adds them wherever they are still missing — verified live on a database built without the columns: account creation, sign-in, `/me`, wrong-password answers and guest logins all pass, before and after any repair.
+- **Wrong credentials now answer honestly.** On the same broken-shape databases, any failed attempt (a typo in the username, a wrong password) crashed into a raw `500 server_error` instead of a clean `wrong username or password`. The share lookup at the login door is now defensive — a drifted table degrades to the honest 401, never to a crash.
+- **The recovery script can no longer be corrupted by your shell.** The documented password-reset SQL contains `$` characters; pasted into a terminal in double quotes, bash silently expands them and stores a corrupt hash — the reset *looks* successful and sign-in still fails. The recovery guide now warns about it and ships shell-proof variants (the dashboard's D1 Console stays the recommended path, single-quotes command and `--file=` are the terminal routes).
+- **The health panel names the defect before you feel it.** A `share_links` missing its columns is flagged as `schema_outdated` with the exact column names, and Repair fixes it in one press — verified: a broken database comes out with `status: ok` and zero schema drift.
+
+<details>
+<summary><b>What 3.0.2 changed — the button install, finished properly</b></summary>
 
 - **A button install now ends where it should: on the setup wizard.** Two separate failures shared one symptom — a fresh deploy asking for a password. Root one: the button reuses a database whose name it recognizes, so the new Worker got wired to the FIRST install's live data (real mail, real login). The deploy step now gives every install **its own database, named after its Worker** (`<worker-name>-db`), finds-or-creates it, re-binds anything that points elsewhere, and patches the working config itself — verified live: a second install came up with an empty admin table while production didn't lose a row.
 - **The Deploy step stays green even when the account is out of cron slots.** The most confusing ✗ of all was a deploy that had actually succeeded: the version uploaded, the binding was right — and then attaching the hourly cleanup cron hit the free plan's ceiling of 5 cron triggers per account (code 10072) and turned the whole step red. The resolver now catches it, deploys without the cron, and says in plain words how to attach it later.
 - **The deploy step speaks.** Its log now reads like a story: which Worker, which database is the install's own, what was found / created / re-bound, and what was patched — when something looks off, the fix is readable, not guessable.
 - **`deploy.sh` learned the same manners** — its final deploy runs through the same resolver, so terminal installs share every fix above.
+
+</details>
 
 <details>
 <summary><b>What 3.0.1 changed — the setup gate, a deploy button that heals itself, and several installs on one account</b></summary>
