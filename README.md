@@ -107,7 +107,15 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 3.0.0 — sharing unleashed, two doors on the sign-in card
+## What's new in 3.0.1 — the setup gate, a deploy button that heals itself, and several installs on one account
+
+- **A fresh install always lands on the setup door.** The one real complaint after a button install — "Visit showed a sign-in page, and I never set a password" — is dead at the root. An empty database is now a state the app says out loud: until the tables exist, every route folds into the setup gate; the sign-in card stops pretending an account is already there and shows an honest **"database not ready"** panel; and asking for the admin before the schema is built earns a firm `409 tables_missing`. The **create access** door appears the moment the tables are in — and never before. (Direct links to `#/login` fold into the gate too.)
+- **The Deploy button heals itself.** The button's Deploy step used to cross itself out with error `10021` ("binding DB … must have a valid `database_id`"): the repo ships a placeholder id on purpose — no real id ever lives in a public repo — and the button only rewrites ids for resources it creates itself, so an existing same-name database is reused as-is, placeholder and all. The deploy step now runs a **self-resolving script** (`scripts/deploy-resolve.mjs`, wired as `npm run deploy` — the button pipeline adopts it automatically): it reads the binding, finds the database by name or creates it, patches the working copy of `wrangler.jsonc`, and only then hands over to wrangler. Terminal users get the same self-healing from `npm run deploy`.
+- **Several installs on one account, zero collisions.** People installing a second (or third) Cmail on one account watched their data mix together: the fixed names (worker `cmail`, database `cmail-db`) meant every install after the first either overwrote the previous Worker or bound itself to the first install's data. The installer now opens with the install's **identity**: Enter keeps the default single install (`cmail` / `cmail-db`), a typed name spins up an independent one (`CMAIL_WORKER_NAME` / `CMAIL_DB_NAME` skip the prompts for scripted installs) — and the whole identity is written into the config: worker name, database name, and a `database_id` reset to the placeholder, so the resolver always binds the database that belongs to the chosen name and a stale id can never survive a switch. **Email Routing's catch-all** can aim at any instance (`configure-email-routing.sh` takes the worker name), the deploy guide gained a whole [**Several instances on one account**](docs/DEPLOY.md#several-instances-on-one-account) section — free plan cap: 10 D1 databases — and the whole flow was verified live: the second instance came up with its own empty admin table while the production install didn't lose a single row.
+
+<details>
+<summary><b>What 3.0.0 changed — sharing unleashed, two doors on the sign-in card</b></summary>
+
 
 - **Sharing, unleashed.** The share system grows back into what it was always meant to be: one guest credential can now hold **as many mailboxes as you like** — not just one. A brand-new mailbox picker (one chip per mailbox) lives in Settings → Sharing; the guest sees exactly the mailboxes you hand over and nothing else of the account. The list, search, star, folders, notes, bulk actions, attachments and even sending (as any one of the shared addresses) all speak the new multi-mailbox world.
 - **The settings the old system had — and then some.** Every credential now carries a **simultaneous device cap** (unlimited / 1 / 2 / 3 — the newest browser politely refuses when the room is full) and a **welcome note**: a short line the guest reads the moment it lands, straight from its admin. Perms, expiry presets + exact date, custom username/password with the dice, live audit (online dot, browsers inside, last seen), kick, revoke, hard delete — all still one pane.
@@ -122,6 +130,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 - **The inbox, tightened.** Unread rows now carry a slim accent bar and a faint tint (their time stamp turns accent too), selected rows glow in the mood's color, and the bulk bar springs in. The toolbar tells the truth: counters match the box you are actually in (sent · starred · a folder — not the account totals), outgoing mail no longer counts as unread, switching accounts retires a leftover selection bar, replying to your own sent mail addresses the recipient (never you), `/` jumps straight to search and `Esc` wipes the query.
 - **The send button, repositioned.** The compose footer is now a real **send row**: the send button leads it (the first thing the eye meets, RTL and LTR alike), the quiet cancel follows, the draft note trails at the far end — no more hunting a small send key in the corner. On phones it takes the full width.
 - **One file, updated end to end.** The single-file `worker.js` — the artifact every deployment path uses — is rebuilt from these sources with the version stamped **3.0.0** everywhere: the pillbar, the About page, the badge.
+
+</details>
 
 <details>
 <summary><b>What 2.9.5 changed — folders on every account, scenes behind the glass</b></summary>
@@ -235,6 +245,7 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 - **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.1/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
 - **Full package v3.0.1:** [`CMail-v3.0.1.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.1/CMail-v3.0.1.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- The zip mirrors the v3.0.1 tag — the newest installer improvements (the self-healing deploy step, multi-instance naming) live in the repository itself, so the Deploy button and a fresh clone always carry them.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 
