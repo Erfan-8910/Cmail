@@ -3,7 +3,7 @@
 # Usage: CLOUDFLARE_API_TOKEN=… ./scripts/configure-email-routing.sh mail.example.com
 set -euo pipefail
 
-DOMAIN="${1:?usage: configure-email-routing.sh <domain>}"
+DOMAIN="${1:?usage: configure-email-routing.sh <domain> [worker-name]}"
 TOKEN="${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
 API="https://api.cloudflare.com/client/v4"
 HDR=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json")
@@ -20,7 +20,7 @@ ZONE_ID=$(curl -s "${HDR[@]}" "$API/zones?name=$ZONE_DOMAIN" | node -e "let d=''
 [ -n "$ZONE_ID" ] || { echo "✖ zone $ZONE_DOMAIN not found on this token"; exit 1; }
 echo "✔ zone id: $ZONE_ID"
 
-WORKER_NAME="cmail"
+WORKER_NAME="${2:-cmail}"
 echo "→ enabling Email Routing…"
 curl -s -X POST "${HDR[@]}" "$API/zones/$ZONE_ID/email/routing/enable" >/dev/null || true
 
