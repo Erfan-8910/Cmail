@@ -33,14 +33,14 @@
 
 Press the button and Cloudflare does the cloning, provisioning and shipping on its own:
 
-1. **Press Deploy** — Cloudflare copies the repo into your own GitHub, creates a **fresh D1 database**, wires the binding and deploys the Worker. (The repository must be public for the button to see it.)
-2. **Open the app** at the URL Cloudflare shows — the **setup gate** takes over: build the tables with one press, create the admin account.
-3. **Connect your domain** — the wizard walks Email Routing on your own zone (mail receiving always lives in your Cloudflare, so the domain must sit in the same account).
+1. **Press Deploy** — Cloudflare copies the repo into your own GitHub, provisions the resources and ships the Worker. (The repository must be public for the button to see it.)
+2. **Wait for the build's Deploy step to turn green** (about a minute). That step runs the repo's own deploy script, which makes the install self-sufficient:
+   - **the install gets its own database**, named after its Worker (`<worker-name>-db`) — never a database that belongs to another install. The script finds-or-creates it, re-binds anything that points elsewhere, and patches the working config itself — the build never dies on a placeholder id;
+   - **cron slots are respected** — free accounts cap cron triggers at 5 per account. If every slot is taken, the deploy lands *without* the hourly cleanup cron and the log says so in plain words; the app is fully live either way.
+3. **Visit the app — after the Deploy step is green.** (Visiting in the first minute can briefly show another install's data while the script re-binds the database.) The **setup gate** takes over: build the tables with one press, create the admin account, connect the domain, wire sending.
 4. Your code, your repo: the button already placed the project in your GitHub with a CI pipeline — every push rebuilds and redeploys.
 
-The pipeline's Deploy step runs the repo's `npm run deploy`, which resolves the D1 binding on its own (finds the database by name, creates one if there truly is none) — so the build never dies on a placeholder database id, even when an existing database is reused.
-
-> **Testing on the same account as an existing install?** The button matches databases **by name** — if `cmail-db` already exists (your live Cmail), the flow reuses it and the new Worker shows that install's data, login screen included. That is the real database talking, not a bug. For a clean first-run experience use a fresh Cloudflare account, or rename the existing database first (D1 → your database → Rename) and rename it back afterwards.
+> **Why the Deploy step once went red on a perfect install:** the upload and the binding actually succeeded — the last sub-request, attaching the hourly cleanup cron, hit the free plan's ceiling of 5 cron triggers per account (error 10072) and turned the whole step ✗. The deploy script now catches that, deploys without the cron, and keeps the build green. If you see that warning in the build log, the app is live and safe to use.
 
 The routes below still work exactly the same — for hands-on installs and terminal tastes.
 
@@ -60,7 +60,8 @@ Cmail is fully multi-install: **every instance is one Worker + one D1 database w
 
 - **Route 1 asks the instance name.** Answer e.g. `cmail-shop` and the install deploys Worker `cmail-shop` on database `cmail-shop-db` (press Enter for the default single install: `cmail` on `cmail-db`). Scripted installs skip the prompts with `CMAIL_WORKER_NAME` / `CMAIL_DB_NAME`.
 - **Updating an instance** = re-run `deploy.sh` and answer the same names — the resolver always binds the database that belongs to the chosen name.
-- **The Deploy button matches databases by name** — on an account that already runs Cmail, use Route 1 for a second instance (see the Route 0 note).
+- **The Deploy button names per instance too.** The button already forces a fresh Worker name for every install — and now the database follows it: each button install deploys on its own `<worker-name>-db`. A second, third or tenth install on the same account is isolated by construction.
+- **Cron triggers on the free plan: 5 per account** — shared across ALL your Workers, not just Cmail. Extra installs deploy fine but carry no cleanup cron (see the Route 0 note).
 - **Free plan:** up to 10 D1 databases per account — that is the instance cap; paid plans raise it massively.
 - **Removing an instance:** delete its Worker and its D1 database in the dashboard (or `npx wrangler delete` + `npx wrangler d1 delete <name>`) — nothing else references them.
 

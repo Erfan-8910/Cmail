@@ -118,7 +118,7 @@ good "wrangler.jsonc → worker “$WORKER_NAME”, database “$DB_NAME”"
 # database when it truly does not exist, patches the working copy. No deploy
 # happens here yet (CMAIL_RESOLVE_ONLY) — migrations run first below.
 say "Creating (or finding) the D1 database “${DB_NAME}”…"
-CMAIL_RESOLVE_ONLY=1 node scripts/deploy-resolve.mjs || fail "Could not resolve the D1 database"
+CMAIL_RESOLVE_ONLY=1 CMAIL_DB_NAME="$DB_NAME" node scripts/deploy-resolve.mjs || fail "Could not resolve the D1 database"
 DB_ID=$(grep -oE '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}' wrangler.jsonc | head -1)
 [ -n "$DB_ID" ] || fail "database_id missing after resolve"
 good "D1 database: $DB_ID"
@@ -140,9 +140,14 @@ fi
 good "APP_SECRET configured"
 
 # ---------- deploy ----------
+# the final deploy goes through deploy-resolve.mjs too — same code the button's
+# CI runs: re-checks the binding, and keeps the build green when the account's
+# cron-trigger slots are full (free plan: 5 per account).
 say "Deploying Cmail…"
-DEPLOY_OUT=$(npx wrangler deploy 2>&1)
+DEPLOY_RC=0
+DEPLOY_OUT=$(CMAIL_DB_NAME="$DB_NAME" node scripts/deploy-resolve.mjs 2>&1) || DEPLOY_RC=$?
 echo "$DEPLOY_OUT" | sed 's/^/  /'
+[ "$DEPLOY_RC" -eq 0 ] || fail "deploy failed — see the output above"
 WORKER_URL=$(echo "$DEPLOY_OUT" | grep -oE 'https://[a-z0-9.-]+\.workers\.dev' | head -1 || true)
 [ -n "$WORKER_URL" ] || WORKER_URL="(check wrangler output above)"
 good "deployed: $WORKER_URL"
