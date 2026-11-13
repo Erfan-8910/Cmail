@@ -169,6 +169,21 @@ export function renderLogin(root) {
     card.append(h('p', { class: 'auth-note' }, icon('key'), t('shareLoginHint')));
   }
 
+  // the honest fresh-install answer: no credential form exists yet because
+  // the database has no tables (Deploy-button flow provisions an empty D1)
+  // or the system state is unknown — the setup gate owns both cases
+  function drawDbPending() {
+    clear(card);
+    card.append(
+      h('h2', { class: 'auth-title' }, t('setupNeedDbTitle')),
+      h('p', { class: 'auth-sub' }, t('setupNeedDbSub')),
+    );
+    const btn = h('button', { class: 'btn btn--primary', type: 'button', style: { width: '100%' } },
+      icon('database'), t('setupNeedDbBtn'));
+    btn.addEventListener('click', () => { location.hash = '#/status'; });
+    card.append(h('div', { class: 'auth-form' }, btn));
+  }
+
   async function submitCreate(fd) {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
@@ -179,6 +194,13 @@ export function renderLogin(root) {
       toast(t('welcomeAccess'), 'ok', 2200);
       afterAuth();
     } catch (e) {
+      // a raw D1 error must never strand a fresh install on a form that can
+      // never succeed — hand the visitor to the gate that builds the tables
+      if (e?.code === 'tables_missing') {
+        toast(t('setupNeedDbToast'), 'err', 2600);
+        setTimeout(() => { location.hash = '#/status'; }, 900);
+        return;
+      }
       toast(errText(e), 'err');
       shakeCard();
       btn.disabled = false;
@@ -248,6 +270,10 @@ export function renderLogin(root) {
     if (window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) setTimeout(() => codeInput.focus(), 60);
   }
 
+  // hard guard: while the database state is unknown or the tables are not
+  // built yet, NO credential form is drawn — the setup gate is the only door
+  const dbPending = !state.setup || !state.setup.tables;
+  if (dbPending) { drawDbPending(); return; }
   if (firstRun) drawCreate(); else drawLogin();
 }
 

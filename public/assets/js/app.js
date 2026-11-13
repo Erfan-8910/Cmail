@@ -80,7 +80,11 @@ async function route() {
   // before the username form. Once the tables exist, the sign-in page is
   // reachable normally and the gate handles the remaining steps (domain…).
   if (!ready) {
-    const dbPending = !!state.setup && !state.setup.tables;
+    // an UNKNOWN status (status fetch failed / worker cold-start hiccup) is
+    // setup-pending too: a fresh visitor must never meet a credential form
+    // before the system state is known — the gate (with its own offline
+    // panel and retry) is the only honest answer in that case
+    const dbPending = !state.setup || !state.setup.tables;
     const allowed = page === 'status' || (page === 'login' && !dbPending);
     if (!allowed) { location.hash = '#/status'; return; }
   } else if (page === 'status' && !location.hash.includes('stay')) {
