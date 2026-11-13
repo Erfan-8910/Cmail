@@ -34,9 +34,13 @@
 Press the button and Cloudflare does the cloning, provisioning and shipping on its own:
 
 1. **Press Deploy** — Cloudflare copies the repo into your own GitHub, creates a **fresh D1 database**, wires the binding and deploys the Worker. (The repository must be public for the button to see it.)
-2. **Open the app** at the URL Cloudflare shows — `/setup` takes over: create the admin account.
+2. **Open the app** at the URL Cloudflare shows — the **setup gate** takes over: build the tables with one press, create the admin account.
 3. **Connect your domain** — the wizard walks Email Routing on your own zone (mail receiving always lives in your Cloudflare, so the domain must sit in the same account).
 4. Your code, your repo: the button already placed the project in your GitHub with a CI pipeline — every push rebuilds and redeploys.
+
+The pipeline's Deploy step runs the repo's `npm run deploy`, which resolves the D1 binding on its own (finds the database by name, creates one if there truly is none) — so the build never dies on a placeholder database id, even when an existing database is reused.
+
+> **Testing on the same account as an existing install?** The button matches databases **by name** — if `cmail-db` already exists (your live Cmail), the flow reuses it and the new Worker shows that install's data, login screen included. That is the real database talking, not a bug. For a clean first-run experience use a fresh Cloudflare account, or rename the existing database first (D1 → your database → Rename) and rename it back afterwards.
 
 The routes below still work exactly the same — for hands-on installs and terminal tastes.
 
@@ -63,7 +67,7 @@ Five steps. No SQL, no folder uploads — only your browser and the Cloudflare d
 
 - **Workers & Pages → Create → Workers → Create Worker**
 - Name it `cmail` and **Deploy** once with the default code.
-- Click **Edit code**, delete the default code, paste the full content of the prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.0/worker.js) and **Deploy**.
+- Click **Edit code**, delete the default code, paste the full content of the prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.1/worker.js) and **Deploy**.
 
 **3) The only binding you need: D1**
 
