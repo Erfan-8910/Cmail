@@ -263,9 +263,9 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.2/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v3.0.2:** [`CMail-v3.0.2.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.2/CMail-v3.0.2.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
-- The zip mirrors the v3.0.2 tag — the newest installer improvements (the self-healing deploy step, multi-instance naming) live in the repository itself, so the Deploy button and a fresh clone always carry them.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.3/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v3.0.3:** [`CMail-v3.0.3.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.3/CMail-v3.0.3.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- The zip mirrors the v3.0.3 tag — the sign-in loop fix (issue #2) is inside; the Deploy button and a fresh clone always carry the newest installer improvements too.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 
