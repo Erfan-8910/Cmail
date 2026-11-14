@@ -111,6 +111,8 @@ export function errText(e) {
     totp_not_enabled: 'totpNotEnabled',
     device_limit: 'deviceLimit',
     tables_missing: 'setupNeedDbToast',
+    suspended_share: 'suspendedShare',
+    cannot_change_own_role: 'cannotChangeOwnRole',
   };
   return map[e?.code] ? t(map[e.code]) : (e?.detail ? `${t('error')} — ${e.detail}` : t('error'));
 }

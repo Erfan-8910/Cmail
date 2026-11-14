@@ -6,9 +6,12 @@
 import { Hono } from 'hono';
 import type { AppEnv, SessionUser } from '../util';
 import { uid, now, clean } from '../util';
-import { requireUser, shareCan } from '../auth';
+import { requireUser, shareCan, blockSuspendedShare } from '../auth';
 
 const app = new Hono<AppEnv>();
+
+// a suspended share is frozen at the API itself (v3.1.0)
+app.use('*', blockSuspendedShare);
 
 // the guest's mailbox set — shared addresses only, since v3.0.0 a set
 function guestScope(u: SessionUser): string[] | null {

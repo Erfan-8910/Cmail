@@ -2,10 +2,14 @@
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
 import { uid, now, clean, getSetting } from '../util';
-import { requireUser, shareCan } from '../auth';
+import { requireUser, shareCan, blockSuspendedShare } from '../auth';
 import { sendViaProvider } from '../emailout';
 
 const app = new Hono<AppEnv>();
+
+// a suspended share is frozen at the API itself (v3.1.0) — the shell paints
+// its frozen page from /api/auth/me; every mailbox route refuses here
+app.use('*', blockSuspendedShare);
 
 // a share guest sees exactly its shared mailbox set and only what its
 // permission list allows — these helpers keep that rule in one place.

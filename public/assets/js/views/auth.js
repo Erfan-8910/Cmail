@@ -14,12 +14,61 @@ export function recoveryCopyLine(text) {
   return h('div', { class: 'copy-line' }, h('span', {}, text), btn);
 }
 
+// --------------------------------------------------------------------------
+// v3.1.0 — the recovery command is generated FRESH every time it is shown.
+// Older builds shipped one global temporary password (and its ready-made
+// hash) in the panel and the docs — anyone could read it on the public login
+// page with devtools. Now the browser rolls a random one-off password and
+// derives its PBKDF2 hash locally (same algorithm the worker verifies), so
+// no reusable value exists anywhere in the app, the repo or the docs.
+// --------------------------------------------------------------------------
+const RND_POOL = 'abcdefghjkmnpqrstuvwxyz23456789';
+
+function rndChars(n) {
+  const a = new Uint8Array(n);
+  crypto.getRandomValues(a);
+  return [...a].map((b) => RND_POOL[b % RND_POOL.length]).join('');
+}
+
+function b64encode(u8) {
+  let s = '';
+  for (const b of u8) s += String.fromCharCode(b);
+  return btoa(s);
+}
+
+export async function generateRecoveryCommand() {
+  const password = `Rec-${rndChars(4)}-${rndChars(4)}-7${rndChars(3)}`;
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 }, key, 256);
+  const hash = `pbkdf2$100000$${b64encode(salt)}$${b64encode(new Uint8Array(bits))}`;
+  return { password, sql: `UPDATE users SET password_hash = '${hash}' WHERE role = 'admin';` };
+}
+
+// the whole recovery block: fresh command + the one-off password beside it
+export function recoveryFreshBlock() {
+  const sqlLine = h('div', { class: 'copy-line' }, h('span', { class: 'rec-gen-sql' }, t('recGenerating')));
+  const pwLine = h('div', { class: 'copy-line' }, h('span', { class: 'rec-gen-pw' }, '…'));
+  generateRecoveryCommand().then(({ password, sql }) => {
+    sqlLine.querySelector('.rec-gen-sql').textContent = sql;
+    const btn = h('button', { class: 'btn btn--sm btn--ghost', onclick: async () => { await copyText(sql); toast(t('copied'), 'ok', 1500); } }, icon('copy'));
+    sqlLine.append(btn);
+    pwLine.querySelector('.rec-gen-pw').textContent = password;
+    pwLine.append(h('button', { class: 'btn btn--sm btn--ghost', onclick: async () => { await copyText(password); toast(t('copied'), 'ok', 1500); } }, icon('copy')));
+  }).catch(() => {
+    sqlLine.querySelector('.rec-gen-sql').textContent = t('recGenFail');
+  });
+  return [sqlLine, pwLine];
+}
+
 export function stepRow(n, title, desc) {
   return h('div', { class: 'step-row' }, h('span', { class: 'step-row__num' }, String(n)),
     h('div', { class: 'step-row__body' }, h('h4', {}, title), h('p', {}, desc)));
 }
 
-// the account-recovery panel: how to get the username / reset the password from D1 Console
+// the account-recovery panel: how to get the username / reset the password from D1 Console.
+// v3.1.0: the UPDATE command and its one-off password are generated fresh in
+// the browser on every open — nothing reusable lives in the app or the repo.
 export function recoveryPanel({ open = false } = {}) {
   const body = h('div', { class: 'rec-body' });
   body.append(
@@ -27,7 +76,8 @@ export function recoveryPanel({ open = false } = {}) {
     stepRow(1, t('recStep1'), ''),
     recoveryCopyLine('SELECT username FROM users;'),
     stepRow(2, t('recStep3'), ''),
-    recoveryCopyLine("UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c=' WHERE role = 'admin';"),
+    ...recoveryFreshBlock(),
+    stepRow(3, t('recStep4'), ''),
     h('div', { class: 'rec-warn' }, icon('shield'), h('span', {}, t('recWarn'))),
   );
   return h('details', { class: `auth-help ${open ? 'is-open' : ''}`, open }, h('summary', {}, icon('help'), t('loginHelp')), body);

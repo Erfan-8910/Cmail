@@ -27,7 +27,17 @@ app.use('*', async (c, next) => {
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('X-Frame-Options', 'SAMEORIGIN');
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // v3.1.0: HSTS everywhere — the panel is HTTPS-only by nature (Workers),
+  // the header makes the browser refuse to even try plain HTTP next time
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // modern companion of X-Frame-Options — covers the browsers that dropped
+  // the legacy header, on API answers too
+  c.header('Content-Security-Policy', [
+    "frame-ancestors 'self'",
+  ].join('; '));
   if (!c.req.path.startsWith('/api')) {
+    // the full CSP applies to the UI shell — merged with the frame-ancestors
+    // directive above by the browser (the strictest of each wins)
     c.header(
       'Content-Security-Policy',
       [
@@ -40,6 +50,7 @@ app.use('*', async (c, next) => {
         "frame-src 'self' data: about:",
         "object-src 'none'",
         "base-uri 'self'",
+        "frame-ancestors 'self'",
       ].join('; ')
     );
   }

@@ -177,7 +177,7 @@ app.post('/', requireAdmin, async (c) => {
     `INSERT INTO share_links (id, owner_id, address_id, username, password_hash, password_enc, label, perms,
                               max_devices, guest_note, expires_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, u.id, primaryId, username, await hashPassword(password), await sealText(c.env, password),
+  ).bind(id, u.id, primaryId, username, await hashPassword(c.env, password), await sealText(c.env, password),
     clean(body?.label, 60) || null, cleanPerms(body?.perms), maxDevices, note, expiresAt, now()).run();
   await writeAddressIds(c.env, id, addressIds);
 
@@ -383,6 +383,8 @@ app.post('/:id/regenerate', requireAdmin, async (c) => {
   }
 
   // password: keep, take the admin's, or roll a friendly Cm-xxx-xxx-xxx
+  // (the last group always carries a digit — the v3.1.0 strength bar wants
+  //  letters AND digits, and the generator must never roll an all-letter roll)
   let password = String(body?.password ?? '');
   if (!password) {
     const rnd = (n: number) => {
@@ -391,13 +393,15 @@ app.post('/:id/regenerate', requireAdmin, async (c) => {
       crypto.getRandomValues(a);
       return [...a].map((b) => pool[b % pool.length]).join('');
     };
-    password = `Cm-${rnd(4)}-${rnd(4)}-${rnd(4)}`;
+    const digits = '23456789';
+    const d = () => digits[crypto.getRandomValues(new Uint8Array(1))[0] % digits.length];
+    password = `Cm-${rnd(4)}-${rnd(4)}-${d()}${rnd(3)}`;
   }
   if (!passwordStrong(password)) return c.json({ ok: false, error: 'weak_password' }, 400);
 
   await c.env.DB.prepare(
     'UPDATE share_links SET username = ?, password_hash = ?, password_enc = ? WHERE id = ?'
-  ).bind(username, await hashPassword(password), await sealText(c.env, password), id).run();
+  ).bind(username, await hashPassword(c.env, password), await sealText(c.env, password), id).run();
 
   let kicked = 0;
   if (body?.kick) {

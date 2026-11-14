@@ -103,8 +103,43 @@ export function usernameValid(u: string): boolean {
   return /^[a-zA-Z0-9_.-]{3,32}$/.test(u);
 }
 
+// ---------- password policy (v3.1.0) ----------
+//
+// The bar is decided HERE, on the server — the client meter is only a mirror.
+// Every password-setting route (first admin, panel change, admin reset, share
+// create/regenerate) calls this same function, so no client-side bypass can
+// sneak a weak credential past it:
+//   - 8..128 characters
+//   - at least one letter (any language — Persian included) and one digit
+//   - never a top-common password, never a single repeated character
+export const WEAK_PASSWORDS = new Set([
+  'password', 'password1', 'password12', 'password123', 'password1234',
+  'passw0rd', 'p@ssw0rd', 'p@ssword1', 'letmein', 'letmein1', 'letmein123',
+  'welcome', 'welcome1', 'welcome123', 'admin', 'admin123', 'admin1234',
+  'qwerty123', 'qwerty1234', 'qwertyuiop1', '1q2w3e4r', '1q2w3e4r5t',
+  'qazwsx123', 'zaq12wsx', 'asdf1234', 'asdfghjk', 'asdfgh123',
+  'iloveyou', 'iloveyou1', 'monkey123', 'dragon123', 'sunshine1',
+  'princess1', 'football1', 'baseball1', 'master123', 'michael1',
+  'abcd1234', 'abc12345', '12345678', '123456789', '1234567890',
+  '11223344', '11111111', '00000000', '12121212', '12341234',
+  '88888888', '12131415', 'iran12345', 'iran1400', 'cmail2026',
+  'recover2026', 'recovercmail', 'recover-cmail', 'recover-cmail-2026',
+  'recovercmail2026', 'recover-cmail2026', 'recover2026!', 'recovery2026',
+]);
+
 export function passwordStrong(p: string): boolean {
-  return typeof p === 'string' && p.length >= 8 && p.length <= 128;
+  if (typeof p !== 'string' || p.length < 8 || p.length > 128) return false;
+  // one letter (any alphabet) + one digit — Unicode-aware so a Persian
+  // passphrase passes exactly like a Latin one
+  if (!/\p{L}/u.test(p)) return false;
+  if (!/\p{N}/u.test(p)) return false;
+  // eight+ identical characters anywhere in the string — aaaaaaaaaa1 is junk,
+  // even though the trailing digit flatters the letter+digit rule
+  if (/(.)\1{7,}/u.test(p)) return false;
+  const low = p.toLowerCase();
+  const flat = low.replace(/[\s._-]/g, '');
+  if (WEAK_PASSWORDS.has(low) || WEAK_PASSWORDS.has(flat)) return false;
+  return true;
 }
 
 // ---------- settings store ----------
@@ -173,22 +208,80 @@ export async function openText(env: Env, sealed: string): Promise<string> {
 }
 
 // ---------- PBKDF2 password hashing ----------
+//
+// v3.1.0 — TWO hard ceilings shape this code:
+//
+// 1. Cloudflare Workers hard-caps PBKDF2 at 100,000 iterations
+//    ("Pbkdf2 failed: iteration counts above 100000 are not supported"),
+//    so the iteration count is pinned AT the platform maximum — verified
+//    live against a real deployment.
+//
+// 2. Iterations alone cannot stop an offline cracker who holds the D1 rows.
+//    So every NEW hash is PEPPERED: the PBKDF2 output is HMAC'd with a key
+//    derived from APP_SECRET — which lives in Worker Secrets (or, at worst,
+//    the D1 settings row). On installs where APP_SECRET is a real secret
+//    (deploy.sh sets it), a leaked database alone can no longer verify a
+//    single password guess. Format: pbkdf2mac$<iters>$<salt>$<hmac>.
+//    Legacy plain pbkdf2$… hashes still verify, and every successful
+//    sign-in transparently re-hashes them to the peppered form.
 
-export async function hashPassword(password: string): Promise<string> {
-  const iterations = 100_000;
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const key = await pbkdf2(password, salt, iterations);
-  return `pbkdf2$${iterations}$${b64.encode(salt)}$${b64.encode(key)}`;
+const PBKDF2_CEILING = 100_000; // Cloudflare's hard cap — do not raise
+
+export function pbkdf2Target(env?: Env): number {
+  const raw = parseInt(String((env as { PBKDF2_ITERATIONS?: string })?.PBKDF2_ITERATIONS ?? ''), 10);
+  if (!Number.isFinite(raw)) return PBKDF2_CEILING;
+  // the override may only go DOWN (10k floor) — never above the platform cap
+  return Math.min(PBKDF2_CEILING, Math.max(10_000, raw));
 }
 
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+// the pepper key: HKDF from the application secret (Worker Secret on real
+// installs), independent from the AES key that seals TOTP secrets
+async function pepperKey(secret: string): Promise<CryptoKey> {
+  const base = await crypto.subtle.importKey('raw', str.toBuf(secret), 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: str.toBuf('cmail-pepper-v1'), info: str.toBuf('password-mac') },
+    base,
+    { name: 'HMAC', hash: 'SHA-256', length: 256 },
+    false,
+    ['sign']
+  );
+}
+
+export async function hashPassword(env: Env, password: string): Promise<string> {
+  const iterations = pbkdf2Target(env);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await pbkdf2(password, salt, iterations);
+  const mac = await crypto.subtle.sign('HMAC', await pepperKey(await appSecret(env)), key);
+  return `pbkdf2mac$${iterations}$${b64.encode(salt)}$${b64.encode(new Uint8Array(mac))}`;
+}
+
+// worth re-hashing: anything that is not the current peppered form at the
+// current iteration floor (ancient plain hashes, low-iteration hashes)
+export function needsRehash(stored: string, env?: Env): boolean {
+  try {
+    const [scheme, iterStr] = stored.split('$');
+    if (scheme !== 'pbkdf2mac') return true;
+    return (parseInt(iterStr, 10) || 0) < pbkdf2Target(env);
+  } catch {
+    return false;
+  }
+}
+
+export async function verifyPassword(env: Env, password: string, stored: string): Promise<boolean> {
   try {
     const [scheme, iterStr, saltB64, hashB64] = stored.split('$');
-    if (scheme !== 'pbkdf2') return false;
+    if (scheme !== 'pbkdf2' && scheme !== 'pbkdf2mac') return false;
     const salt = b64.decode(saltB64);
     const key = await pbkdf2(password, salt, parseInt(iterStr, 10));
-    // timing-safe-ish compare
-    const a = b64.encode(key);
+    // peppered scheme: the PBKDF2 output never touches the database — the
+    // stored value is its HMAC under the app secret
+    let a: string;
+    if (scheme === 'pbkdf2mac') {
+      const mac = await crypto.subtle.sign('HMAC', await pepperKey(await appSecret(env)), key);
+      a = b64.encode(new Uint8Array(mac));
+    } else {
+      a = b64.encode(key);
+    }
     if (a.length !== hashB64.length) return false;
     let diff = 0;
     for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ hashB64.charCodeAt(i);

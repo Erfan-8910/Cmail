@@ -78,7 +78,7 @@ Five steps. No SQL, no folder uploads — only your browser and the Cloudflare d
 
 - **Workers & Pages → Create → Workers → Create Worker**
 - Name it `cmail` and **Deploy** once with the default code.
-- Click **Edit code**, delete the default code, paste the full content of the prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.3/worker.js) and **Deploy**.
+- Click **Edit code**, delete the default code, paste the full content of the prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.0/worker.js) and **Deploy**.
 
 **3) The only binding you need: D1**
 
@@ -177,7 +177,7 @@ Security is taken seriously: passwords are hashed with PBKDF2-SHA256 (100k itera
 
 ### 🔑 If you lose your password or username
 
-No hunting for docs — **the recovery guide lives right on the sign-in page**: open "Help & account recovery" under the login form and copy the ready SQL statements:
+No hunting for docs — **the recovery guide lives right on the sign-in page**: open "Help & account recovery" under the login form.
 
 1. Open [dash.cloudflare.com](https://dash.cloudflare.com) → **Storage & Databases → D1 → cmail-db** → the **Console** tab.
 2. Find your **username**:
@@ -186,20 +186,16 @@ No hunting for docs — **the recovery guide lives right on the sign-in page**: 
 SELECT username FROM users;
 ```
 
-3. **Reset the password** to the temporary value `Recover-Cmail-2026`:
+3. From the same recovery panel, copy the **freshly generated UPDATE statement and its one-off temporary password**, run the statement in the Console. Since 3.1.0 the panel generates a **new one-off password and its matching hash in your browser every time it opens** — no reusable value exists anywhere in the app, the repo or the docs.
 
-```sql
-UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c=' WHERE role = 'admin';
-```
-
-4. Sign in with your username and `Recover-Cmail-2026`, then **immediately** change the password in Settings → Security. No mail is touched — the statement only replaces the password.
+4. Sign in with your username and that temporary password, then **immediately** change the password in Settings → Security. No mail is touched — the statement only replaces the password.
 
 > ⚠️ **Never run `DELETE FROM users`** — deleting the user cascades and wipes all of their inboxes and mail. The UPDATE above is all you need, and change the temporary password right away.
 
-> ⚠️ **Terminal users — mind the shell.** The hash contains `$` characters. Pasting the command in **double quotes** lets bash/zsh silently expand them and store a corrupt hash (`pbkdf2$100000$…` becomes `pbkdf200000==/c=`) — the reset then *looks* successful but sign-in still fails. Use the **D1 Console in the dashboard** (no shell involved — recommended), or wrap the command in **single quotes**:
+> ⚠️ **Terminal users — mind the shell.** The hash contains `$` characters. Pasting the command in **double quotes** lets bash/zsh silently expand them and store a corrupt hash (the hash arrives mangled) — the reset then *looks* successful but sign-in still fails. Use the **D1 Console in the dashboard** (no shell involved — recommended), or wrap the command in **single quotes**:
 >
 > ```bash
-> npx wrangler d1 execute cmail-db --remote --command 'UPDATE users SET password_hash = '"'"'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c='"'"' WHERE role = '"'"'admin'"'"''
+> npx wrangler d1 execute cmail-db --remote --command '<the very UPDATE statement from the recovery panel>'
 > ```
 >
 > …or write the SQL to a file and run `npx wrangler d1 execute cmail-db --remote --file=recover.sql` — files never touch the shell.

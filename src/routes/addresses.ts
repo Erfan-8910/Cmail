@@ -4,9 +4,13 @@ import type { Env, AppEnv, SessionUser } from '../util';
 import {
   uid, now, clean, RE_LOCAL_PART, RE_DOMAIN, randomLocalPart, getSetting,
 } from '../util';
-import { requireUser, requireOwner, requireAdmin } from '../auth';
+import { requireUser, requireOwner, requireAdmin, blockSuspendedShare } from '../auth';
 
 const app = new Hono<AppEnv>();
+
+// a suspended share (manual freeze, or every mailbox unassigned) is frozen at
+// the API itself — see blockSuspendedShare in src/auth.ts
+app.use('*', blockSuspendedShare);
 
 // ---------- domains ----------
 
@@ -190,7 +194,10 @@ app.get('/', requireUser, async (c) => {
     : [];
   const { results } = guestIds.length
     ? await c.env.DB.prepare(
-      `SELECT a.id, a.address, a.label, a.kind, a.expires_at, a.forward_to, a.notes, a.created_at, a.last_mail_at, d.name AS domain,
+      // guest columns only — the owner's forward_to and private notes of the
+      // mailbox row are admin business and never cross the share boundary
+      // (v3.1.0: devtools-visible field leak closed)
+      `SELECT a.id, a.address, a.label, a.kind, a.expires_at, a.created_at, a.last_mail_at, d.name AS domain,
          (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id AND e.is_read = 0) AS unread,
          (SELECT COUNT(*) FROM emails e WHERE e.address_id = a.id) AS total
        FROM addresses a LEFT JOIN domains d ON d.id = a.domain_id

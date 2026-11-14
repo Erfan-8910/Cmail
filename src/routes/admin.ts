@@ -1,7 +1,7 @@
 // Cmail — admin: overview, users, settings, deep health report
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
-import { uid, now, clean, getSettings, setSetting, hashPassword, passwordStrong, RE_LOCAL_PART, randomLocalPart } from '../util';
+import { uid, now, clean, getSettings, setSetting, hashPassword, passwordStrong, sealText, RE_LOCAL_PART, randomLocalPart } from '../util';
 import { requireAdmin, tokenFrom } from '../auth';
 import { testProvider } from '../emailout';
 import { TABLES, EXPECTED } from '../tables';
@@ -40,16 +40,20 @@ app.get('/users', requireAdmin, async (c) => {
 });
 
 app.patch('/users/:id', requireAdmin, async (c) => {
+  const me = c.get('user') as { id: string };
   const id = c.req.param('id');
   const body = await c.req.json<{ role?: string; password?: string; display_name?: string }>().catch(() => null);
   const row = await c.env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(id).first();
   if (!row) return c.json({ ok: false, error: 'not_found' }, 404);
+  // v3.1.0: nobody edits their own role — a demoted self (or a promoted
+  // accident) is how panels lose their only admin
+  if (body?.role !== undefined && id === me.id) return c.json({ ok: false, error: 'cannot_change_own_role' }, 400);
   if (body?.role && ['admin', 'user'].includes(body.role)) {
     await c.env.DB.prepare('UPDATE users SET role = ? WHERE id = ?').bind(body.role, id).run();
   }
   if (body?.password) {
     if (!passwordStrong(body.password)) return c.json({ ok: false, error: 'weak_password' }, 400);
-    await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(await hashPassword(body.password), id).run();
+    await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(await hashPassword(c.env, body.password), id).run();
     await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id).run();
   }
   if (body?.display_name !== undefined) await c.env.DB.prepare('UPDATE users SET display_name = ? WHERE id = ?').bind(clean(body.display_name, 60) || null, id).run();
@@ -116,7 +120,13 @@ app.put('/settings', requireAdmin, async (c) => {
     const provider = String(body.sending_provider);
     if (['none', 'brevo', 'resend'].includes(provider)) await setSetting(c.env, 'sending_provider', provider);
   }
-  if (body.sending_api_key) await setSetting(c.env, 'sending_api_key', clean(String(body.sending_api_key), 200));
+  if (body.sending_api_key) {
+    // v3.1.0: the provider key is sealed (AES-GCM, the TOTP vault's cipher)
+    // before it touches D1 — at rest it is ciphertext, never the raw secret.
+    // Idempotent: an already-sealed value is stored as-is.
+    const key = clean(String(body.sending_api_key), 400);
+    await setSetting(c.env, 'sending_api_key', key.startsWith('v1.') ? key : await sealText(c.env, key));
+  }
   if (body.sending_from_email !== undefined) await setSetting(c.env, 'sending_from_email', clean(String(body.sending_from_email), 120));
   if (body.sending_from_name !== undefined) await setSetting(c.env, 'sending_from_name', clean(String(body.sending_from_name), 60) || 'Cmail');
 

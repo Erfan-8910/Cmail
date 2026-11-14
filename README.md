@@ -107,12 +107,29 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 3.0.3 — the sign-in loop, dead at the root
+## What's new in 3.1.0 — the security release: nothing left to cheat
+
+Users found it, and they were right: **too much of the security was a performance.** A credential the admin suspended could still read its mailboxes through the API; the sign-in page carried a permanent recovery password readable by anyone who opened devtools; the password bar was a client-side meter with an 8-character server shrug. 3.1.0 moves every lock to the server and hardens what a server lock alone can't:
+
+- **The permanent recovery password is dead.** Older builds printed one global temporary password (and its ready-made hash) in the login page's recovery panel and the docs — `inspect` on the public sign-in page was enough to read it. The panel now **generates a fresh one-off password and its matching PBKDF2 hash in your browser every time it opens** — nothing reusable exists anywhere in the app, the repo or the docs, and the server accepts the browser-made hash seamlessly (then silently upgrades it, see below).
+- **Every hash is peppered now.** Cloudflare hard-caps PBKDF2 at 100,000 iterations — verified live against a real deployment — so the honest upgrade is a **PEPPER**: the PBKDF2 output is HMAC'd with a key derived from `APP_SECRET`, which lives in Worker Secrets, not the database. A leaked D1 alone can no longer verify a single password guess. Legacy hashes still verify, and every successful sign-in transparently re-hashes them to the peppered form — one login at a time, no migration, no downtime.
+- **The password bar is server-owned.** Length 8+, letters and digits required (Unicode-aware — Persian passphrases pass exactly like Latin ones), a denylist of top-common passwords (including the old recovery value), no eight-of-a-character junk. The client meter is only a mirror; every password-setting route — first admin, panel change, admin reset, share credentials — runs the same server rule.
+- **A suspended share is suspended for real.** The admin's freeze used to be a client-side flag: a guest with devtools could read its mailboxes anyway. Now every data surface — mail, vault, folders, addresses, send — answers `403 suspended_share` at the API; only `/me` (so the frozen page can speak) and logout remain.
+- **Guest windows stopped leaking.** The guest's mailbox list no longer carries the owner's `forward_to` and private notes fields; `shareCan` fails **closed** — a share session without a resolvable context grants nothing.
+- **Turning 2FA off demands the password too.** A stolen browser session alone can no longer strip the second factor; and changing the password now kills every OTHER live session of the account the moment it lands, with its own rate limit against current-password brute force.
+- **The sending API key is sealed at rest.** Stored as AES-GCM ciphertext (the TOTP vault's cipher) instead of plaintext in D1; legacy plaintext keys keep working and get sealed on the next save.
+- **The frame and the headers got armor.** Rendered emails now carry their own strict CSP (`default-src 'none'` + images/styles allowed) and lose meta-refresh entirely; the worker answers with HSTS everywhere and `frame-ancestors 'self'`; admins can no longer demote their own role.
+- **Verified end-to-end: 71/71.** A dedicated security matrix (`scripts/test-security.mjs`) proves every closed door on a real worker: weak-password rejections (including the old recovery value), legacy→peppered rehash at login, other-session kill on password change, the 2FA-off password wall, suspended-share 403s across all five surfaces, guest field-leak absence, admin role wall, sealed-at-rest key, browser-generated recovery hash compatibility, Persian password acceptance, and the new headers.
+
+<details>
+<summary><b>What 3.0.3 changed — the sign-in loop, dead at the root</b></summary>
 
 - **A correct password could still bounce you straight back to the sign-in form — issue #2, fixed for good.** The report: create your account, then the panel refuses every later sign-in as "wrong username or password", and even the SQL password reset changes nothing. The password was never wrong: on installs built through the **terminal migration chain** (`deploy.sh`, `npm run setup`, `wrangler d1 migrations apply`), the `share_links` table was missing two columns — migration 0010 handed them to the deploy script, which never ran them — and the session lookup that answers **every** signed-in request touched exactly those columns. It threw, the error was swallowed as "no user", and the panel bounced back to the login form right after a successful sign-in: an invisible loop that no password reset could ever fix. Three layers now bury it: the missing columns got their own **migration 0012**; the worker's session reader no longer **depends** on them (a two-stage lookup that works on any database shape, old or new); and the health panel's **Repair** button (plus the setup gate and `deploy.sh`'s new healing pass) adds them wherever they are still missing — verified live on a database built without the columns: account creation, sign-in, `/me`, wrong-password answers and guest logins all pass, before and after any repair.
 - **Wrong credentials now answer honestly.** On the same broken-shape databases, any failed attempt (a typo in the username, a wrong password) crashed into a raw `500 server_error` instead of a clean `wrong username or password`. The share lookup at the login door is now defensive — a drifted table degrades to the honest 401, never to a crash.
 - **The recovery script can no longer be corrupted by your shell.** The documented password-reset SQL contains `$` characters; pasted into a terminal in double quotes, bash silently expands them and stores a corrupt hash — the reset *looks* successful and sign-in still fails. The recovery guide now warns about it and ships shell-proof variants (the dashboard's D1 Console stays the recommended path, single-quotes command and `--file=` are the terminal routes).
 - **The health panel names the defect before you feel it.** A `share_links` missing its columns is flagged as `schema_outdated` with the exact column names, and Repair fixes it in one press — verified: a broken database comes out with `status: ok` and zero schema drift.
+
+</details>
 
 <details>
 <summary><b>What 3.0.2 changed — the button install, finished properly</b></summary>
@@ -263,9 +280,9 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.3/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v3.0.3:** [`CMail-v3.0.3.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.0.3/CMail-v3.0.3.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
-- The zip mirrors the v3.0.3 tag — the sign-in loop fix (issue #2) is inside; the Deploy button and a fresh clone always carry the newest installer improvements too.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v3.1.0:** [`CMail-v3.1.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.0/CMail-v3.1.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- The zip mirrors the v3.1.0 tag — the full security release (peppered hashes, server-owned password bar, the frozen-share lock) is inside; the Deploy button and a fresh clone always carry the newest of everything.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 
