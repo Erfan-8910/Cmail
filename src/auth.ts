@@ -43,13 +43,31 @@ export async function getUserFromToken(env: Env, token: string | undefined): Pro
   //  swallowed it as "no user" and the panel bounced straight back to the
   //  login form right after a successful sign-in — the password was fine,
   //  the schema was not.)
+  //  v3.1.1: locked_at rides along — the padlock's state is the SESSION's,
+  //  enforced here on every request, never a client-side flag. Databases
+  //  upgraded in place answer WITHOUT the column until migration 0013 (or
+  //  the heal pass) adds it — the fallback below keeps every session alive
+  //  in the meantime, unlocked. A missing column must never log anyone out.
   // ---------------------------------------------------------------------------
-  const base = await env.DB.prepare(
-    `SELECT u.id, u.username, u.role, u.display_name, u.totp_enabled, s.expires_at, s.share_id
-       FROM sessions s
-       JOIN users u ON u.id = s.user_id
-      WHERE s.token = ?`
-  ).bind(token).first<{ id: string; username: string; role: string; display_name: string | null; totp_enabled: number; expires_at: number; share_id: string | null }>();
+  type BaseRow = { id: string; username: string; role: string; display_name: string | null; totp_enabled: number; expires_at: number; share_id: string | null; locked_at: number | null };
+  let base: BaseRow | null = null;
+  try {
+    base = await env.DB.prepare(
+      `SELECT u.id, u.username, u.role, u.display_name, u.totp_enabled, s.expires_at, s.share_id, s.locked_at
+         FROM sessions s
+         JOIN users u ON u.id = s.user_id
+        WHERE s.token = ?`
+    ).bind(token).first<BaseRow>();
+  } catch {
+    // pre-0013 database (sessions.locked_at not there yet) — the same row,
+    // the lock column read as 0: sessions keep working, nothing is locked
+    base = await env.DB.prepare(
+      `SELECT u.id, u.username, u.role, u.display_name, u.totp_enabled, s.expires_at, s.share_id, 0 AS locked_at
+         FROM sessions s
+         JOIN users u ON u.id = s.user_id
+        WHERE s.token = ?`
+    ).bind(token).first<BaseRow>() ?? null;
+  }
   if (!base) return null;
   if (base.expires_at < now()) {
     await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
@@ -157,10 +175,10 @@ export async function getUserFromToken(env: Env, token: string | undefined): Pro
       time_frozen: !!(sh.time_frozen && sh.frozen_at),
       frozen_at: sh.time_frozen && sh.frozen_at ? Number(sh.frozen_at) : null,
     };
-    return { id: base.id, username: sh.username, role: 'share', display_name: sh.label ?? sh.username, totp_enabled: 0, share };
+    return { id: base.id, username: sh.username, role: 'share', display_name: sh.label ?? sh.username, totp_enabled: 0, locked: false, share };
   }
 
-  return { id: base.id, username: base.username, role: base.role, display_name: base.display_name, totp_enabled: base.totp_enabled };
+  return { id: base.id, username: base.username, role: base.role, display_name: base.display_name, totp_enabled: base.totp_enabled, locked: !base.share_id && (base.locked_at ?? 0) > 0 };
 }
 
 export function tokenFrom(c: Context): string | undefined {

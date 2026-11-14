@@ -9,6 +9,7 @@ export const state = {
   setup: null,
   unread: 0,
   lockMode: 'totp', // what the top padlock asks for: 'totp' | 'password'
+  sessionLocked: false, // v3.1.1: the server's lock fact for THIS session
 };
 
 const BASE = ''; // same-origin
@@ -64,6 +65,12 @@ async function request(method, path, body, opts = {}) {
       // session died
       window.dispatchEvent(new CustomEvent('cmail:unauthorized'));
     }
+    // v3.1.1: the worker refused a locked session — repaint the lock at once.
+    // The server owns the locked state; the shell just mirrors it. The
+    // exempt paths (auth/setup) never carry the flag, so no loop is possible.
+    if (data?.error === 'session_locked' && !path.startsWith('/api/auth') && !path.startsWith('/api/setup')) {
+      window.dispatchEvent(new CustomEvent('cmail:locked'));
+    }
     if (!res.ok || (data && data.ok === false)) {
       const err = new Error(data?.error || `HTTP ${res.status}`);
       err.code = data?.error || 'http_error';
@@ -113,6 +120,7 @@ export function errText(e) {
     tables_missing: 'setupNeedDbToast',
     suspended_share: 'suspendedShare',
     cannot_change_own_role: 'cannotChangeOwnRole',
+    session_locked: 'lockTitle',
   };
   return map[e?.code] ? t(map[e.code]) : (e?.detail ? `${t('error')} — ${e.detail}` : t('error'));
 }

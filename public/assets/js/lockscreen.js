@@ -1,27 +1,75 @@
 // Cmail — the lock screen.
-// The padlock at the top is not a shortcut — it really locks the panel:
-// a full overlay covers everything, and the only ways back in are the
-// credential the owner chose (the second factor by default, or the panel
-// password — Settings → Security) or signing out entirely.
+//
+// v3.1.1: the padlock is the SERVER's fact, not a browser flag. Locking asks
+// the worker to stamp THIS session's row (sessions.locked_at), and from that
+// moment the worker itself refuses every data endpoint for the session —
+// mail, vault, attachments, send, everything — with 403 session_locked.
+//
+// The overlay you see is only the honest painting of a state the server
+// owns. Deleting it with the inspector reveals nothing: the panel behind it
+// is WIPED the moment the lock lands (the cmail:wipe-private event clears
+// the app root, the dialogs, the account cache), and every API the shell
+// could still call answers 403 — which re-draws this overlay instantly.
+// Clearing sessionStorage changes nothing: the server re-locks on the next
+// /me answer or the next data call, whichever comes first.
+//
+// The ways back in are the credential the owner chose (the second factor by
+// default, or the panel password — Settings → Security) or signing out
+// entirely. Both go through the worker.
 import { api, state, errText } from './api.js';
 import { t } from './i18n.js';
 import { h, clear, icon, toast, vibrate } from './ui.js';
 
-const KEY = 'cmail_locked';
+const KEY = 'cmail_locked'; // cosmetic hint only — the server row is the truth
 let overlayEl = null;
 
-export function isLocked() { return sessionStorage.getItem(KEY) === '1'; }
+// locked as far as anyone can see: the server said so (state.sessionLocked,
+// set from /me or a 403 session_locked) or the tab carries the local hint
+export function isLocked() {
+  return state.sessionLocked === true || sessionStorage.getItem(KEY) === '1';
+}
 
-export function lockNow() {
+// the panel goes dark behind the overlay: nothing sensitive stays in the DOM
+// to be found by deleting the cover. app.js owns those surfaces — it wipes
+// them when it hears this event (no circular import, one direction of truth)
+function wipeBehind() {
+  try { window.dispatchEvent(new CustomEvent('cmail:wipe-private')); } catch { /* */ }
+}
+
+// ask the worker to lock the session — the lock lands in D1 or not at all.
+// A failed call never fakes a lock: the user hears it and the panel stays.
+export async function lockNow() {
+  try {
+    await api.post('/api/auth/lock', {});
+  } catch (err) {
+    toast(errText(err), 'err');
+    return;
+  }
   sessionStorage.setItem(KEY, '1');
+  state.sessionLocked = true;
+  wipeBehind();
   render();
 }
 
-// called on boot and after every sign-in — a locked tab stays locked,
-// a guest session never sees the lock at all
+// the server said "this session is locked" (a 403 session_locked from any
+// call, or /me answering session_locked) — paint the lock over a wiped panel
+export function forceLockUI() {
+  if (overlayEl) return;
+  sessionStorage.setItem(KEY, '1');
+  state.sessionLocked = true;
+  wipeBehind();
+  render();
+}
+
+// called on boot and on every navigation — a locked tab stays locked (the
+// server's flag, then the local hint), a guest session never sees the lock
+// at all, and an unlocked session puts the overlay away
 export function maybeLock() {
-  if (isLocked() && state.user && state.user.role !== 'share') render();
-  else if (overlayEl) unlockDone();
+  if (isLocked() && state.user && state.user.role !== 'share') {
+    if (!overlayEl) { wipeBehind(); render(); }
+  } else if (overlayEl) {
+    unlockDone();
+  }
 }
 
 // what the lock asks for — the owner's choice, read from /me
@@ -70,6 +118,8 @@ function render() {
 
   out.addEventListener('click', async () => {
     await api.post('/api/auth/logout').catch(() => { });
+    sessionStorage.removeItem(KEY);
+    state.sessionLocked = false;
     unlockDone();
     state.user = null;
     location.hash = '#/login';
@@ -82,9 +132,15 @@ function render() {
     if (!value) { shake(); return; }
     btn.disabled = true;
     try {
+      // the credential check lives on the worker; only ITS yes opens the
+      // session row (locked_at = 0) — the panel repaints from that answer
       await api.post('/api/auth/verify-unlock', m === 'password' ? { mode: 'password', password: value } : { mode: 'totp', code: value });
       toast(t('lockWelcome'), 'ok', 1600);
+      sessionStorage.removeItem(KEY);
+      state.sessionLocked = false;
       unlockDone();
+      // the wiped panel comes back fresh: one clean re-render of the page
+      window.dispatchEvent(new Event('cmail:rerender'));
     } catch (err) {
       toast(errText(err), 'err');
       shake();
@@ -106,6 +162,7 @@ function render() {
 
 function unlockDone() {
   sessionStorage.removeItem(KEY);
+  state.sessionLocked = false;
   const el = overlayEl;
   overlayEl = null;
   if (el) {

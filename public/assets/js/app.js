@@ -14,7 +14,7 @@ import { renderSettings } from './views/settings.js';
 import { renderAbout } from './views/about.js';
 import { renderHelp } from './views/help.js';
 import { renderInto as renderAlerts } from './health.js';
-import { lockNow, maybeLock, isLocked } from './lockscreen.js';
+import { lockNow, maybeLock, isLocked, forceLockUI } from './lockscreen.js';
 
 const app = document.getElementById('app');
 const pillbar = document.getElementById('pillbar');
@@ -98,6 +98,15 @@ async function route() {
   // a locked panel stays locked — the overlay covers every page until the
   // credential the owner chose (or a full sign-out) answers
   maybeLock();
+
+  // v3.1.1: while the session is locked nothing renders behind the overlay —
+  // the panel was wiped (cmail:wipe-private) and data endpoints refuse at the
+  // server. The nav bars hide too: a locked panel shows the lock, nothing else.
+  if (isLocked() && state.user && state.user.role !== 'share') {
+    renderShell(page, true);
+    clear(app);
+    return;
+  }
 
   const authView = page === 'login' || page === 'status';
   renderShell(page, authView);
@@ -634,6 +643,14 @@ setInterval(async () => {
     const r = await api.get('/api/auth/me');
     state.user = r.user;
     if (r.lock_mode) state.lockMode = r.lock_mode;
+    // v3.1.1: the keepalive also carries the lock's truth — a session the
+    // server locked (another tab, an earlier answer) re-locks here even if
+    // its overlay was deleted and no data call happened to fail yet
+    if (r.session_locked !== undefined) {
+      state.sessionLocked = !!r.session_locked;
+      maybeLock();
+    }
+    if (r.session_locked) return; // locked /me carries no mailbox facts
     // the owner's toolbar may grow or lose the padlock as settings change
     refreshLockBadge();
     // the guest's island rides the freshest share facts — freeze state,
@@ -703,6 +720,22 @@ export function updateUnreadBadge() {
       location.hash = '#/login';
     }
   });
+  // v3.1.1 — the lock screen's server truth, mirrored by the shell:
+  // cmail:locked    → the worker refused a data call (403 session_locked);
+  //                   paint the lock over the wiped panel immediately
+  // cmail:wipe-private → the panel goes dark behind the lock: app root,
+  //                   dialogs, palette, island, account cache all cleared.
+  //                   Deleting the overlay afterwards reveals nothing.
+  window.addEventListener('cmail:locked', () => forceLockUI());
+  window.addEventListener('cmail:wipe-private', () => {
+    closeAllOverlays();
+    if (cmdkIsOpen()) closeCmdk();
+    closeSwitcher();
+    removeShareIsland();
+    state.addresses = [];
+    invalidateAccounts();
+    clear(app);
+  });
   window.addEventListener('cmail:rerender', () => { if (!location.hash.includes('/status')) route(); });
   window.addEventListener('cmail:unread-changed', (e) => { state.unread = e.detail ?? 0; updateUnreadBadge(); });
   window.addEventListener('hashchange', () => { console.log('[hashchange event]'); closeSwitcher(); route(); });
@@ -739,6 +772,9 @@ export function updateUnreadBadge() {
     state.user = me.user;
     state.unread = me.unread ?? 0;
     if (me.lock_mode) state.lockMode = me.lock_mode;
+    // v3.1.1: the session's lock state is the server's word — a locked tab
+    // wakes up locked, whatever its sessionStorage claimed
+    state.sessionLocked = !!me.session_locked;
   } catch { state.user = null; }
 
   if (!location.hash) location.hash = state.user ? '#/mail' : '#/login';

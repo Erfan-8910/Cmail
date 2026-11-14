@@ -154,6 +154,10 @@ export function renderLogin(root) {
   }
 
   function afterAuth() {
+    // v3.1.1: a fresh sign-in IS an unlocked session — the server row starts
+    // open, so any local lock hint from a previous session must not haunt it
+    state.sessionLocked = false;
+    sessionStorage.removeItem('cmail_locked');
     location.hash = state.setup?.ready ? '#/mail' : '#/status';
   }
 

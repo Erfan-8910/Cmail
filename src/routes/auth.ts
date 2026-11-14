@@ -15,13 +15,34 @@ import { renderSVG } from 'uqr';
 
 const app = new Hono<AppEnv>();
 
+// v3.1.1: databases upgraded in place may not carry sessions.locked_at yet
+// (migration 0013 / the heal pass add it). Rather than fail, the first lock
+// or unlock attempt heals the table itself — the same self-repair spirit the
+// health panel has had since issue #2. A duplicate-column error is silence.
+async function ensureLockColumn(env: Env): Promise<void> {
+  try {
+    await env.DB.prepare('ALTER TABLE sessions ADD COLUMN locked_at INTEGER NOT NULL DEFAULT 0').run();
+  } catch { /* column already lives there */ }
+}
+
 // current user
 app.get('/me', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
+  // v3.1.1: the lock's state rides on every /me answer — boot and the
+  // keepalive poll repaint the lock the moment the session row says so.
+  const sessionLocked = !!u.locked;
   // the lock screen reads the chosen unlock method; guests never see the lock
   let lockMode = 'totp';
   if (u.role !== 'share') {
     lockMode = (await getSetting(c.env, 'lock_mode')) === 'password' ? 'password' : 'totp';
+    // v3.1.1: a LOCKED session is answered with the bare minimum — who it
+    // belongs to and what the lock asks for. unread counts and the newest
+    // email line (sender, subject, time) stay behind the credential: a
+    // locked tab must not leak mailbox facts through the one API it can
+    // still reach.
+    if (sessionLocked) {
+      return c.json({ ok: true, user: u, unread: 0, lock_mode: lockMode, session_locked: true });
+    }
     const unread = await c.env.DB.prepare(
       'SELECT COUNT(*) AS n FROM emails WHERE user_id = ? AND is_read = 0'
     ).bind(u.id).first<{ n: number }>();
@@ -41,7 +62,7 @@ app.get('/me', requireUser, async (c) => {
         ).bind(u.id).first();
       } catch { /* never block /me */ }
     }
-    return c.json({ ok: true, user: u, unread: unread?.n ?? 0, last_email: last ?? null, lock_mode: lockMode });
+    return c.json({ ok: true, user: u, unread: unread?.n ?? 0, last_email: last ?? null, lock_mode: lockMode, session_locked: false });
   }
   // share guest: unread lives inside the shared mailboxes
   const guestAddrIds = (u.share?.address_ids?.length ? u.share.address_ids : [u.share?.address_id ?? '']).filter(Boolean);
@@ -57,7 +78,31 @@ app.get('/me', requireUser, async (c) => {
   // very next boot without waiting for the list endpoint. The flag is already
   // computed per-request inside getUserFromToken: manual suspension by the
   // admin, or no mailbox assigned to the credential anymore.
-  return c.json({ ok: true, user: u, unread: guestUnread, lock_mode: null, suspended: !!u.share?.suspended });
+  return c.json({ ok: true, user: u, unread: guestUnread, lock_mode: null, session_locked: false, suspended: !!u.share?.suspended });
+});
+
+// --------------------------------------------------------------------------
+//  v3.1.1 — the padlock, as the server sees it. The client asks to lock and
+//  the SESSION ROW carries the answer: locked_at = now(). From this moment
+//  the worker itself refuses every data endpoint for this session (see the
+//  lock gate in worker.ts) — the browser overlay is only the painting of a
+//  state the server owns. The credential question comes on the way back in
+//  (verify-unlock), exactly the mode the owner chose in Settings.
+//  Per-session by design, like a phone: locking THIS browser never locks
+//  the owner's other signed-in devices.
+// --------------------------------------------------------------------------
+app.post('/lock', requireUser, async (c) => {
+  const u = c.get('user') as SessionUser;
+  if (u.role === 'share') return c.json({ ok: false, error: 'forbidden' }, 403);
+  const token = tokenFrom(c);
+  if (!token) return c.json({ ok: false, error: 'unauthorized' }, 401);
+  await c.env.DB.prepare('UPDATE sessions SET locked_at = ? WHERE token = ? AND share_id IS NULL')
+    .bind(now(), token).run()
+    .catch(async () => {
+      await ensureLockColumn(c.env);
+      await c.env.DB.prepare('UPDATE sessions SET locked_at = ? WHERE token = ? AND share_id IS NULL').bind(now(), token).run();
+    });
+  return c.json({ ok: true, session_locked: true });
 });
 
 // step 1: password login → may ask for 2FA
@@ -286,7 +331,17 @@ app.post('/verify-unlock', requireUser, async (c) => {
       return c.json({ ok: false, error: 'invalid_credentials' }, 401);
     }
     await rateLimitClear(c.env, ip, 'unlock');
-    return c.json({ ok: true });
+    // v3.1.1: the credential opened the lock ON THE SERVER — the session
+    // row is open again, and every data endpoint answers from here on.
+    try {
+      await c.env.DB.prepare('UPDATE sessions SET locked_at = 0 WHERE token = ? AND share_id IS NULL')
+        .bind(tokenFrom(c) ?? '').run();
+    } catch {
+      await ensureLockColumn(c.env);
+      await c.env.DB.prepare('UPDATE sessions SET locked_at = 0 WHERE token = ? AND share_id IS NULL')
+        .bind(tokenFrom(c) ?? '').run();
+    }
+    return c.json({ ok: true, session_locked: false });
   }
 
   const code = (body?.code ?? '').trim();
@@ -298,7 +353,16 @@ app.post('/verify-unlock', requireUser, async (c) => {
   await rateLimitClear(c.env, ip, 'unlock');
   // a verified unlock counts as a verified moment for the grace timer
   await setSetting(c.env, `totp_last:${u.id}`, String(now()));
-  return c.json({ ok: true });
+  // v3.1.1: same as the password mode — the server opens the session row
+  try {
+    await c.env.DB.prepare('UPDATE sessions SET locked_at = 0 WHERE token = ? AND share_id IS NULL')
+      .bind(tokenFrom(c) ?? '').run();
+  } catch {
+    await ensureLockColumn(c.env);
+    await c.env.DB.prepare('UPDATE sessions SET locked_at = 0 WHERE token = ? AND share_id IS NULL')
+      .bind(tokenFrom(c) ?? '').run();
+  }
+  return c.json({ ok: true, session_locked: false });
 });
 
 // ---------- account login-2FA management ----------

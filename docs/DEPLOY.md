@@ -78,7 +78,7 @@ Five steps. No SQL, no folder uploads — only your browser and the Cloudflare d
 
 - **Workers & Pages → Create → Workers → Create Worker**
 - Name it `cmail` and **Deploy** once with the default code.
-- Click **Edit code**, delete the default code, paste the full content of the prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.0/worker.js) and **Deploy**.
+- Click **Edit code**, delete the default code, paste the full content of the prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.1/worker.js) and **Deploy**.
 
 **3) The only binding you need: D1**
 
