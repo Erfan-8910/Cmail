@@ -1,8 +1,18 @@
 // Cmail — outgoing email via HTTP providers (Brevo / Resend)
 import type { Env } from './util';
-import { getSettings } from './util';
+import { getSettings, openText } from './util';
 
 export type SendResult = { ok: true; id?: string } | { ok: false; error: string };
+
+// since v3.1.0 the provider key is stored SEALED (AES-GCM). Legacy plaintext
+// values keep working — and get sealed on the next settings save.
+async function sendingKey(env: Env, stored: string): Promise<string> {
+  if (!stored) return '';
+  if (stored.startsWith('v1.')) {
+    try { return await openText(env, stored); } catch { return ''; }
+  }
+  return stored;
+}
 
 export async function sendViaProvider(
   env: Env,
@@ -10,7 +20,7 @@ export async function sendViaProvider(
 ): Promise<SendResult> {
   const cfg = await getSettings(env, ['sending_provider', 'sending_api_key', 'sending_from_email', 'sending_from_name']);
   const provider = cfg.sending_provider ?? 'none';
-  const apiKey = cfg.sending_api_key ?? '';
+  const apiKey = await sendingKey(env, cfg.sending_api_key ?? '');
   const fromEmail = cfg.sending_from_email ?? '';
   const fromName = cfg.sending_from_name ?? 'Cmail';
 

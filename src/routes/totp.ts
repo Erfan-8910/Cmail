@@ -8,10 +8,14 @@ import { Hono } from 'hono';
 import { renderSVG } from 'uqr';
 import type { Env, AppEnv, SessionUser } from '../util';
 import { uid, now, clean, sealText, openText } from '../util';
-import { requireUser } from '../auth';
+import { requireUser, blockSuspendedShare } from '../auth';
 import { totp, totpRemaining, parseOtpauthUri, normalizeSecret, verifyTotp } from '../totp';
 
 const app = new Hono<AppEnv>();
+
+// a suspended share is frozen at the API itself (v3.1.0) — no vault reads,
+// no live codes, nothing, until the admin unsuspends
+app.use('*', blockSuspendedShare);
 
 type Entry = {
   id: string; name: string; issuer: string | null; secret_enc: string;

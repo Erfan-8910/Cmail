@@ -207,10 +207,27 @@ export async function requireOwner(c: Context, next: Next) {
   await next();
 }
 
-// permission check for share sessions — the owner always passes
+// middleware (v3.1.0): a SUSPENDED share is frozen for real — the admin pulled
+// the credential's hand. The shell still answers /api/auth/me (so the frozen
+// page can paint its honest message) and /api/auth/logout, but every data
+// surface — mail, vault, folders, addresses, send — refuses at the API itself.
+// Before this, suspension was a client-side flag: a guest with devtools could
+// read its mailboxes anyway. Not anymore.
+export async function blockSuspendedShare(c: Context, next: Next) {
+  const user = c.get('user') as SessionUser | null;
+  if (user?.role === 'share' && user.share?.suspended) {
+    return c.json({ ok: false, error: 'suspended_share' }, 403);
+  }
+  await next();
+}
+
+// permission check for share sessions — the owner always passes.
+// Fail-CLOSED (v3.1.0): a share session without a resolvable share context
+// grants NOTHING — the safe default, never the permissive one.
 export function shareCan(u: SessionUser | null | undefined, perm: string): boolean {
   if (!u) return false;
-  if (u.role !== 'share' || !u.share) return true;
+  if (u.role !== 'share') return true;
+  if (!u.share) return false;
   return u.share.perms.includes(perm);
 }
 

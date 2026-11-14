@@ -3,7 +3,7 @@
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
 import {
-  usernameValid, passwordStrong, hashPassword, verifyPassword, uid, now,
+  usernameValid, passwordStrong, hashPassword, verifyPassword, needsRehash, uid, now,
   getSetting, setSetting, sealText, openText, randomToken, shareSuspended, shareExpired,
 } from '../util';
 import {
@@ -77,7 +77,7 @@ app.post('/login', async (c) => {
     : await c.env.DB.prepare('SELECT id, username, role, password_hash, totp_enabled FROM users ORDER BY created_at LIMIT 1')
         .first<{ id: string; username: string; role: string; password_hash: string; totp_enabled: number }>();
 
-  if (!user || !(await verifyPassword(password, user.password_hash))) {
+  if (!user || !(await verifyPassword(c.env, password, user.password_hash))) {
     // not the owner — maybe a share guest. The same login form answers both:
     // the credential is looked up in share_links too, and a match opens the
     // shared mailboxes with exactly the permissions the admin handed out.
@@ -93,7 +93,13 @@ app.post('/login', async (c) => {
       } catch {
         sh = null; // share table missing or drifted — treat as "no share match"
       }
-      if (sh && !sh.revoked_at && !shareExpired(sh) && (await verifyPassword(password, sh.password_hash))) {
+      if (sh && !sh.revoked_at && !shareExpired(sh) && (await verifyPassword(c.env, password, sh.password_hash))) {
+        // v3.1.0: a legacy share hash (pre-300k iterations) quietly climbs to
+        // the current strength — the guest never notices, the hash gets harder
+        if (needsRehash(sh.password_hash, c.env)) {
+          try { await c.env.DB.prepare('UPDATE share_links SET password_hash = ? WHERE id = ?')
+            .bind(await hashPassword(c.env, password), sh.id).run(); } catch { /* never block the sign-in */ }
+        }
         // the device cap is enforced at the door: too many live browsers for
         // this credential → the newest is refused, not the oldest kicked
         const maxDevices = Number(sh.max_devices ?? 0) || 0;
@@ -157,6 +163,14 @@ app.post('/login', async (c) => {
   }
 
   await rateLimitClear(c.env, ip, 'login');
+
+  // v3.1.0: a hash stored under the old 100k floor silently upgrades to the
+  // current PBKDF2 strength the moment its owner signs in — every login
+  // leaves the stored hash at least as strong as the policy demands
+  if (needsRehash(user.password_hash, c.env)) {
+    try { await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+      .bind(await hashPassword(c.env, password), user.id).run(); } catch { /* never block the sign-in */ }
+  }
 
   const userOut = () => ({ id: user.id, username: user.username, role: user.role, totp_enabled: user.totp_enabled ? 1 : 0 });
 
@@ -226,17 +240,27 @@ app.post('/logout', async (c) => {
   return c.json({ ok: true });
 });
 
-// change password (the owner only — a guest never touches the panel password)
+// change password (the owner only — a guest never touches the panel password).
+// v3.1.0: rate limited like a login, and every OTHER session dies with it —
+// a stolen browser that was not the one making the change is locked out the
+// moment the password moves.
 app.post('/password', requireOwner, async (c) => {
+  const ip = clientIp(c);
+  if (!(await rateLimit(c.env, ip, 'pwchange', 10))) return c.json({ ok: false, error: 'rate_limited' }, 429);
   const u = c.get('user') as SessionUser;
   const body = await c.req.json<{ current?: string; next?: string }>().catch(() => null);
   const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?').bind(u.id).first<{ password_hash: string }>();
-  if (!row || !(await verifyPassword(body?.current ?? '', row.password_hash))) {
+  if (!row || !(await verifyPassword(c.env, body?.current ?? '', row.password_hash))) {
     return c.json({ ok: false, error: 'invalid_credentials' }, 401);
   }
   if (!passwordStrong(body?.next ?? '')) return c.json({ ok: false, error: 'weak_password' }, 400);
   await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
-    .bind(await hashPassword(body!.next!), u.id).run();
+    .bind(await hashPassword(c.env, body!.next!), u.id).run();
+  const cur = tokenFrom(c);
+  if (cur) {
+    await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token != ?').bind(u.id, cur).run();
+  }
+  await rateLimitClear(c.env, ip, 'pwchange');
   return c.json({ ok: true });
 });
 
@@ -258,7 +282,7 @@ app.post('/verify-unlock', requireUser, async (c) => {
 
   if (mode === 'password') {
     const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?').bind(u.id).first<{ password_hash: string }>();
-    if (!row || !(await verifyPassword(body?.password ?? '', row.password_hash))) {
+    if (!row || !(await verifyPassword(c.env, body?.password ?? '', row.password_hash))) {
       return c.json({ ok: false, error: 'invalid_credentials' }, 401);
     }
     await rateLimitClear(c.env, ip, 'unlock');
@@ -315,14 +339,24 @@ app.post('/totp/qr', requireOwner, async (c) => {
 });
 
 app.post('/totp/disable', requireOwner, async (c) => {
+  const ip = clientIp(c);
+  if (!(await rateLimit(c.env, ip, 'totpdisable', 10))) return c.json({ ok: false, error: 'rate_limited' }, 429);
   const u = c.get('user') as SessionUser;
-  const body = await c.req.json<{ code?: string }>().catch(() => null);
-  const row = await c.env.DB.prepare('SELECT totp_secret FROM users WHERE id = ?').bind(u.id).first<{ totp_secret: string }>();
-  if (row?.totp_secret) {
+  const body = await c.req.json<{ code?: string; current?: string }>().catch(() => null);
+  // v3.1.0: turning 2FA OFF demands the account password as well — a session
+  // alone (a stolen browser, a borrowed laptop) can no longer silently strip
+  // the second factor away
+  const row = await c.env.DB.prepare('SELECT password_hash, totp_secret FROM users WHERE id = ?').bind(u.id)
+    .first<{ password_hash: string; totp_secret: string | null }>();
+  if (!row || !(await verifyPassword(c.env, body?.current ?? '', row.password_hash))) {
+    return c.json({ ok: false, error: 'invalid_credentials' }, 401);
+  }
+  if (row.totp_secret) {
     const secret = await openText(c.env, row.totp_secret);
     if (!(await verifyTotp(secret, (body?.code ?? '').trim()))) return c.json({ ok: false, error: 'invalid_code' }, 401);
   }
   await c.env.DB.prepare('UPDATE users SET totp_enabled = 0, totp_secret = NULL WHERE id = ?').bind(u.id).run();
+  await rateLimitClear(c.env, ip, 'totpdisable');
   return c.json({ ok: true });
 });
 

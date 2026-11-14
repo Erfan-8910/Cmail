@@ -39,7 +39,9 @@ function rnd(n, pool = ALNUM) {
   return [...a].map((b) => pool[b % pool.length]).join('');
 }
 const genUsername = () => `guest-${rnd(5)}`;
-const genPassword = () => `Cm-${rnd(4)}-${rnd(4)}-${rnd(4)}`;
+// v3.1.0: the last group always starts with a digit — the server strength bar
+// wants letters AND digits, so the dice must never roll an all-letter roll
+const genPassword = () => `Cm-${rnd(4)}-${rnd(4)}-${rnd(1, '23456789')}${rnd(3)}`;
 
 function dhms(ms) {
   if (ms <= 0) return t('expired');

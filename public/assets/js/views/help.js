@@ -1,7 +1,7 @@
 // Cmail — help / setup guide view
 import { t, lang } from '../i18n.js';
 import { h, icon } from '../ui.js';
-import { recoveryCopyLine, stepRow } from './auth.js';
+import { recoveryCopyLine, recoveryFreshBlock, stepRow } from './auth.js';
 
 export function renderHelp(root) {
   const fa = lang === 'fa';
@@ -94,9 +94,9 @@ npx wrangler deploy`);
     stepRow(2, fa ? 'برای پیدا کردن نام کاربری:' : 'To find your username:', ''),
   );
   recBody.append(recoveryCopyLine('SELECT username FROM users;'));
-  recBody.append(stepRow(3, fa ? 'برای ریست کردن رمز به مقدار موقت Recover-Cmail-2026:' : 'To reset the password to the temporary value Recover-Cmail-2026:', ''));
-  recBody.append(recoveryCopyLine("UPDATE users SET password_hash = 'pbkdf2$100000$Y21haWwtcmVjb3Zlci1zYWx0MQ==$lvVylyVdxsS9Ji19drxw9ko72vDhlyHCDf5dSIC9Z/c=' WHERE role = 'admin';"));
-  recBody.append(stepRow(4, fa ? 'حالا با همان نام کاربری و رمز Recover-Cmail-2026 وارد شو و بلافاصله از تنظیمات ← امنیت، رمز را عوض کن.' : 'Sign in with your username and Recover-Cmail-2026, then immediately change the password in Settings → Security.',
+  recBody.append(stepRow(3, fa ? 'برای ریست رمز با یک گذرواژهٔ موقتِ یک‌بارمصرف (همین لحظه در مرورگرِ تو ساخته می‌شود):' : 'To reset the password with a one-off temporary value (generated in your browser, right now):', ''));
+  recBody.append(...recoveryFreshBlock());
+  recBody.append(stepRow(4, fa ? 'با همان نام کاربری و رمز موقتی که همین پنل ساخته وارد شو و بلافاصله از تنظیمات ← امنیت، رمز را عوض کن.' : 'Sign in with your username and the temporary password this panel just generated, then immediately change the password in Settings → Security.',
     fa ? 'هیچ ایمیلی حذف نمی‌شود؛ این دستور فقط رمز را عوض می‌کند.' : 'No mail is touched; the statement only replaces the password.'));
   recBody.append(h('p', { style: { margin: '8px 0 0' } },
     fa

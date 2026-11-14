@@ -131,7 +131,7 @@ def hero(d):
 </svg>'''
 
 BADGES = [
-    ('badge-version.svg',  'version',            'v3.0.3',             '#2f9e63', '#0b0f14', '#e8f5ec'),
+    ('badge-version.svg',  'version',            'v3.1.0',             '#2f9e63', '#0b0f14', '#e8f5ec'),
     ('badge-platform.svg', 'runs on',            'Cloudflare Workers', '#c05f2a', '#0b0f14', '#fdeee4'),
     ('badge-storage.svg',  'storage',            'one D1 database',    '#2f7fb0', '#0b0f14', '#e6f2fa'),
     ('badge-license.svg',  'license',            'MIT',                '#7e5fa6', '#0b0f14', '#f1ecf9'),

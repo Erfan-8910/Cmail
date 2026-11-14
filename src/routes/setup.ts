@@ -276,7 +276,7 @@ app.post('/admin', async (c) => {
   if (!passwordStrong(password)) return c.json({ ok: false, error: 'weak_password' }, 400);
 
   const id = uid('usr_');
-  const hash = await hashPassword(password);
+  const hash = await hashPassword(c.env, password);
   await c.env.DB.prepare(
     'INSERT INTO users (id, username, password_hash, role, display_name, created_at) VALUES (?, ?, ?, ?, ?, ?)'
   ).bind(id, username, hash, 'admin', (body?.display_name ?? '').slice(0, 60) || null, now()).run();

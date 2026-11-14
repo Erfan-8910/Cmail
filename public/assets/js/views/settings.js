@@ -295,14 +295,17 @@ async function securityPane() {
 
   async function disableFlow() {
     const code = h('input', { class: 'input mono', style: { textAlign: 'center', letterSpacing: '6px', fontSize: '18px' }, inputmode: 'numeric', maxlength: '6' });
+    // v3.1.0: disabling the second factor also demands the account password —
+    // a session alone can no longer strip 2FA away
+    const pw = h('input', { class: 'input', type: 'password', autocomplete: 'current-password' });
     const m = modal({
       title: t('disable2fa'), iconName: 'shield',
-      body: [h('p', { class: 'small muted', style: { margin: 0 } }, t('totpSub')), h('div', { class: 'field' }, h('label', {}, t('totpTitle')), code)],
+      body: [h('p', { class: 'small muted', style: { margin: 0 } }, t('totpSub')), h('div', { class: 'field' }, h('label', {}, t('disable2faPw')), pw), h('div', { class: 'field' }, h('label', {}, t('totpTitle')), code)],
       footer: [
         h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('cancel')),
         h('button', { class: 'btn btn--danger', onclick: async () => {
           try {
-            await api.post('/api/auth/totp/disable', { code: code.value.trim() });
+            await api.post('/api/auth/totp/disable', { code: code.value.trim(), current: pw.value });
             toast(t('saved'), 'ok');
             m.close();
             state.user.totp_enabled = 0;
