@@ -1,4 +1,4 @@
-// Cmail — v3.1.0 security E2E: prove every "bypass via devtools" report is dead.
+// Cmail — v3.1.1 security E2E: prove every "bypass via devtools" report is dead.
 // Run against a FRESH wrangler dev on :8787 (local D1 wiped first).
 // Prints PASS/FAIL per check; exits non-zero on any failure.
 import { execSync } from 'node:child_process';
@@ -250,7 +250,60 @@ const backLogin = await req('POST', '/api/auth/login', { username: 'erfan', pass
 ok('final login works', backLogin.data?.ok === true, JSON.stringify(backLogin.data).slice(0, 80));
 cookie = cookieOf(backLogin);
 
-// ---------- phase 10: headers ----------
+// ---------- phase 10: the lock is the SERVER's fact (v3.1.1) ----------
+// The report this phase kills: "the two-step password can be bypassed with
+// inspect — I deleted the element and walked in without a password". The
+// locked state now lives in the SESSION ROW; the worker refuses the data
+// itself. No browser edit can change that row.
+const lockB = await req('POST', '/api/auth/login', { username: 'erfan', password: PW3 }, '');
+const cookieB = cookieOf(lockB);
+ok('second session alive for the per-session lock test', !!cookieB);
+
+const lk = await req('POST', '/api/auth/lock', {}, cookie);
+ok('padlock lands on the SESSION ROW', lk.data?.ok === true && lk.data?.session_locked === true, JSON.stringify(lk.data));
+ok('the row really carries locked_at > 0', (d1(`SELECT locked_at FROM sessions WHERE token = '${cookie.split('=')[1]}'`)[0]?.locked_at ?? 0) > 0, '');
+
+const lkMail = await req('GET', '/api/emails', null, cookie);
+ok('LOCKED session: mail refuses (403 session_locked)', lkMail.status === 403 && lkMail.data?.error === 'session_locked', `${lkMail.status} ${JSON.stringify(lkMail.data)}`);
+const lkVault = await req('GET', '/api/totp', null, cookie);
+ok('LOCKED session: vault refuses', lkVault.status === 403 && lkVault.data?.error === 'session_locked', `got ${lkVault.status}`);
+const lkAddr = await req('GET', '/api/addresses', null, cookie);
+ok('LOCKED session: addresses refuse', lkAddr.status === 403, `got ${lkAddr.status}`);
+const lkAdmin = await req('GET', '/api/admin/overview', null, cookie);
+ok('LOCKED session: admin refuses', lkAdmin.status === 403, `got ${lkAdmin.status}`);
+const lkSend = await req('POST', '/api/emails/send', { to: 'x@y.zz', subject: 's', text: 'hi' }, cookie);
+ok('LOCKED session: send refuses', lkSend.status === 403, `got ${lkSend.status}`);
+const lkMe = await req('GET', '/api/auth/me', null, cookie);
+ok('LOCKED session: /me answers with the lock fact', lkMe.data?.session_locked === true, JSON.stringify(lkMe.data).slice(0, 120));
+ok('LOCKED session: /me leaks NO mailbox facts', lkMe.data?.last_email === undefined && lkMe.data?.unread === 0, JSON.stringify(lkMe.data).slice(0, 160));
+const lkStatus = await req('GET', '/api/setup/status', null, cookie);
+ok('LOCKED session: setup status still reachable', lkStatus.status === 200, `got ${lkStatus.status}`);
+const lkOther = await req('GET', '/api/emails', null, cookieB);
+ok('locking THIS browser never locks the other session', lkOther.data?.ok === true, `got ${lkOther.status}`);
+
+const uBad = await req('POST', '/api/auth/verify-unlock', { mode: 'password', password: 'Wrong-Try-99' }, cookie);
+ok('unlock with wrong password → 401, still locked', uBad.status === 401, JSON.stringify(uBad.data));
+const uStill = await req('GET', '/api/emails', null, cookie);
+ok('still locked after the failed credential', uStill.status === 403, `got ${uStill.status}`);
+const uOk = await req('POST', '/api/auth/verify-unlock', { mode: 'password', password: PW3 }, cookie);
+ok('unlock with the right password opens the session', uOk.data?.ok === true && uOk.data?.session_locked === false, JSON.stringify(uOk.data));
+const uMail = await req('GET', '/api/emails', null, cookie);
+ok('data flows again after the credential', uMail.data?.ok === true, `got ${uMail.status}`);
+ok('the session row is open again', (d1(`SELECT locked_at FROM sessions WHERE token = '${cookie.split('=')[1]}'`)[0]?.locked_at ?? 1) === 0, '');
+
+// ---------- phase 11: cross-site writes are refused (CSRF second wall) ----------
+const evilO = await fetch(BASE + '/api/auth/lock', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://evil.example' }, body: '{}' });
+ok('cross-site write with foreign Origin refused', evilO.status === 403, `got ${evilO.status}`);
+const evilR = await fetch(BASE + '/api/auth/lock', { method: 'POST', headers: { 'content-type': 'application/json', referer: 'https://evil.example/attack' }, body: '{}' });
+ok('cross-site write with foreign Referer refused', evilR.status === 403, `got ${evilR.status}`);
+const getForeign = await fetch(BASE + '/api/emails', { headers: { origin: 'https://evil.example', cookie } });
+ok('plain GETs are not caught by the wall', getForeign.status === 200, `got ${getForeign.status}`);
+const goodO = await fetch(BASE + '/api/auth/lock', { method: 'POST', headers: { 'content-type': 'application/json', origin: BASE, cookie }, body: '{}' });
+ok('same-origin write passes the wall', goodO.status === 200, `got ${goodO.status}`);
+const reOk = await req('POST', '/api/auth/verify-unlock', { mode: 'password', password: PW3 }, cookie);
+ok('unlocked again after the CSRF drill', reOk.data?.ok === true, JSON.stringify(reOk.data));
+
+// ---------- phase 12: headers ----------
 const home = await fetch(BASE + '/');
 ok('HSTS on the shell', (home.headers.get('strict-transport-security') ?? '').includes('max-age=31536000'), home.headers.get('strict-transport-security') ?? '(none)');
 ok('frame-ancestors in shell CSP', (home.headers.get('content-security-policy') ?? '').includes("frame-ancestors 'self'"), home.headers.get('content-security-policy') ?? '(none)');
@@ -258,10 +311,11 @@ ok('X-Frame-Options kept', home.headers.get('x-frame-options') === 'SAMEORIGIN',
 const health = await fetch(BASE + '/api/health');
 ok('HSTS reaches API answers too', (health.headers.get('strict-transport-security') ?? '').length > 0, '(none)');
 
-// ---------- phase 11: mail frame hardening (static, in the built bundle) ----------
+// ---------- phase 13: mail frame hardening (static, in the built bundle) ----------
 const bundle = (await import('node:fs')).readFileSync('worker.js', 'utf8');
 ok('mail frame ships its own strict CSP', bundle.includes("default-src 'none'; img-src"), '');
 ok('meta-refresh is stripped by the sanitizer', (await import('node:fs')).readFileSync('public/assets/js/views/mail.js','utf8').includes('meta[ht'.concat('tp-equiv="refresh"]')), '');
+ok('server-enforced lock gate in the bundle', bundle.includes('session_locked'), '');
 ok('no global recovery constant in the bundle', !bundle.includes('Recover-Cmail-2026') && !bundle.includes('lvVylyVdxsS9'), '');
 ok('peppered hash scheme in the bundle', bundle.includes('pbkdf2mac'), '');
 ok('platform iteration ceiling respected (no 300k anywhere)', !bundle.includes('300000') || !bundle.includes('PBKDF2_DEFAULT = 300'), '');

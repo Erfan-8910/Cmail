@@ -239,6 +239,14 @@ export async function scheduledCleanup(env: Env): Promise<void> {
   } catch { /* a database without share tables yet */ }
   // old rate-limit rows
   await env.DB.prepare('DELETE FROM auth_attempts WHERE window_start < ?').bind(t - 3600_000).run();
+  // v3.1.1: expired 2FA pending tokens leave the settings table. The login
+  // flow already refuses them on use (their timestamp rides in the value);
+  // until now the dead rows simply lingered forever.
+  try {
+    await env.DB.prepare(
+      "DELETE FROM settings WHERE key LIKE 'pending2fa:%' AND CAST(substr(value, instr(value, '.') + 1) AS INTEGER) < ?"
+    ).bind(t).run();
+  } catch { /* hygiene only — never block the cron */ }
   // heartbeat: the health panel shows "background cleanup ran X ago"
   try {
     await env.DB.prepare("INSERT INTO settings (key, value) VALUES ('last_cron_run', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")

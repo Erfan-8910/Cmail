@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
   ua         TEXT,
-  ip         TEXT
+  ip         TEXT,
+  locked_at  INTEGER NOT NULL DEFAULT 0    -- v3.1.1: 0 = open, timestamp = the padlock locked THIS session (server-enforced)
 );
 
 -- Sliding-window rate-limit counters (per IP + route). Fail-open by design:
@@ -282,3 +283,13 @@ CREATE INDEX IF NOT EXISTS idx_shares_addr      ON share_links(address_id);
 CREATE INDEX IF NOT EXISTS idx_share_addr_addr  ON share_addresses(address_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_share   ON sessions(share_id);
 CREATE INDEX IF NOT EXISTS idx_emails_folder    ON emails(folder_id);
+
+-- ============================================================================
+--  Heal (v3.1.1) — the server-enforced lock screen
+-- ----------------------------------------------------------------------------
+--  Installs created before this release get the sessions.locked_at column
+--  here (the Setup gate / Health repair runs the same statement list as this
+--  file). On a fresh database the CREATE TABLE already carries the column,
+--  so this ALTER is skipped harmlessly as "duplicate column".
+-- ============================================================================
+ALTER TABLE sessions ADD COLUMN locked_at INTEGER NOT NULL DEFAULT 0;

@@ -107,7 +107,20 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 3.1.0 — the security release: nothing left to cheat
+## What's new in 3.1.1 — the padlock is the server's, not a prop
+
+The follow-up report to 3.1.0 was specific and honest: **the panel lock (the two-step password) could still be walked around** — right-click, delete the overlay element in the inspector, and the panel opened without any password. True: 3.1.0 verified the unlock credential on the server, but the *locked state itself* was still a browser flag — the server never knew the session was locked, so it kept answering every data call behind that deleted overlay. 3.1.1 moves the lock itself into the server:
+
+- **The locked state lives in the session row.** Pressing the padlock now stamps `sessions.locked_at` in D1 — and from that moment **the worker itself refuses every data endpoint** for that session: mail, vault codes, attachments, folders, addresses, admin, send — all answer `403 session_locked`. Only the surfaces the lock needs stay open: `/me` (so the lock can repaint), `/lock` (idempotent), `verify-unlock`, logout, the public setup status and the health probe. Deleting the overlay, clearing sessionStorage, editing JS in the inspector — nothing in the browser can change a D1 row: the data simply never leaves the worker.
+- **The panel behind the overlay is wiped.** Locking clears the app root, the open dialogs, the command palette, the account cache — there is no mail list, no opened letter, no vault code sitting behind the cover to be found by deleting it. Unlocking (server-verified credential) re-renders the page fresh.
+- **A locked `/me` leaks nothing.** The one API a locked session can still reach now answers only who it belongs to and what the lock asks for — unread counts and the newest-email line (sender, subject, time) stay behind the credential.
+- **It locks like a phone: per session.** Locking this browser never locks the owner's other signed-in devices; each session row carries its own flag, and any tab that somehow sheds its overlay gets re-locked by the server's next word (the 20-second keepalive, or the next data call that answers `session_locked`).
+- **A second wall against cross-site writes.** Every state-changing API call now checks its `Origin`/`Referer` against the request host — a forged cross-site POST that somehow carried the cookie (old browsers, Lax quirks) is refused before it runs. SameSite=Lax remains the first wall; this is the second.
+- **Housekeeping:** expired 2FA pending tokens are swept by the hourly cron instead of lingering forever.
+- **Verified end-to-end: 94/94.** The security matrix now proves the lock itself on a real worker: the session row really carries the lock, every data surface refuses while locked (mail, vault, addresses, admin, send), a locked `/me` leaks no mailbox facts, the *other* session keeps working, a wrong unlock credential keeps the lock, the right one opens it, foreign `Origin`/`Referer` writes are refused, same-origin writes pass — plus all 71 checks of the 3.1.0 matrix, still green.
+
+<details>
+<summary><b>What 3.1.0 changed — the security release: nothing left to cheat</b></summary>
 
 Users found it, and they were right: **too much of the security was a performance.** A credential the admin suspended could still read its mailboxes through the API; the sign-in page carried a permanent recovery password readable by anyone who opened devtools; the password bar was a client-side meter with an 8-character server shrug. 3.1.0 moves every lock to the server and hardens what a server lock alone can't:
 
@@ -120,6 +133,8 @@ Users found it, and they were right: **too much of the security was a performanc
 - **The sending API key is sealed at rest.** Stored as AES-GCM ciphertext (the TOTP vault's cipher) instead of plaintext in D1; legacy plaintext keys keep working and get sealed on the next save.
 - **The frame and the headers got armor.** Rendered emails now carry their own strict CSP (`default-src 'none'` + images/styles allowed) and lose meta-refresh entirely; the worker answers with HSTS everywhere and `frame-ancestors 'self'`; admins can no longer demote their own role.
 - **Verified end-to-end: 71/71.** A dedicated security matrix (`scripts/test-security.mjs`) proves every closed door on a real worker: weak-password rejections (including the old recovery value), legacy→peppered rehash at login, other-session kill on password change, the 2FA-off password wall, suspended-share 403s across all five surfaces, guest field-leak absence, admin role wall, sealed-at-rest key, browser-generated recovery hash compatibility, Persian password acceptance, and the new headers.
+
+</details>
 
 <details>
 <summary><b>What 3.0.3 changed — the sign-in loop, dead at the root</b></summary>
@@ -280,9 +295,9 @@ Users found it, and they were right: **too much of the security was a performanc
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v3.1.0:** [`CMail-v3.1.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.0/CMail-v3.1.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
-- The zip mirrors the v3.1.0 tag — the full security release (peppered hashes, server-owned password bar, the frozen-share lock) is inside; the Deploy button and a fresh clone always carry the newest of everything.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.1/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v3.1.1:** [`CMail-v3.1.1.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.1/CMail-v3.1.1.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- The zip mirrors the v3.1.1 tag — the full security release (the server-owned padlock, peppered hashes, server-owned password bar, the frozen-share lock) is inside; the Deploy button and a fresh clone always carry the newest of everything.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 

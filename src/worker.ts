@@ -4,7 +4,7 @@
 // serves its own interface, so deployment needs nothing but this file
 // and one D1 binding).
 import { Hono } from 'hono';
-import type { Env, AppEnv } from './util';
+import type { Env, AppEnv, SessionUser } from './util';
 import { attachUser } from './auth';
 import { handleEmail, scheduledCleanup } from './emailin';
 import { ASSET_FILES } from './generated/assets';
@@ -94,6 +94,59 @@ app.get('/assets/*', (c) => {
 
 // ---------- api ----------
 app.use('/api/*', attachUser);
+
+// v3.1.1 — CSRF defense in depth. The session cookie is SameSite=Lax (which
+// already keeps cross-site POSTs from carrying it in every modern browser);
+// this check is the second wall: a browser that DID attach the cookie to a
+// cross-site write (old browser, Lax-plus-GET quirks) still fails here,
+// because its Origin/Referer names another site. Non-browser clients (curl,
+// scripts with Bearer tokens) send neither header and walk through.
+app.use('/api/*', async (c, next) => {
+  const m = c.req.method.toUpperCase();
+  if (m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS') {
+    const src = c.req.header('Origin') || c.req.header('Referer');
+    if (src) {
+      try {
+        if (new URL(src).host !== new URL(c.req.url).host) {
+          return c.json({ ok: false, error: 'forbidden' }, 403);
+        }
+      } catch {
+        return c.json({ ok: false, error: 'forbidden' }, 403);
+      }
+    }
+  }
+  await next();
+});
+
+// v3.1.1 — THE LOCK IS THE SERVER'S. When the session row carries
+// locked_at > 0, every data endpoint refuses (403 session_locked) — mail,
+// vault codes, attachments, send, folders, addresses, admin, shares. Only
+// the surfaces the lock screen itself needs stay open:
+//   /api/auth/me            → the boot check that re-draws the lock
+//   /api/auth/lock          → idempotent re-lock (never turns a lock off)
+//   /api/auth/verify-unlock → the credential check that turns it off
+//   /api/auth/logout        → the way out
+//   /api/setup/*            → public pre-auth bootstrap, no user data
+//   /api/health             → the liveness probe
+// Deleting the overlay, clearing sessionStorage, editing JS — nothing in the
+// browser changes the session row: the data simply never leaves the worker.
+const LOCK_EXEMPT = [
+  '/api/auth/me',
+  '/api/auth/lock',
+  '/api/auth/verify-unlock',
+  '/api/auth/logout',
+  '/api/health',
+];
+app.use('/api/*', async (c, next) => {
+  const u = c.get('user') as SessionUser | null;
+  if (u?.locked) {
+    const p = c.req.path;
+    const exempt = LOCK_EXEMPT.includes(p) || p.startsWith('/api/setup/');
+    if (!exempt) return c.json({ ok: false, error: 'session_locked' }, 403);
+  }
+  await next();
+});
+
 app.use('/api/*', async (c, next) => {
   await next();
   c.header('Cache-Control', 'no-store');

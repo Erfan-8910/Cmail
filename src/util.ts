@@ -41,6 +41,10 @@ export type SessionUser = {
   role: string;
   display_name: string | null;
   totp_enabled: number;
+  // v3.1.1 — the padlock is a SERVER fact now: true when THIS session row
+  // carries locked_at > 0. The middleware in worker.ts refuses every data
+  // endpoint for a locked session; share guests never carry the flag.
+  locked?: boolean;
   share?: ShareInfo;
 };
 
