@@ -107,231 +107,213 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 3.1.3 — the last step goes green, and a spent code stays spent
+## What's new in 3.1.3
 
-**This release started with one red X.** You press Deploy, everything sails like the wind — and at the very last step an error jumps out that points nobody anywhere. We walked the same road end to end, and the truth turned out to be lovely: nothing was broken; **the place was simply full.** Cloudflare's free plan holds **10 D1 databases per account**, and every abandoned test and half-finished install had quietly reserved a seat. So 3.1.3 replaced that dead end with a friendly signpost:
+The report that built this release was specific: the last step of the Deploy button failed with an error that pointed nowhere. Replaying the whole pipeline from a fresh clone showed nothing in Cmail was broken — the account had simply run out of room. Cloudflare's free plan allows 10 D1 databases per account, and leftover test databases had quietly filled it. 3.1.3 turns that dead end into a clear message:
 
-- **The installer talks like a person now.** When the account is out of room it says exactly that, in plain words, and lays the four-step map at your feet: Dashboard → Storage & Databases → D1 → delete a database you honestly retired, run the install again. Goodbye to `System limit reached` at the bottom of a red log.
-- **It checks before it hopes.** The same wall is caught in step one — not at the finish line of a multi-minute install.
-- **A side door for stubborn setups:** `CMAIL_D1_ID=<id>` points the installer straight at the database id you copied from the dashboard.
-- **And to prove it, the whole button pipeline was replayed from scratch** — fresh clone, clean install, a live healthy worker at the other end. Green.
+- The installer detects the quota in step one, not after minutes of work, and explains the fix in plain words: Dashboard → Storage & Databases → D1 → delete a database you honestly no longer use, then run the install again.
+- `CMAIL_D1_ID=<id>` skips database discovery entirely and points the installer at an id copied from the dashboard.
+- `deploy.sh` got the same friendlier failure text.
 
-**The setup screen learned to sit up straight on phones.** The report was visual and exact: on a 320px display the D1 inspector's rows scattered — the «not built» tag, the table name and the Build button each slid onto their own line, and the whole list read like a pile of loose symbols. Now **every table is one tidy line at any width**: icon, name, status — and on narrow screens the Build button folds itself into a plus glyph to make room (the full label returns the moment it fits). Verified from 320 to 1280 pixels, Persian and English, dark and daylight.
+A UI fix grew out of the same report: on a 320px screen the setup screen's D1 inspector was falling apart — the "not built" tag, the table name and the Build button each slid onto their own line. The rows are rebuilt: at any width every table reads as one line (icon, name, status), and on narrow screens the Build button compresses to a + glyph, with the full label returning when it fits. Checked at 320/360/390/1280px in both languages and themes, plus a full sweep of every view at 320px — no overflow anywhere.
 
-**And security went after the one-time codes themselves:**
+Security work this time targets the one-time codes themselves:
 
-- **A spent code stays spent.** Each TOTP code opens one door exactly once — if that code is intercepted on the way, it can never be replayed for a second open. And because every door keeps its own book (sign-in, unlock, 2FA-off), real life stays comfortable: a code used to unlock can still switch 2FA off seconds later — the way a human actually uses an authenticator.
-- **Every door has its own meter** — the 2FA-enable confirm included; a hijacked session can no longer hammer the six-digit space.
-- **Sign-in timing went quiet.** An unknown username and a wrong password now cost exactly the same — the clock no longer whispers which usernames exist.
-- **Attachments kept their manners:** anything a browser could execute (HTML, SVG, XML) always downloads as inert bytes — it never renders.
-- **The session cookie went Strict** — it no longer rides any cross-site navigation at all.
-- **The security matrix is now 111/111.** Eleven fresh checks prove the replay wall on a real worker: the spent code refused, the older step refused, the drifted current step accepted — and the per-door book kept.
+- **TOTP codes are single-use now.** Each door — sign-in, panel unlock, 2FA disable — tracks the last accepted step under `totp_step:<userId>:<door>` and refuses the same code twice, so an intercepted code can never be replayed. The tracking is per-door: a code used to unlock can still turn 2FA off within the same step, the way people actually work with authenticators.
+- `/totp/enable` got its own rate limit (10 per 10 min per IP), and re-enabling 2FA resets all ledgers so a fresh secret starts with a clean history.
+- Unknown usernames cost the same as wrong passwords: a decoy PBKDF2 hash is computed either way, so response timing no longer reveals which usernames exist.
+- Attachments a browser could execute (HTML, SVG, XHTML, XML) always download as `application/octet-stream` with an explicit `nosniff` — they never render.
+- The session cookie moved to SameSite=Strict; it no longer travels with cross-site navigation.
 
-*And as always, everything ships in sync: the version badge, the download links, the single-file worker and the one-click installer — all 3.1.3.*
+Tested: the security matrix stands at **111/111** on a live worker, with eleven new checks covering the replay wall — the spent code refused, the older step refused, the drifted current step accepted, and the per-door isolation kept. `tsc` clean, i18n parity 799/799. The version badge, download links, single-file worker and one-click installer all ship on 3.1.3.
 
 <details>
-<summary><b>What 3.1.2 changed — the icons sat where they belong, and the outbox got its brake</b></summary>
+<summary><b>3.1.2 — icon placement fixed, outbound-mail rate limits, COOP/CORP headers</b></summary>
 
-This release's report came from the setup-completion screen itself: **some symbols simply refused to sit in the right place and jumped straight at the user** — with a few more of the same in other sections. The three main offenders:
+The report came from the setup-completion screen itself: symbols refusing to sit where they belong. Three culprits, proven live, all fixed:
 
-- **The "Optional" tag had become a giant stretched dashed box.** In the setup screen's check rows, a broad CSS selector (`check__txt span`) meant for the row description was hijacking the little tag and turning it into a full-width block — a big empty-looking dashed rectangle under the title. The selector now scopes to the description only, and "Optional" is a small inline chip again.
-- **The "SERVER ONLINE" badge landed on top of the floating logo.** Logo and badge were both inline elements sharing one line box — on narrow screens the badge sat exactly on the wordmark. The logo is a block now and the badge owns its own line below it; the same fix went to the sign-in page's logo.
-- **The celebration confetti rained ON TOP of the card.** The confetti layer sat above everything (z-index 320) — pieces fell over titles, buttons and the "Connected" pills and read as broken elements. Confetti now falls BEHIND the app: only on the background and faintly through the glass — and it stays fully hidden under reduced motion.
+- The "Optional" tag stretched into a full-width dashed box — a broad CSS selector (`.check__txt span`) meant for the row description was hijacking the chip. The selector now scopes to the description only, and the tag is a small inline pill again.
+- The "SERVER ONLINE" badge landed on the floating logo — logo and badge were both inline elements sharing one line box, worst on phones. The logo is a block now and the badge owns its own line; the same fix went to the sign-in logo.
+- The celebration confetti rained on top of the card (z-index 320). It now falls behind the app — background only, faintly through the glass — and stays fully hidden under reduced motion.
 
-With those three fixed, the whole setup screen was re-verified on a real install: at 320px width, in both languages and both themes, none of mail, addresses, vault, domains, settings or about overflows by a single pixel anymore.
+Responsiveness got hard braces: eleven `minmax(N, 1fr)` auto-grids carry a `min(N, 100%)` guard (the health cards were pushed half off-screen on 320–360px RTL phones), long domain names ellipsize with the copy icon always visible, D1 inspector rows wrap instead of squeezing, wizard rail labels ellipsize at ≤360px, and status pills compress. Verified at 320px in both languages and both themes: zero overflow in every view.
 
-**And general responsiveness got hard braces:**
-
-- **Eleven `minmax(NNNpx, 1fr)` auto-grids now carry the `min(NNNpx, 100%)` guard.** Without it, on 320–360px phones the health cards in Settings were pushed half off-screen (RTL grid overflow) — the health, settings, about, stats, palette and shortcut grids all got the brace.
-- **Long domain names now truly ellipsize**, and the copy icon is never pushed out of the card (the name lives in its own shrinkable span).
-- D1 inspector rows wrap instead of squeezing; wizard rail labels ellipsize at ≤360px; status pills compress; the sign-in logo got its floating-animation headroom back.
-
-**And security climbed one more step, as it does every release:**
-
-- **The two outbound-mail triggers were the only unmetered ones.** `POST /api/emails/send` is now capped at **20 per 10 minutes per IP** and `POST /api/admin/test-send` at **10** — a leaked session or an over-privileged guest can no longer pump unlimited mail through the owner's Brevo/Resend account until the provider suspends it. The answer is 429; every IP owns its own clean bucket.
-- **COOP and CORP everywhere.** The two modern companions of HSTS and X-Frame-Options: the panel opens no pop-ups to or for other sites, and its resources are nobody else's to embed (COOP also cuts the cross-site tab-nabbing channels).
-- **The security matrix is now 100/100.** Six fresh checks: the send storm hits the wall exactly at 20, the test-send storm at 10, a different IP keeps its own clean bucket, and COOP/CORP ride both the shell and the API.
+And security climbed one step: `POST /api/emails/send` is capped at 20 per 10 minutes per IP, `POST /api/admin/test-send` at 10 (429, one clean bucket per IP) — a leaked session or an over-privileged guest can no longer pump unlimited mail through the owner's Brevo/Resend account. COOP and CORP headers ride every response. The security matrix stands at 100/100 (six new checks) plus all 94 checks of the 3.1.1 matrix, still green.
 
 </details>
 
 <details>
-<summary><b>What 3.1.1 changed — the padlock is the server's, not a prop</b></summary>
+<summary><b>3.1.1 — the panel lock moves to the server, plus a second CSRF wall</b></summary>
 
-The follow-up report to 3.1.0 was specific and honest: **the panel lock (the two-step password) could still be walked around** — right-click, delete the overlay element in the inspector, and the panel opened without any password. True: 3.1.0 verified the unlock credential on the server, but the *locked state itself* was still a browser flag — the server never knew the session was locked, so it kept answering every data call behind that deleted overlay. 3.1.1 moves the lock itself into the server:
+The report was exact: the panel lock could still be walked around — right-click, delete the overlay element in the inspector, and the panel opened without any password. True: 3.1.0 verified the unlock credential on the server, but the locked state itself was still a browser flag, and the server never knew the session was locked. 3.1.1 moves the lock itself into the server:
 
-- **The locked state lives in the session row.** Pressing the padlock now stamps `sessions.locked_at` in D1 — and from that moment **the worker itself refuses every data endpoint** for that session: mail, vault codes, attachments, folders, addresses, admin, send — all answer `403 session_locked`. Only the surfaces the lock needs stay open: `/me` (so the lock can repaint), `/lock` (idempotent), `verify-unlock`, logout, the public setup status and the health probe. Deleting the overlay, clearing sessionStorage, editing JS in the inspector — nothing in the browser can change a D1 row: the data simply never leaves the worker.
-- **The panel behind the overlay is wiped.** Locking clears the app root, the open dialogs, the command palette, the account cache — there is no mail list, no opened letter, no vault code sitting behind the cover to be found by deleting it. Unlocking (server-verified credential) re-renders the page fresh.
-- **A locked `/me` leaks nothing.** The one API a locked session can still reach now answers only who it belongs to and what the lock asks for — unread counts and the newest-email line (sender, subject, time) stay behind the credential.
-- **It locks like a phone: per session.** Locking this browser never locks the owner's other signed-in devices; each session row carries its own flag, and any tab that somehow sheds its overlay gets re-locked by the server's next word (the 20-second keepalive, or the next data call that answers `session_locked`).
-- **A second wall against cross-site writes.** Every state-changing API call now checks its `Origin`/`Referer` against the request host — a forged cross-site POST that somehow carried the cookie (old browsers, Lax quirks) is refused before it runs. SameSite=Lax remains the first wall; this is the second.
-- **Housekeeping:** expired 2FA pending tokens are swept by the hourly cron instead of lingering forever.
-- **Verified end-to-end: 94/94.** The security matrix now proves the lock itself on a real worker: the session row really carries the lock, every data surface refuses while locked (mail, vault, addresses, admin, send), a locked `/me` leaks no mailbox facts, the *other* session keeps working, a wrong unlock credential keeps the lock, the right one opens it, foreign `Origin`/`Referer` writes are refused, same-origin writes pass — plus all 71 checks of the 3.1.0 matrix, still green.
+- Pressing the padlock stamps `sessions.locked_at` in D1 (migration 0013), and from that moment the worker refuses every data endpoint for that session — mail, vault codes, attachments, folders, addresses, admin, send — all answer `403 session_locked`. Only the surfaces the lock needs stay open: `/me`, `/lock`, `verify-unlock`, logout, the public setup status and the health probe. Nothing inside the browser can change a D1 row: the data simply never leaves the worker.
+- Locking wipes the panel behind the overlay — the app root, open dialogs, the command palette, the account cache. There is no mail list or vault code hiding under the cover; unlocking re-renders the page fresh.
+- A locked `/me` leaks nothing: unread counts and the newest-email line stay behind the credential.
+- It locks per session. Other signed-in devices keep working, and any tab that sheds its overlay gets re-locked by the server's next word — the 20-second keepalive, or the next data call.
+- Every state-changing API call checks its `Origin`/`Referer` against the request host; a forged cross-site POST is refused before it runs.
+- Upgrade-safe: databases upgraded in place are answered without the new column until migration 0013 or the heal pass adds it, and the first lock press heals the table itself. Existing sessions are preserved. Expired 2FA pending tokens are swept by the hourly cron.
 
-</details>
-
-<details>
-<summary><b>What 3.1.0 changed — the security release: nothing left to cheat</b></summary>
-
-Users found it, and they were right: **too much of the security was a performance.** A credential the admin suspended could still read its mailboxes through the API; the sign-in page carried a permanent recovery password readable by anyone who opened devtools; the password bar was a client-side meter with an 8-character server shrug. 3.1.0 moves every lock to the server and hardens what a server lock alone can't:
-
-- **The permanent recovery password is dead.** Older builds printed one global temporary password (and its ready-made hash) in the login page's recovery panel and the docs — `inspect` on the public sign-in page was enough to read it. The panel now **generates a fresh one-off password and its matching PBKDF2 hash in your browser every time it opens** — nothing reusable exists anywhere in the app, the repo or the docs, and the server accepts the browser-made hash seamlessly (then silently upgrades it, see below).
-- **Every hash is peppered now.** Cloudflare hard-caps PBKDF2 at 100,000 iterations — verified live against a real deployment — so the honest upgrade is a **PEPPER**: the PBKDF2 output is HMAC'd with a key derived from `APP_SECRET`, which lives in Worker Secrets, not the database. A leaked D1 alone can no longer verify a single password guess. Legacy hashes still verify, and every successful sign-in transparently re-hashes them to the peppered form — one login at a time, no migration, no downtime.
-- **The password bar is server-owned.** Length 8+, letters and digits required (Unicode-aware — Persian passphrases pass exactly like Latin ones), a denylist of top-common passwords (including the old recovery value), no eight-of-a-character junk. The client meter is only a mirror; every password-setting route — first admin, panel change, admin reset, share credentials — runs the same server rule.
-- **A suspended share is suspended for real.** The admin's freeze used to be a client-side flag: a guest with devtools could read its mailboxes anyway. Now every data surface — mail, vault, folders, addresses, send — answers `403 suspended_share` at the API; only `/me` (so the frozen page can speak) and logout remain.
-- **Guest windows stopped leaking.** The guest's mailbox list no longer carries the owner's `forward_to` and private notes fields; `shareCan` fails **closed** — a share session without a resolvable context grants nothing.
-- **Turning 2FA off demands the password too.** A stolen browser session alone can no longer strip the second factor; and changing the password now kills every OTHER live session of the account the moment it lands, with its own rate limit against current-password brute force.
-- **The sending API key is sealed at rest.** Stored as AES-GCM ciphertext (the TOTP vault's cipher) instead of plaintext in D1; legacy plaintext keys keep working and get sealed on the next save.
-- **The frame and the headers got armor.** Rendered emails now carry their own strict CSP (`default-src 'none'` + images/styles allowed) and lose meta-refresh entirely; the worker answers with HSTS everywhere and `frame-ancestors 'self'`; admins can no longer demote their own role.
-- **Verified end-to-end: 71/71.** A dedicated security matrix (`scripts/test-security.mjs`) proves every closed door on a real worker: weak-password rejections (including the old recovery value), legacy→peppered rehash at login, other-session kill on password change, the 2FA-off password wall, suspended-share 403s across all five surfaces, guest field-leak absence, admin role wall, sealed-at-rest key, browser-generated recovery hash compatibility, Persian password acceptance, and the new headers.
+Security matrix: 94/94 on a real worker — 23 new checks covering the lock itself plus all 71 checks of the 3.1.0 matrix.
 
 </details>
 
 <details>
-<summary><b>What 3.0.3 changed — the sign-in loop, dead at the root</b></summary>
+<summary><b>3.1.0 — the security release: every lock moves to the server</b></summary>
 
-- **A correct password could still bounce you straight back to the sign-in form — issue #2, fixed for good.** The report: create your account, then the panel refuses every later sign-in as "wrong username or password", and even the SQL password reset changes nothing. The password was never wrong: on installs built through the **terminal migration chain** (`deploy.sh`, `npm run setup`, `wrangler d1 migrations apply`), the `share_links` table was missing two columns — migration 0010 handed them to the deploy script, which never ran them — and the session lookup that answers **every** signed-in request touched exactly those columns. It threw, the error was swallowed as "no user", and the panel bounced back to the login form right after a successful sign-in: an invisible loop that no password reset could ever fix. Three layers now bury it: the missing columns got their own **migration 0012**; the worker's session reader no longer **depends** on them (a two-stage lookup that works on any database shape, old or new); and the health panel's **Repair** button (plus the setup gate and `deploy.sh`'s new healing pass) adds them wherever they are still missing — verified live on a database built without the columns: account creation, sign-in, `/me`, wrong-password answers and guest logins all pass, before and after any repair.
-- **Wrong credentials now answer honestly.** On the same broken-shape databases, any failed attempt (a typo in the username, a wrong password) crashed into a raw `500 server_error` instead of a clean `wrong username or password`. The share lookup at the login door is now defensive — a drifted table degrades to the honest 401, never to a crash.
-- **The recovery script can no longer be corrupted by your shell.** The documented password-reset SQL contains `$` characters; pasted into a terminal in double quotes, bash silently expands them and stores a corrupt hash — the reset *looks* successful and sign-in still fails. The recovery guide now warns about it and ships shell-proof variants (the dashboard's D1 Console stays the recommended path, single-quotes command and `--file=` are the terminal routes).
-- **The health panel names the defect before you feel it.** A `share_links` missing its columns is flagged as `schema_outdated` with the exact column names, and Repair fixes it in one press — verified: a broken database comes out with `status: ok` and zero schema drift.
+Users found it, and they were right: too much of the security was client-side theater. A suspended credential could still read its mailboxes through the API; the sign-in page carried a permanent recovery password readable with devtools; the password meter lived in the browser. 3.1.0 moves every lock to the server:
 
-</details>
+- The permanent recovery password is dead. The recovery panel now generates a fresh one-off password and its matching PBKDF2 hash in your browser every time it opens — nothing reusable exists in the app, the repo or the docs.
+- Every hash is peppered: the PBKDF2 output is HMAC'd with a key derived from `APP_SECRET`, which lives in Worker Secrets — not the database. A leaked D1 alone can no longer verify a single password guess. Legacy hashes re-hash transparently at each successful sign-in.
+- The password bar is server-owned: length 8+, letters and digits required (Unicode-aware — Persian passphrases pass exactly like Latin ones), a denylist of top-common passwords, repeated-character junk rejected.
+- A suspended share is suspended for real: mail, vault, folders, addresses and send all answer `403 suspended_share`; only `/me` and logout stay open.
+- Guest windows stopped leaking (`forward_to` and private-notes fields removed) and `shareCan` fails closed.
+- Turning 2FA off demands the password; changing the password kills every other live session and carries its own rate limit.
+- The sending API key is sealed at rest as AES-GCM ciphertext; rendered emails run under their own strict CSP with meta-refresh stripped; HSTS and `frame-ancestors 'self'` everywhere; admins can no longer demote their own role.
 
-<details>
-<summary><b>What 3.0.2 changed — the button install, finished properly</b></summary>
-
-- **A button install now ends where it should: on the setup wizard.** Two separate failures shared one symptom — a fresh deploy asking for a password. Root one: the button reuses a database whose name it recognizes, so the new Worker got wired to the FIRST install's live data (real mail, real login). The deploy step now gives every install **its own database, named after its Worker** (`<worker-name>-db`), finds-or-creates it, re-binds anything that points elsewhere, and patches the working config itself — verified live: a second install came up with an empty admin table while production didn't lose a row.
-- **The Deploy step stays green even when the account is out of cron slots.** The most confusing ✗ of all was a deploy that had actually succeeded: the version uploaded, the binding was right — and then attaching the hourly cleanup cron hit the free plan's ceiling of 5 cron triggers per account (code 10072) and turned the whole step red. The resolver now catches it, deploys without the cron, and says in plain words how to attach it later.
-- **The deploy step speaks.** Its log now reads like a story: which Worker, which database is the install's own, what was found / created / re-bound, and what was patched — when something looks off, the fix is readable, not guessable.
-- **`deploy.sh` learned the same manners** — its final deploy runs through the same resolver, so terminal installs share every fix above.
+Dedicated security matrix (`scripts/test-security.mjs`): 71/71 on a real worker.
 
 </details>
 
 <details>
-<summary><b>What 3.0.1 changed — the setup gate, a deploy button that heals itself, and several installs on one account</b></summary>
+<summary><b>3.0.3 — root-causing the sign-in loop (issue #2)</b></summary>
 
-- **A fresh install always lands on the setup door.** The one real complaint after a button install — "Visit showed a sign-in page, and I never set a password" — is dead at the root. An empty database is now a state the app says out loud: until the tables exist, every route folds into the setup gate; the sign-in card stops pretending an account is already there and shows an honest **"database not ready"** panel; and asking for the admin before the schema is built earns a firm `409 tables_missing`. The **create access** door appears the moment the tables are in — and never before. (Direct links to `#/login` fold into the gate too.)
-- **The Deploy button heals itself.** The button's Deploy step used to cross itself out with error `10021` ("binding DB … must have a valid `database_id`"): the repo ships a placeholder id on purpose — no real id ever lives in a public repo — and the button only rewrites ids for resources it creates itself, so an existing same-name database is reused as-is, placeholder and all. The deploy step now runs a **self-resolving script** (`scripts/deploy-resolve.mjs`, wired as `npm run deploy` — the button pipeline adopts it automatically): it reads the binding, finds the database by name or creates it, patches the working copy of `wrangler.jsonc`, and only then hands over to wrangler. Terminal users get the same self-healing from `npm run deploy`.
-- **Several installs on one account, zero collisions.** People installing a second (or third) Cmail on one account watched their data mix together: the fixed names (worker `cmail`, database `cmail-db`) meant every install after the first either overwrote the previous Worker or bound itself to the first install's data. The installer now opens with the install's **identity**: Enter keeps the default single install (`cmail` / `cmail-db`), a typed name spins up an independent one (`CMAIL_WORKER_NAME` / `CMAIL_DB_NAME` skip the prompts for scripted installs) — and the whole identity is written into the config: worker name, database name, and a `database_id` reset to the placeholder, so the resolver always binds the database that belongs to the chosen name and a stale id can never survive a switch. **Email Routing's catch-all** can aim at any instance (`configure-email-routing.sh` takes the worker name), the deploy guide gained a whole [**Several instances on one account**](docs/DEPLOY.md#several-instances-on-one-account) section — free plan cap: 10 D1 databases — and the whole flow was verified live: the second instance came up with its own empty admin table while the production install didn't lose a single row.
+The password was never wrong. On installs built through the terminal migration chain (`deploy.sh`, `npm run setup`, `wrangler d1 migrations apply`), the `share_links` table was missing two columns (`max_devices`, `guest_note`) — migration 0010 had handed them to a deploy script that never ran — and the session lookup that answers every signed-in request touched exactly those columns. It threw, the error was swallowed as "no user", and the panel bounced back to the login form right after a successful sign-in. An invisible loop no password reset could fix.
 
-</details>
+Three layers bury it:
 
-<details>
-<summary><b>What 3.0.0 changed — sharing unleashed, two doors on the sign-in card</b></summary>
+- The columns got their own migration 0012.
+- The worker's session reader is two-stage and shape-agnostic: owner sessions never touch `share_links`, on any database shape.
+- The health panel's **Repair** button, the setup gate and a new healing pass in `deploy.sh` add the columns wherever they are still missing; a drifted table is flagged as `schema_outdated` with the exact column names.
 
-
-- **Sharing, unleashed.** The share system grows back into what it was always meant to be: one guest credential can now hold **as many mailboxes as you like** — not just one. A brand-new mailbox picker (one chip per mailbox) lives in Settings → Sharing; the guest sees exactly the mailboxes you hand over and nothing else of the account. The list, search, star, folders, notes, bulk actions, attachments and even sending (as any one of the shared addresses) all speak the new multi-mailbox world.
-- **The settings the old system had — and then some.** Every credential now carries a **simultaneous device cap** (unlimited / 1 / 2 / 3 — the newest browser politely refuses when the room is full) and a **welcome note**: a short line the guest reads the moment it lands, straight from its admin. Perms, expiry presets + exact date, custom username/password with the dice, live audit (online dot, browsers inside, last seen), kick, revoke, hard delete — all still one pane.
-- **A sign-in card with two doors.** The login page wears a slim segmented control: **My account** for the owner, **Shared access** (بخش ورود اشتراکی) for guests — a clearly marked door with its own sigil that signs a shared credential straight into its mailboxes. The welcome note pops the second a guest lands; a full device cap says so in plain words instead of a generic error.
-- **The guest panel became a Dynamic Island.** The busy explainer banner is gone. A guest now lives under one floating central pill, Apple-style: the mailbox name (or "n mailboxes"), a live D-H-M-S countdown and a single **?**. Tapping **?** morphs the island open with nothing but the essentials — labeled time remaining, the mailbox list (tap a row to copy), the admin's note if there is one, and sign-out. It floats instead of pushing your page around, shows a frozen honest number while suspended, and re-syncs itself quietly every 20 seconds without jumping under your cursor.
-- **The admin got a control room for every credential.** Each share now carries a **device list** and a **session list** — see every browser and every live session and disable any of them with one press. Username and password are always lookable again (sealed AES-256-GCM, same vault as TOTP), and **Regenerate** rolls a fresh username/password pair, optionally signing out every live guest browser in the same breath.
-- **Suspension, done properly.** A shared account with **no mailbox assigned** suspends itself instead of being deleted — assign a mailbox again and it wakes up on its own (an inbox merely empty of mail never suspends). You can suspend any credential manually and choose what its clock does: **keep counting down** or **freeze time**. The suspended guest still signs in but a frozen page answers, showing the remaining time. Deleting a mailbox that is still assigned to guests warns you first — because it leaves them too.
-- **One truth, everywhere.** A 2FA key a guest adds to a shared mailbox is the same row the admin sees — the live code is identical on both sides, and account details (code counts, mailboxes, identity) refresh together in every view. And guests no longer stumble at the vault's door: the D1 parameter-binding bug that broke every guest vault query is fixed at the root.
-- **Nothing unauthorized ever renders.** Guest permission-trimming went from "disabled" to "does not exist": no compose button, no star, no delete, no bulk selection, no settings pages, no manage-folders — and the command palette only knows what the guest may do. Hard-navigating to `#/settings` or `#/domains` folds straight back to the mail view instead of serving a 403 after the fact.
-- **Every icon audited, every glyph replaced.** The whole app's symbols went under the magnifier: the two modal icons that silently fell back to a generic mark (`folder`, `users`) now have real icons, the command palette's text arrows (↑↓) became crisp SVG chevrons that can never turn into tofu boxes, keyboard guides spell `Enter` and `Ctrl`/`⌘` in ASCII-safe keycaps, and the handful of emoji riding in titles gave way to theme-tinted SVG marks that render everywhere.
-- **A dedicated mark for Lock mode, and mascots that follow the mood.** Lock mode earned its own icon — a padlock with a spark in its keyhole — on the toolbar, the lock screen and Settings → Security. The lock screen's guard is now a **clean cutout that floats on the glass** — the white sticker plate is gone; daylight carries a soft shadow, night adds a quiet accent halo. The About ribbon wears the real **Cmail + Climind duo** — the maker's own artwork, trimmed to the two characters with an even margin — and the Climind fellow **re-tints himself into all twelve palettes** through pre-built per-palette cutouts (exact accent hues, no muddy CSS filters), while the Cmail mascot beside him stays exactly himself. The top bar's brand mark stays the classic glyph it always was: white by night, black by day.
-- **The inbox, tightened.** Unread rows now carry a slim accent bar and a faint tint (their time stamp turns accent too), selected rows glow in the mood's color, and the bulk bar springs in. The toolbar tells the truth: counters match the box you are actually in (sent · starred · a folder — not the account totals), outgoing mail no longer counts as unread, switching accounts retires a leftover selection bar, replying to your own sent mail addresses the recipient (never you), `/` jumps straight to search and `Esc` wipes the query.
-- **The send button, repositioned.** The compose footer is now a real **send row**: the send button leads it (the first thing the eye meets, RTL and LTR alike), the quiet cancel follows, the draft note trails at the far end — no more hunting a small send key in the corner. On phones it takes the full width.
-- **One file, updated end to end.** The single-file `worker.js` — the artifact every deployment path uses — is rebuilt from these sources with the version stamped **3.0.0** everywhere: the pillbar, the About page, the badge.
+Also: a failed sign-in on a drifted database now answers a clean `401 invalid_credentials` instead of a raw `500 server_error`; and the recovery script is shell-proof — the reset SQL contains `$` characters and pasting it in double quotes silently corrupts the hash, so the guide warns about it and ships single-quote and `--file=` variants. Verified with 41/41 E2E checks on a live worker.
 
 </details>
 
 <details>
-<summary><b>What 2.9.5 changed — folders on every account, scenes behind the glass</b></summary>
+<summary><b>3.0.2 — one database per install; the cron-cap deploy failure fixed</b></summary>
 
+Two separate failures shared one symptom — a fresh button install asking for a password:
 
-- **Folders on every account.** The folder rail grew a second story: create your own folders **per account** — each folder wears a color dot, holds its own counter, and never mixes two accounts' mail (the same isolation the 2FA vault follows). File a message from its row menu, file a whole selection with the bulk **Move to folder** bar, and give a folder a **sender rule** — comma-separated fragments like `news, bills` — so incoming mail from those senders files itself the moment it lands. The manager (rename, recolor, rule, delete) lives one plus-button away; deleting a folder returns its mail to the plain inbox, nothing is lost.
-- **Scenes behind the glass.** Settings → Appearance gained a **Background scene** picker: five hand-drawn stages that live behind every panel — **Green hills** (a clear nostalgic morning over soft rises, with slow-drifting clouds), **Aurora** (green-violet ribbons breathing over a starry dark), **Dusk** (a low sun sinking into warm haze), **Starry night** (a quiet field of twinkling stars) — or **No scene** for the plain room. All original art, all animated gently, all frozen the moment your system asks for reduced motion.
-- **The writing table, rebuilt.** The compose window now reads like the big clients': inline rows instead of stacked labels, a **body that grows with the message**, the sender shown as a live avatar beside the picker, mistakes said next to the field (invalid recipient, empty body) instead of shouted from a toast, a **send button with its own spinner**, **Ctrl/Command + Enter** to fire — and a **draft that saves itself** and survives a closed tab.
-- **One-click deploy.** The README now carries the official **Deploy to Cloudflare** button: press it, and Cloudflare clones the repo, provisions its own D1 database and ships the Worker — then `/setup` walks you through the rest. The terminal installer (`deploy.sh`) still does the whole job for the command-line route, and now understands both config shapes.
-- **Rapid-fire safety, extended.** Folder loads race-protect with their own sequence tokens, folder switches clear the previous account's set before the new one lands, and the drawer/status machinery only ever paints into the live view.
+- The button reused a database whose name it recognized, so the new Worker could get wired to the first install's live data. The deploy step now gives every install its own database named after its Worker (`<worker-name>-db`), finds-or-creates it, re-binds any foreign id, and patches the working config itself (database name, id, and a `CMAIL_DB_NAME` marker).
+- A deploy that had actually succeeded still went red when the account was out of cron slots — the free plan caps cron triggers at 5 per account (error 10072), and attaching the hourly cleanup cron was the last step. The resolver catches it, deploys without the cron, and says how to attach it later.
+- The database id is recoverable three ways — `wrangler d1 list`, the live Worker's own bindings, or creation — so a CI token that may create but not list still deploys.
+- The deploy log reads plainly, and `deploy.sh` runs its final deploy through the same resolver.
 
-</details>
-
-<details>
-<summary><b>What 2.9 changed — the release that rebuilds the inbox like the big clients</b></summary>
-
-- **The inbox is rebuilt from zero.** One clear **identity oval** up top — the account's face, its name and its full address with a **one-tap copy button** — then the whole mailbox in **one living card**: a toolbar with a select-all box, a refresh and a breathing auto-refresh dot, and rows that read on a single line, the way grown-up mail clients read: face · sender · subject — preview · star · time. Unread rows show a little dot where the checkbox would be; reach for the row and the checkbox takes its place. The wasted reading column is gone — the list owns the full width, and every email still opens on its own dedicated page.
-- **Loading never lies.** Any request that runs longer than a blink paints a **thin living progress bar** at the very top of the page. When the inbox's own load drags on, a status strip with a spinner and honest words slides in — even during a background refresh. A failed load says what happened and offers a retry; an empty folder, a fruitless search and a missing mailbox each get their own words instead of a blank stare.
-- **The About ribbon learned mobile manners.** On phones the Climind-W band lays itself out as a proper two-row card — mark and text up top, chip and button below — instead of crushing its text into a sliver, and its aurora stops spinning on mobile GPUs.
-- **The app finally boots exactly once.** This release exposed a silent double-boot: the versioned entry script and the bare internal imports loaded the whole shell twice — two routers racing, two hash listeners, an inbox that sometimes painted into a detached view and showed nothing. That was the real face of the “two sections open at once” bug family. Every module import now carries the same version stamp as the entry, so the app is one instance — guaranteed.
-- **Fresh animated hero, version badge and retaken screenshots** for the rebuilt inbox, switcher, palette, daylight and mobile scenes — both languages.
+Verified end-to-end, 21/21 checks: the second install came up with its own empty admin table while production didn't lose a row.
 
 </details>
 
 <details>
-<summary><b>What 2.8 changed — the release that gives switching one home</b></summary>
+<summary><b>3.0.1 — the setup gate, a self-healing Deploy button, several installs per account</b></summary>
 
-- **Switching accounts happens in exactly one place: the circle at the top.** The inbox sidebar no longer lists accounts, and the inbox header's chip is now a quiet identity plate — it states whose inbox you are in and never navigates. The folder rail under the identity card is the account's own rooms: **All · Unread · Starred · Noted**, each with a live counter, cut client-side so flips are instant and the counters are always exact.
-- **The 2FA vault is a room per account — folders included.** The account chips are gone from the vault; it always opens on the account you are in. Folders stopped being global: every folder is born bound to one account (`address_id` in the database, with a graceful migration for old installs), the folder picker only ever offers that account's groupings, and moving a key to another account releases the old account's folder automatically. One account's keys can never mix with another account's folders.
-- **The frozen badge now rides with the account everywhere it appears** — beside the temp account in the mail sidebar's identity card, in the vault's identity chip, on the add-code button — snowflake-and-padlock before the responsibility is granted, a breathing flame 🔥 after.
-- **Rapid clicking finally met its root cause.** A stale view's async continuation could reach into the fresh view's DOM through `getElementById` fallbacks and paint a page twice; every view now paints only into its own captured nodes and a stale render touches nothing. Open dialogs (and their Escape handlers), floating menus and popovers all retire the moment you navigate — a dialog can no longer haunt the next page.
-- **Settings lost the dead weight:** the “Service name” field is gone — the app already has one. The System-health tab re-checks the admin role on the spot, and assets now carry a versioned URL (`app.css?v=2.8.0`), so no browser can ever serve an old script from cache after an update.
-- **The About page wears the sibling ribbon:** an animated aurora band advertising **Climind-W**, the maker's other project — one press from the About page to the repository.
-- **Domains breathe:** cards get a living aurora wash under the cursor and a soft heartbeat ring around the globe of any domain that is actually receiving mail.
-- **The mobile overlap is dead:** the “active account” badge on the Inboxes page reserved its own width — long addresses no longer run underneath it.
-- **Fresh animated hero, version badge and 24 retaken screenshots** — every view, both languages, from the 2.8 build.
+- A fresh install always lands on the setup door. On an empty or unknown database, every route folds into the setup gate; the sign-in card shows an honest "database not ready" panel instead of a credential form; and `POST /api/setup/admin` answers a clean `409 tables_missing`. The create-access door appears only once the tables exist.
+- The Deploy button heals itself. The repo ships a placeholder `database_id` on purpose, and the button's Deploy step used to die on error 10021; a self-resolving script (`scripts/deploy-resolve.mjs`, wired as `npm run deploy`) now reads the binding, finds the database by name or creates it, patches the working copy of `wrangler.jsonc`, then hands over to wrangler.
+- Several installs on one account, zero collisions. The installer opens with an identity prompt — Enter keeps the default single install, a typed name spins up an independent one, and `CMAIL_WORKER_NAME` / `CMAIL_DB_NAME` skip the prompts for scripted installs. The identity is written into the config so the resolver always binds the database that belongs to the chosen name. Email Routing's catch-all can aim at any instance (`configure-email-routing.sh` takes the worker name), and the deploy guide gained a "Several instances on one account" section — free plan cap: 10 D1 databases.
+- The whole flow was verified live: the second instance came up with its own empty admin table while production didn't lose a row. i18n parity 794/794.
 
 </details>
 
 <details>
-<summary><b>What 2.7 changed — the release that names its colors and locks what needs locking</b></summary>
+<summary><b>3.0.0 — multi-mailbox sharing and two doors on the sign-in card</b></summary>
 
-- **Palettes are named by their color. Period.** Sage, Serene and the rest of the poetry retired — the picker now says **Green · Blue · Purple · Amber**, and the background modes say what they do: **Animated · Still · Plain**. Old picks fold into their color automatically. Switching a palette still repaints the entire room — instantly, live, without a reload.
-- **Frozen locks where responsibility is due.** While no sending provider is connected, the compose button (header + floating action button) stays on stage with its paper plane wearing an icy snowflake-and-padlock badge — tapping it explains what is missing instead of vanishing in silence. The reader's reply button obeys the same rule. Once a provider is configured, the badge becomes an open shackle and everything just works.
-- **The temp-address vault: frozen, then flame.** Adding a 2FA code to a temporary account still starts locked — snowflake and padlock beside the usual plus. Accept the deletion countdown once and the grant is remembered for that address: the badge flips to a small breathing flame 🔥, the dialog never asks again, and the other temporary accounts stay independently frozen.
-- **A tighter, calmer inbox.** Rows slimmed down (smaller avatars, tighter padding, closer preview lines) — more mail visible, same glass softness. The auto-refresh now breathes every 10 seconds.
-- **Rapid-clicking can't break it anymore.** Settings tabs, palette cards, inbox filters and account switches all race-proofed: every async paint carries a token, so the stale one steps aside instead of painting two sections at once. Double-clicking compose can no longer stack two composers. And dropdown menus moved to a fixed layer on the page itself — a background refresh can never yank an open menu away mid-tap.
-- **The sidebar only repaints when something changed**, so your scroll position and any open menu survive the auto-refresh untouched.
-- **Status you can see:** the Sending settings open with a live "Sending locked / Sending ready" chip, so the state of outgoing mail is visible before reading a single field.
-- **Fresh hero and version badge**, animated, in both languages.
-
-</details>
-
-<details>
-<summary><b>What 2.6 changed — the release that gives every account its own room</b></summary>
-
-- **A tidy inbox with the account in its header.** The inbox header now carries the active account itself — colored avatar, address, kind and mail count in one chip. Open it and a glass card lists every account with its unread badge: switch accounts right there, without leaving the inbox; "Add another account" sits at the bottom of the same card.
-- **One account, one card.** The Inboxes page traded its flat table for real cards: a stat strip up top (accounts · mails · temporary · active account) and one card per account — avatar, kind tag, three numbers (mails, last mail, expiry countdown) and the actions (copy · forwarding · +1 day · open inbox · delete). The live account wears an accent ring and a "this one" badge.
-- **Domains got serious swagger.** The domains page now opens with a stat strip (domains · verified · in progress · mailboxes) and gives every domain a card of its own: the lifecycle trail (saved → verify code → live), the real status pill, **Active** and **Catch-all** switches with one-line explanations, and the numbers (mailboxes, last mail) — same glass softness, twice the information.
-- **The 2FA vault belongs to the account.** The vault opens scoped to the account you are in, not "all" — every account's codes stay separate, and the "Add code" button defaults to that same account.
-- **The vault locks itself for temporary addresses.** Adding a code to a temporary account shows a 🔒 on the button. The only way through is the responsibility dialog, which tells you exactly when the address — and every code linked to it — will be deleted. Accept, and the code goes in; decline, and it stays locked. Codes linked to a temp address wear a live deletion countdown on their card.
-- **The visual bugs are closed.** Dismissing notifications with × now removes exactly that toast and cancels its timer; closing dialogs with × no longer leaves the Escape listener behind (Escape can no longer re-run a dead dialog and scramble the page); and rapid-fire clicks on the menu can no longer open two sections at once — every navigation takes a token and the stale render steps aside at its next await.
-- **The menu indicator glides.** The active page pill is now a real glass indicator that springs from page to page — the tab-switch feel of the big clients.
-- **Fresh screenshots in both languages** from the 2.6 build — the inbox, the account cards, the domain cards and the locked vault.
+- One guest credential can hold as many mailboxes as you choose — not just one. The mailbox picker lives in Settings → Sharing; guests see exactly what you hand over. List, search, star, folders, notes, bulk actions and sending (as any shared address) all speak multi-mailbox.
+- Every credential carries a simultaneous device cap (unlimited / 1 / 2 / 3) and a welcome note the guest reads the moment it lands. Perms, expiry presets plus an exact date, custom username/password, live audit, kick, revoke, hard delete — still one pane.
+- The login page wears a slim segmented control: **My account** for the owner, **Shared access** for guests.
+- The guest panel became a Dynamic Island: one floating pill with the mailbox name, a live D-H-M-S countdown and a single ? that morphs open — remaining time, the mailbox list, the admin's note, sign-out. It re-syncs every 20 seconds.
+- Each credential got a control room: device and session lists with one-press disable, username/password always lookable again (AES-256-GCM), and **Regenerate** with an optional sign-out of every live browser.
+- Suspension became a proper lifecycle: a share with no mailbox assigned suspends itself and wakes when you assign one; manual suspension keeps counting down or freezes time; deleting a mailbox that still has guests warns first.
+- A 2FA key a guest adds is the same row the admin sees — the live code is identical on both sides. The D1 parameter-binding bug that broke every guest vault query is fixed at the root (migration `0011_share_control`).
+- Nothing unauthorized ever renders — not even disabled — and hard-typed `#/settings` or `#/domains` folds straight back to the mail view.
 
 </details>
 
 <details>
-<summary><b>What 2.5 changed — the release that works like the big clients</b></summary>
+<summary><b>2.9.5 — folders per account, scene backgrounds, a rebuilt composer</b></summary>
 
-- **The account circle.** The avatar at the top right now opens a real account switcher, the way you already know from the big mail clients: every mailbox listed with its tiny details — mails received, 2FA codes held, what's unread — plus **Add another account**, and the manage/settings/sign-out row underneath. Click an account and the whole app lands in its space; the circle itself wears that account's color and letter.
-- **Every email gets its own page.** Opening a message no longer floats a popup over the list — it navigates to a dedicated page with its own URL (`#/mail/m/:id`), a real **Back to inbox** button, older/newer arrows, the full action bar (reply, star, mark unread, delete) and the personal note panel. One mail, one page, zero popup bugs.
-- **One account at a time.** The mailbox list and the unified stream merged into one honest model: the app shows the active account's inbox, and switching — from the circle, the sidebar, or the command palette — changes the space entirely. No more “which mailbox did this land in?” labels.
-- **Navigation grew a pill.** The whole shell is now one floating glass pill: brand and version on one side, the four pages (Mail · Inboxes · 2FA Vault · Guide) in the middle, search/theme/language/account on the other — exactly the layout of the reference design.
-- **Four moods, honestly named.** The palette settled on four moods you actually use, and switching one now repaints the entire room: background, glass tints, accents, highlights, even the browser chrome color. Old picks fold into their nearest mood automatically. *(They carry their actual color names since 2.7.)*
-- **The health panel heals its own gate.** Installs migrated from old builds could silently lose admin rights (the role column's default), which hid System health, Domains and every admin surface. The app now notices and restores the single user's admin role on boot — the panel simply appears again, no SQL required.
-- **Fresh screenshots everywhere**, per language, from the 2.5 build — including two new ones: the account circle and the dedicated email page.
+- Folders gained a second level: build your own folders per account — each with a color dot, a live counter and its own rule, never mixing two accounts' mail. Move a mail from its row menu, move a whole selection with the "Move to folder" bar, and give a folder a sender rule (a few comma-separated words like `news, bills`) so fresh mail from those senders lands inside the moment it arrives. Deleting a folder returns its mail to the main inbox — nothing is lost.
+- Settings → Appearance gained a scene-background picker: four hand-drawn animated scenes — green hills, aurora, sunset, night sky — plus no scene at all. All of them respect reduced motion.
+- The composer was rebuilt: aligned rows, a message body that grows as you type, the sender with a live avatar beside the picker, errors stated beside the field itself, a send button with its own spinner, Ctrl/Command + Enter, and a draft that saves itself and survives closing the tab.
+- The guide gained the official Deploy to Cloudflare button; the terminal installer (`deploy.sh`) now recognizes both config shapes.
+- Rapid-click safety extended: folder loads carry sequence tokens, account switching clears the previous account's folders first, and nothing paints outside the live view.
 
 </details>
 
 <details>
-<summary><b>What 2.4 changed</b></summary>
+<summary><b>2.9 — the inbox rebuilt from zero</b></summary>
 
-- **A living background, yours to tune.** The ambient room behind the app glows with the active mood — switching moods re-tints the whole environment. Three presence modes in Settings → Appearance: **Aurora** (slow drifting light), **Halo** (still glow), **Pure** (flat).
-- **The setup screen grew up.** Forms are truly centered on desktop at any window size. A domain left mid-registration sits in the setup screen with its status and a **Continue setup** button — and re-adding it is never an error: the wizard just opens. Skipped verification? Come back later and verify with a code whenever you like.
-- **The sidebar lost the filler.** The quote card is gone; the space goes to your inboxes and your accounts.
-- **The maker card.** The About page introduces the person behind the project with a gradient-ring card.
+- One identity oval above a single living card: account face, name and full address with one-tap copy. Rows read like the big clients — face · sender · subject — preview · star · time — and unread rows show a dot where the checkbox would be; reach for the row and the checkbox takes its place. The unused reading column is gone: the list owns the full width and every mail still opens in its own page.
+- Loading never lies. Anything that drags gets a thin progress bar at the top; the inbox has its own status strip, even during background refreshes; failed loads offer a retry; and empty folder, fruitless search and "no mailbox picked" each speak for themselves.
+- The About ribbon learned mobile manners: a proper two-row grid on phones, and the aurora at rest on mobile GPUs.
+- One boot, guaranteed. The entry script was versioned but the module imports were not, so the whole shell loaded twice — two routers, two hash listeners, an inbox occasionally painting into a detached view. That was the real face of the "two sections open at once" bug family. Every import now carries the entry's version stamp.
 
 </details>
 
 <details>
-<summary><b>What 2.3 changed</b></summary>
+<summary><b>2.8 — switching lives in one place; vault folders belong to each account</b></summary>
 
-- **The unified inbox.** "All inboxes" streams every mailbox into one list; each row wears a small chip naming the mailbox it landed in. The sidebar switches spaces like the big clients do — one tap, zero page reloads.
-- **The inbox breathes.** Every 15 seconds it silently checks for new mail, highlights what just arrived and refreshes the unread badges.
-- **A health panel in Settings.** D1 connection with live latency, every expected table with its row count **and its column state**, the cron heartbeat, and the mail flow with a not-receiving-mail checklist. Missing table? Build button right there. Old schema? Repair button right there.
-- **Serious problems surface at the top.** D1 down, tables missing, schema outdated, cron gone quiet, mail stalled — a banner appears above the app, in plain language, with the fix one press away.
-- **Incoming mail became drift-proof.** After upgrading the worker without migrating the database, the handler degrades gracefully to whatever columns exist and keeps delivering — and the health panel flags the drift for a one-press repair.
+- Account switching lives only in the top avatar circle. The inbox sidebar no longer lists accounts, and the header chip is a quiet identity plate. Below it sits the account's own folder rail — All · Unread · Starred · Noted — with exact live counters, cut client-side so switching is instant.
+- Every vault folder is now bound to one account (`0006_vault_folder_scope.sql`, auto-healed on older installs): the folder picker only offers that account's groupings, and moving a key to another account releases the old folder.
+- The frozen badge follows temporary accounts everywhere they appear — the sidebar identity card, the vault chip, the add-code button — flipping to the breathing flame once responsibility is granted.
+- The rapid-click bug family met its actual root cause: stale async continuations could reach the fresh view's DOM through `getElementById` and paint twice. Every view now paints only into its own captured nodes, and open dialogs, floating menus and popovers retire the moment you navigate.
+- Settings lost the Service-name field; assets ship versioned URLs (`app.css?v=2.8.0`) so no browser runs an old script after an update; the About page wears the animated Climind-W ribbon; domains got a hover aurora and a heartbeat ring; the mobile badge-overlap on Inboxes is fixed; and 24 screenshots were retaken — every view, both languages.
+
+</details>
+
+<details>
+<summary><b>2.7 — palettes named by their color; frozen locks for sending and the temp vault</b></summary>
+
+- Palettes say what they are: Green · Blue · Purple · Amber. Background modes too: Animated · Still · Plain. Old poetic names fold into their color automatically, and switching a palette still repaints the whole room live.
+- While no sending provider is connected, the compose buttons (header and floating) and the reader's reply wear a frozen badge — tapping it explains what is missing instead of vanishing silently. Connect a provider and the badge becomes an open shackle.
+- The temporary-address vault works the same way: adding a 2FA code to a temp account starts frozen behind the responsibility dialog; accept the deletion countdown once and the badge flips to a breathing flame — remembered per address, while every other temp account stays independently frozen.
+- The inbox tightened: slimmer rows, auto-refresh every 10 seconds.
+- Rapid clicking can't break things anymore: settings tabs, palette cards, inbox filters and account switches carry render tokens; compose can't be double-stacked; dropdown menus live on a fixed page layer and survive background refreshes; the sidebar only repaints when something actually changed.
+- Sending settings open with a live locked/ready chip.
+
+</details>
+
+<details>
+<summary><b>2.6 — account and domain cards; the vault gets account scope</b></summary>
+
+- The inbox header carries the active account as a chip (avatar, address, kind, mail count); open it and a glass card lists every account with its unread badge — switch without leaving the inbox.
+- The Inboxes page traded its table for real cards: a stat strip up top, then one card per account — avatar, permanent/temporary tag, mail count, last mail, expiry countdown, and copy / forwarding / +1 day / open inbox / delete actions.
+- Domains got the same treatment: a stat strip (domains · verified · in progress · mailboxes) and a card per domain with the lifecycle trail (saved → verify code → live), honest status pills, and explained Active / Catch-all switches.
+- The 2FA vault opens scoped to the account you are in, and the add-code button defaults to it.
+- For temporary addresses the add-code button shows a lock; the responsibility dialog names the exact deletion countdown, and codes tied to a temp address carry a live countdown.
+- Visual bugs closed: notifications dismiss with their own × (timer cancelled), dialogs retire their Escape listener, rapid menu clicks can't paint two sections, and the menu indicator became a real glass pill that springs from page to page.
+
+</details>
+
+<details>
+<summary><b>2.5 — the account circle and a page for every email</b></summary>
+
+- The avatar at the top opens a real account switcher, the way you know from the big clients: every mailbox with its details — mails received, 2FA codes held, unread count — plus **Add another account** and a manage / settings / sign-out row. One click moves the whole app into that account's space.
+- Every email gets its own page with its own URL (`#/mail/m/:id`), a real back button, older/newer arrows and the full action bar. No more popups over the list.
+- The whole shell condenses into one floating glass pill: brand on one side, Mail · Inboxes · 2FA Vault · Guide in the middle, search / theme / language / account on the other.
+- Four named moods — Sage, Serene, Violet, Amber — each repaint the entire room: background, glass tints, accents, highlights, even the browser chrome. Old picks migrate to the nearest mood.
+- Installs upgraded from older builds could silently lose the admin role and with it System health, domains and every admin section. The app now restores the single-user admin role at boot — no SQL involved.
+
+</details>
+
+<details>
+<summary><b>2.4 — a tidier setup screen and a tunable living background</b></summary>
+
+- Setup forms are genuinely centered on desktop at any window size — the double-padded stage that nudged the cards aside is gone. Every saved domain keeps its seat with a status chip and a Continue-setup button; re-adding an existing domain is a soft notice that opens its own wizard, never an error; and unverified domains offer Verify-with-code whenever you come back.
+- The room behind the app re-tints with the active mood, with three presence modes in Settings → Appearance: Aurora (slow drifting light), Halo (still glow), Pure (flat).
+- The sidebar quote card retired; the space belongs to your inboxes. The About page introduces the maker with a proper gradient-ring card.
+- TypeScript compiles with zero errors; fresh screenshots everywhere and the hero banners carry the 2.4 chip.
+
+</details>
+
+<details>
+<summary><b>2.3 — the unified inbox and the system health panel</b></summary>
+
+- All mailboxes land in one live list, each row tagged with the mailbox it arrived in, and the sidebar switches without reloads.
+- The inbox breathes: every 15 seconds it quietly pulls for new mail, highlights what just arrived and keeps every unread badge honest.
+- Settings gained a System health panel: D1 connection with live latency, every table with row and column state, the cron heartbeat, and a mail-flow checklist for "not receiving mail?" moments. A missing table gets a Build button; an outdated schema gets Repair.
+- Serious problems surface at the top in plain language — D1 unreachable, tables missing, schema outdated, cron gone quiet, mail stalled, domains half-registered — each banner with its fix built in.
+- Incoming mail became drift-proof: the email handler falls back to legacy column shapes instead of silently bouncing mail after a worker upgrade without migrations, and the health panel flags the drift for a one-press repair.
+- The docs split into deploy and usage guides per language, with an animated hero per language, per-language screenshot galleries — every old image retired — and the Persian README in proper RTL.
 
 </details>
 
