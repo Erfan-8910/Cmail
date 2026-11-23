@@ -269,10 +269,18 @@ app.get('/attachment/:attId', requireUser, async (c) => {
   if (atScope && !atScope.includes(row.address_id)) return c.json({ ok: false, error: 'not_found' }, 404);
   if (!row.content_b64) return c.json({ ok: false, error: 'attachment_too_large' }, 413);
   const buf = Uint8Array.from(atob(row.content_b64), (ch) => ch.charCodeAt(0));
+  // v3.1.3 — attachment MIME discipline: the download is always forced
+  // (content-disposition: attachment) AND active types never keep their
+  // stored content-type. A malicious HTML/SVG that rode in as "mail" then
+  // could never come back out with a type a browser might render.
+  const RAW_TYPE = (row.content_type || '').toLowerCase().split(';')[0].trim();
+  const ACTIVE = new Set(['text/html', 'image/svg+xml', 'application/xhtml+xml', 'application/xhtml', 'text/xml', 'application/xml']);
+  const safeType = ACTIVE.has(RAW_TYPE) ? 'application/octet-stream' : (row.content_type || 'application/octet-stream');
   return new Response(buf.buffer as ArrayBuffer, {
     headers: {
-      'content-type': row.content_type || 'application/octet-stream',
+      'content-type': safeType,
       'content-disposition': `attachment; filename="${(row.filename || 'attachment').replace(/[^\w.\- ]/g, '_')}"`,
+      'x-content-type-options': 'nosniff',
     },
   });
 });

@@ -2499,6 +2499,18 @@ button.note-panel__head { cursor: pointer; }
 .d1__rows { margin-inline-start: auto; font-size: 11px; color: var(--faint); white-space: nowrap; }
 .d1__extras { display: flex; flex-direction: column; gap: 4px; }
 .d1__extra-t { font-size: 11px; font-weight: 700; color: var(--warn); margin-top: 2px; }
+/* the per-row build/drop buttons: on phones the label folds away and the
+   glyph carries the action (title + aria-label keep it accessible), so every
+   table row is ONE tidy line at any width — the full label returns the
+   moment the card has room. Before this, the button wrapped onto its own
+   ragged line on 320px phones and the row read as scattered symbols. */
+@media (max-width: 420px) {
+  .d1__row { row-gap: 6px; flex-wrap: nowrap; }
+  .d1__name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .d1__row .btn { padding: 5px 8px; font-size: 11px; gap: 4px; }
+  .d1__row .d1__add-t { display: none; }
+  .d1__rows { font-size: 10.5px; }
+}
 
 /* ---------- domain connect wizard ---------- */
 .wiz__rail { display: flex; align-items: center; gap: 10px; margin: 2px 0 14px; }

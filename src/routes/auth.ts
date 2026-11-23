@@ -10,10 +10,17 @@ import {
   createSession, setSessionCookie, clearSessionCookie, destroySession, tokenFrom,
   requireUser, requireOwner, clientIp, rateLimit, rateLimitClear
 } from '../auth';
-import { randomSecret, verifyTotp, buildOtpauthUri } from '../totp';
+import { randomSecret, verifyTotp, verifyTotpStep, buildOtpauthUri } from '../totp';
 import { renderSVG } from 'uqr';
 
 const app = new Hono<AppEnv>();
+
+// v3.1.3 — unknown usernames and wrong passwords now cost the same. Without
+// the decoy, a fast 401 whispers "this username does not exist" while a slow
+// one says "the password was wrong" — a timing oracle for account discovery.
+// The miss path burns one PBKDF2 against this fixed decoy hash first, so
+// both answers take the same road and the clock stays quiet.
+const LOGIN_DECOY_HASH = 'pbkdf2$100000$BwcHBwcHBwcHBwcHBwcHBw$VJy1o5_S9FpIuUENFbU8mDDjJnsqT6Uism25BgMi_JY';
 
 // v3.1.1: databases upgraded in place may not carry sessions.locked_at yet
 // (migration 0013 / the heal pass add it). Rather than fail, the first lock
@@ -122,6 +129,7 @@ app.post('/login', async (c) => {
     : await c.env.DB.prepare('SELECT id, username, role, password_hash, totp_enabled FROM users ORDER BY created_at LIMIT 1')
         .first<{ id: string; username: string; role: string; password_hash: string; totp_enabled: number }>();
 
+  if (!user) await verifyPassword(c.env, password, LOGIN_DECOY_HASH);
   if (!user || !(await verifyPassword(c.env, password, user.password_hash))) {
     // not the owner — maybe a share guest. The same login form answers both:
     // the credential is looked up in share_links too, and a match opens the
@@ -268,7 +276,8 @@ app.post('/login/totp', async (c) => {
   if (!user || !user.totp_secret) return c.json({ ok: false, error: 'invalid_request' }, 400);
 
   const secret = await openText(c.env, user.totp_secret);
-  if (!(await verifyTotp(secret, code))) return c.json({ ok: false, error: 'invalid_code' }, 401);
+  // v3.1.3: the replay wall — a spent step can never complete a login again
+  if (!(await verifyTotpStep(c.env, user.id, 'login', secret, code))) return c.json({ ok: false, error: 'invalid_code' }, 401);
 
   await c.env.DB.prepare("DELETE FROM settings WHERE key = ?").bind(`pending2fa:${pending}`).run();
   await c.env.DB.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').bind(now(), user.id).run();
@@ -349,7 +358,8 @@ app.post('/verify-unlock', requireUser, async (c) => {
   const row = await c.env.DB.prepare('SELECT totp_secret FROM users WHERE id = ?').bind(u.id).first<{ totp_secret: string | null }>();
   if (!row?.totp_secret) return c.json({ ok: false, error: 'totp_not_enabled' }, 409);
   const secret = await openText(c.env, row.totp_secret);
-  if (!(await verifyTotp(secret, code))) return c.json({ ok: false, error: 'invalid_code' }, 401);
+  // v3.1.3: the replay wall — an intercepted unlock code dies after first use
+  if (!(await verifyTotpStep(c.env, u.id, 'unlock', secret, code))) return c.json({ ok: false, error: 'invalid_code' }, 401);
   await rateLimitClear(c.env, ip, 'unlock');
   // a verified unlock counts as a verified moment for the grace timer
   await setSetting(c.env, `totp_last:${u.id}`, String(now()));
@@ -378,6 +388,10 @@ app.post('/totp/start', requireOwner, async (c) => {
 
 // confirm enabling with a code
 app.post('/totp/enable', requireOwner, async (c) => {
+  // v3.1.3: every door gets a meter — the confirm step included, so even a
+  // hijacked session cannot hammer the 6-digit space to force a wrong secret in
+  const ip = clientIp(c);
+  if (!(await rateLimit(c.env, ip, 'totpenable', 10))) return c.json({ ok: false, error: 'rate_limited' }, 429);
   const u = c.get('user') as SessionUser;
   const body = await c.req.json<{ secret?: string; code?: string }>().catch(() => null);
   const secret = (body?.secret ?? '').trim();
@@ -386,6 +400,10 @@ app.post('/totp/enable', requireOwner, async (c) => {
   if (!(await verifyTotp(secret, code))) return c.json({ ok: false, error: 'invalid_code' }, 401);
   const sealed = await sealText(c.env, secret);
   await c.env.DB.prepare('UPDATE users SET totp_enabled = 1, totp_secret = ? WHERE id = ?').bind(sealed, u.id).run();
+  await rateLimitClear(c.env, ip, 'totpenable');
+  // v3.1.3: a fresh secret starts with clean doors — replay bookkeeping from
+  // any previous enrollment belongs to a secret that no longer exists
+  await c.env.DB.prepare("DELETE FROM settings WHERE key LIKE ?").bind(`totp_step:${u.id}:%`).run();
   // enabling counts as a verified moment — the grace window starts now
   await setSetting(c.env, `totp_last:${u.id}`, String(now()));
   return c.json({ ok: true });
@@ -417,7 +435,8 @@ app.post('/totp/disable', requireOwner, async (c) => {
   }
   if (row.totp_secret) {
     const secret = await openText(c.env, row.totp_secret);
-    if (!(await verifyTotp(secret, (body?.code ?? '').trim()))) return c.json({ ok: false, error: 'invalid_code' }, 401);
+    // v3.1.3: the replay wall guards the last door too — a used code is dead
+    if (!(await verifyTotpStep(c.env, u.id, 'disable', secret, (body?.code ?? '').trim()))) return c.json({ ok: false, error: 'invalid_code' }, 401);
   }
   await c.env.DB.prepare('UPDATE users SET totp_enabled = 0, totp_secret = NULL WHERE id = ?').bind(u.id).run();
   await rateLimitClear(c.env, ip, 'totpdisable');

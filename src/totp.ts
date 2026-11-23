@@ -1,5 +1,5 @@
 // Cmail — TOTP (RFC 6238) implementation + vault helpers
-import { b64, str } from './util';
+import { b64, str, getSetting, setSetting, type Env } from './util';
 
 // ---------- base32 (RFC 4648) ----------
 
@@ -85,6 +85,37 @@ export async function verifyTotp(secretB32: string, code: string, algo = 'SHA1',
     if (c === code.trim()) return true;
   }
   return false;
+}
+
+// v3.1.3 — the TOTP replay wall. A code opens a door for its 30-second step
+// (plus one step of clock skew) — and after that door opens, that step is
+// SPENT for that door: no second login, no second unlock, no second 2FA-off
+// can ever accept the same code again. Without this, one intercepted code
+// could be replayed for ~90 seconds against the same door. Tracking is
+// per-door (login / unlock / disable): a code spent on one door can still
+// serve another within its natural life — that is how a human actually uses
+// an authenticator (unlock now, disable seconds later with the code still on
+// screen) — while the same-door replay, the real attack, dies on arrival.
+// The highest accepted step is stored per user+door, and a verify only
+// passes when it moves time FORWARD. Multi-device owners stay fine: a newer
+// step always beats an older recorded one.
+export type TotpDoor = 'login' | 'unlock' | 'disable';
+export async function verifyTotpStep(
+  env: Env, userId: string, door: TotpDoor, secretB32: string, code: string,
+  algo = 'SHA1', digits = 6, period = 30, window = 1,
+): Promise<boolean> {
+  const counter = Math.floor(Date.now() / 1000 / period);
+  let matched: number | null = null;
+  for (let i = -window; i <= window; i++) {
+    const step = counter + i;
+    if ((await hotp(secretB32, step, algo, digits)) === code.trim()) { matched = step; break; }
+  }
+  if (matched === null) return false;
+  const key = `totp_step:${userId}:${door}`;
+  const last = Number((await getSetting(env, key)) ?? 0);
+  if (matched <= last) return false; // a spent step — replay refused
+  await setSetting(env, key, String(matched));
+  return true;
 }
 
 // ---------- otpauth:// URI ----------

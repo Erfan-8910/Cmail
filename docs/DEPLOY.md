@@ -37,10 +37,13 @@ Press the button and Cloudflare does the cloning, provisioning and shipping on i
 2. **Wait for the build's Deploy step to turn green** (about a minute). That step runs the repo's own deploy script, which makes the install self-sufficient:
    - **the install gets its own database**, named after its Worker (`<worker-name>-db`) — never a database that belongs to another install. The script finds-or-creates it, re-binds anything that points elsewhere, and patches the working config itself — the build never dies on a placeholder id;
    - **cron slots are respected** — free accounts cap cron triggers at 5 per account. If every slot is taken, the deploy lands *without* the hourly cleanup cron and the log says so in plain words; the app is fully live either way.
+   - **database slots are respected too** — the free plan holds 10 D1 databases per account. When the tenth slot is taken, the deploy step stops early and explains itself in plain words: which limit, why, and the exact four-step fix (delete a retired test database, run again). The power user's side door: `CMAIL_D1_ID=<id>` points the installer straight at a database id copied from the dashboard.
 3. **Visit the app — after the Deploy step is green.** (Visiting in the first minute can briefly show another install's data while the script re-binds the database.) The **setup gate** takes over: build the tables with one press, create the admin account, connect the domain, wire sending.
 4. Your code, your repo: the button already placed the project in your GitHub with a CI pipeline — every push rebuilds and redeploys.
 
 > **Why the Deploy step once went red on a perfect install:** the upload and the binding actually succeeded — the last sub-request, attaching the hourly cleanup cron, hit the free plan's ceiling of 5 cron triggers per account (error 10072) and turned the whole step ✗. The deploy script now catches that, deploys without the cron, and keeps the build green. If you see that warning in the build log, the app is live and safe to use.
+
+> **The other way the Deploy step could go red on a perfect install: a full account.** Every Cmail install owns one D1 database, and the free plan allows 10 per account — old tests and abandoned experiments count toward that ceiling. Older builds surfaced Cloudflare's raw `System limit reached: databases per account` with no hint; now the installer catches it, says plainly what is full and what to do, and the moment a slot frees up (or the account upgrades), the very same install resumes where it stopped.
 
 The routes below still work exactly the same — for hands-on installs and terminal tastes.
 
@@ -78,7 +81,7 @@ Five steps. No SQL, no folder uploads — only your browser and the Cloudflare d
 
 - **Workers & Pages → Create → Workers → Create Worker**
 - Name it `cmail` and **Deploy** once with the default code.
-- Click **Edit code**, delete the default code, paste the full content of the prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.2/worker.js) and **Deploy**.
+- Click **Edit code**, delete the default code, paste the full content of the prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.3/worker.js) and **Deploy**.
 
 **3) The only binding you need: D1**
 

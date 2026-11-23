@@ -118,7 +118,7 @@ good "wrangler.jsonc → worker “$WORKER_NAME”, database “$DB_NAME”"
 # database when it truly does not exist, patches the working copy. No deploy
 # happens here yet (CMAIL_RESOLVE_ONLY) — migrations run first below.
 say "Creating (or finding) the D1 database “${DB_NAME}”…"
-CMAIL_RESOLVE_ONLY=1 CMAIL_DB_NAME="$DB_NAME" node scripts/deploy-resolve.mjs || fail "Could not resolve the D1 database"
+CMAIL_RESOLVE_ONLY=1 CMAIL_DB_NAME="$DB_NAME" node scripts/deploy-resolve.mjs || fail "D1 resolution failed — the resolver's message above carries the exact fix"
 DB_ID=$(grep -oE '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}' wrangler.jsonc | head -1)
 [ -n "$DB_ID" ] || fail "database_id missing after resolve"
 good "D1 database: $DB_ID"

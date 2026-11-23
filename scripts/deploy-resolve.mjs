@@ -112,12 +112,33 @@ async function liveBindingId(workerName, targetDb) {
   } catch { return null; }
 }
 
+function d1LimitGuide(targetDb) {
+  // the account is full — say it like a human and hand over the exact fix.
+  // This is the exact failure users saw as a bare red build at the very end
+  // of an otherwise perfect install (the Deploy-button's "last step failed").
+  console.error('');
+  console.error(`✖ this Cloudflare account is out of D1 database slots — the free plan allows 10 per account, and every one is taken.`);
+  console.error(`  Cmail needs exactly ONE database of its own ("${targetDb}") — everything else in this install is fine, it just cannot move in yet.`);
+  console.error('');
+  console.error('  Free a slot, then run this install again (nothing else changes):');
+  console.error('   1. dash.cloudflare.com → Storage & Databases → D1 SQL Database');
+  console.error('   2. open the list — any database from an old test or a project you retired can go');
+  console.error('   3. Delete it (the data inside goes with it, so be sure it is truly dead)');
+  console.error('   4. re-run the installer / the Deploy button — this time it sails through');
+  console.error('');
+  console.error('  Prefer to keep all 10? Upgrading the account raises the limit and the very same install resumes.');
+  console.error('');
+}
+
 function createDatabase(name) {
   // returns the new id — or null when the name is taken ("already exists"
-  // prints no id; the caller re-resolves instead of trusting the message)
+  // prints no id; the caller re-resolves instead of trusting the message) —
+  // or the string 'LIMIT' when the account itself is full (the caller then
+  // explains like a human instead of dumping Cloudflare's raw error)
   const c = run(`npx wrangler d1 create "${name}"`);
   const out = `${c.stdout || ''}\n${c.stderr || ''}`;
   if (c.status !== 0) {
+    if (/system limit reached|maximum number of databases|quota.*exceeded|databases per account/i.test(out)) return 'LIMIT';
     if (/already exists/i.test(out)) return null;
     console.error(`✖ could not create D1 database "${name}":\n${out.slice(0, 600)}`);
     process.exit(1);
@@ -147,10 +168,17 @@ async function main() {
     let id = null;
     let how = '';
 
+    // a human-provided id always wins — the documented escape hatch for
+    // exotic CI setups (CMAIL_D1_ID=<uuid> from the dashboard's D1 page)
+    const EXPLICIT = (process.env.CMAIL_D1_ID || '').trim();
+    if (isUuid(EXPLICIT) && EXPLICIT !== PLACEHOLDER) {
+      id = EXPLICIT; how = 'used CMAIL_D1_ID from the environment (you pointed the way, so it goes exactly there)';
+    }
+
     const cfgIdOk = isUuid(e.id) && e.id !== PLACEHOLDER;
     const cfgNameOk = e.name === targetDb;
 
-    if (cfgIdOk && cfgNameOk && rows) {
+    if (!id && cfgIdOk && cfgNameOk && rows) {
       const actual = (rows.find((r) => r.uuid === e.id) || {}).name;
       if (actual === targetDb) { id = e.id; how = 'already bound to this install\'s own database — nothing to change'; }
     }
@@ -168,12 +196,18 @@ async function main() {
         const found = rows.find((r) => r.name === targetDb);
         if (found) { id = found.uuid; how = `found "${targetDb}" (d1 list) — re-using this install's database`; }
       }
+      if (!id && rows && rows.length >= 10) {
+        // the listing already tells the whole story — no need to knock on a full house
+        d1LimitGuide(targetDb);
+        process.exit(1);
+      }
       if (!id) {
         const live = await liveBindingId(workerName, targetDb);
         if (live) { id = live; how = `found "${targetDb}" (the live worker's own binding)`; }
       }
       if (!id) {
         id = createDatabase(targetDb);
+        if (id === 'LIMIT') { d1LimitGuide(targetDb); process.exit(1); }
         if (id) how = `created "${targetDb}" — this install's own, empty database`;
       }
       if (!id) {
@@ -193,6 +227,8 @@ async function main() {
       console.error('  tried: wrangler d1 list, the live worker\'s own bindings, and creation.');
       console.error('  If this is CI: the build token could neither list nor create D1 databases.');
       console.error(`  Fix: allow D1 Edit for the build token, or run with CMAIL_DB_NAME=${targetDb} where the token has D1 access.`);
+      console.error(`  One more way out: copy the database id from dash.cloudflare.com → D1 → "${targetDb}"`);
+      console.error(`       and run with CMAIL_D1_ID=<that id> — the resolver then uses it as-is.`);
       process.exit(1);
     }
 

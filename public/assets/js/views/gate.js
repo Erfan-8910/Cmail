@@ -134,7 +134,8 @@ export async function renderGate(root) {
         h('code', { class: 'd1__name' }, tb.name),
         h('span', { class: 'd1__rows' }, tb.exists ? `${lang === 'fa' ? toFa(tb.rows ?? 0) : (tb.rows ?? 0)} ${t('d1Rows')}` : t('d1MissingShort')),
         !tb.exists ? h('button', {
-          class: 'btn btn--sm', onclick: async (e) => {
+          class: 'btn btn--sm d1__add', title: t('d1CreateOne'), 'aria-label': t('d1CreateOne'),
+          onclick: async (e) => {
             const b = e.currentTarget; b.disabled = true; b.classList.add('is-busy');
             try {
               await api.post(`/api/setup/tables/${tb.name}/create`, {});
@@ -142,7 +143,7 @@ export async function renderGate(root) {
               await recheck(false); refreshInspector();
             } catch (err) { toast(errText(err), 'err'); b.disabled = false; b.classList.remove('is-busy'); }
           },
-        }, icon('plus'), t('d1CreateOne')) : null,
+        }, icon('plus'), h('span', { class: 'd1__add-t' }, t('d1CreateOne'))) : null,
       ));
     }
 
@@ -154,14 +155,15 @@ export async function renderGate(root) {
         h('code', { class: 'd1__name' }, x.name),
         h('span', { class: 'd1__rows' }, t('d1NotOurs')),
         h('button', {
-          class: 'btn btn--sm btn--danger-ghost', onclick: () => confirmBox(t('d1DropConfirm'), async () => {
+          class: 'btn btn--sm btn--danger-ghost d1__drop', title: t('d1Drop'), 'aria-label': t('d1Drop'),
+          onclick: () => confirmBox(t('d1DropConfirm'), async () => {
             try {
               await api.del(`/api/setup/tables/${x.name}`);
               toast(t('d1Dropped'), 'ok', 1600);
               refreshInspector();
             } catch (err) { toast(errText(err), 'err'); }
           }),
-        }, icon('trash'), t('d1Drop'))))) : null;
+        }, icon('trash'), h('span', { class: 'd1__add-t' }, t('d1Drop')))))) : null;
 
     clear(box).append(head, grid, ...(extraBox ? [extraBox] : []));
   }

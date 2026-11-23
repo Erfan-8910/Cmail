@@ -107,7 +107,30 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 3.1.2 — the icons sit where they belong, and the outbox got its brake
+## What's new in 3.1.3 — the last step goes green, and a spent code stays spent
+
+**This release started with one red X.** You press Deploy, everything sails like the wind — and at the very last step an error jumps out that points nobody anywhere. We walked the same road end to end, and the truth turned out to be lovely: nothing was broken; **the place was simply full.** Cloudflare's free plan holds **10 D1 databases per account**, and every abandoned test and half-finished install had quietly reserved a seat. So 3.1.3 replaced that dead end with a friendly signpost:
+
+- **The installer talks like a person now.** When the account is out of room it says exactly that, in plain words, and lays the four-step map at your feet: Dashboard → Storage & Databases → D1 → delete a database you honestly retired, run the install again. Goodbye to `System limit reached` at the bottom of a red log.
+- **It checks before it hopes.** The same wall is caught in step one — not at the finish line of a multi-minute install.
+- **A side door for stubborn setups:** `CMAIL_D1_ID=<id>` points the installer straight at the database id you copied from the dashboard.
+- **And to prove it, the whole button pipeline was replayed from scratch** — fresh clone, clean install, a live healthy worker at the other end. Green.
+
+**The setup screen learned to sit up straight on phones.** The report was visual and exact: on a 320px display the D1 inspector's rows scattered — the «not built» tag, the table name and the Build button each slid onto their own line, and the whole list read like a pile of loose symbols. Now **every table is one tidy line at any width**: icon, name, status — and on narrow screens the Build button folds itself into a plus glyph to make room (the full label returns the moment it fits). Verified from 320 to 1280 pixels, Persian and English, dark and daylight.
+
+**And security went after the one-time codes themselves:**
+
+- **A spent code stays spent.** Each TOTP code opens one door exactly once — if that code is intercepted on the way, it can never be replayed for a second open. And because every door keeps its own book (sign-in, unlock, 2FA-off), real life stays comfortable: a code used to unlock can still switch 2FA off seconds later — the way a human actually uses an authenticator.
+- **Every door has its own meter** — the 2FA-enable confirm included; a hijacked session can no longer hammer the six-digit space.
+- **Sign-in timing went quiet.** An unknown username and a wrong password now cost exactly the same — the clock no longer whispers which usernames exist.
+- **Attachments kept their manners:** anything a browser could execute (HTML, SVG, XML) always downloads as inert bytes — it never renders.
+- **The session cookie went Strict** — it no longer rides any cross-site navigation at all.
+- **The security matrix is now 111/111.** Eleven fresh checks prove the replay wall on a real worker: the spent code refused, the older step refused, the drifted current step accepted — and the per-door book kept.
+
+*And as always, everything ships in sync: the version badge, the download links, the single-file worker and the one-click installer — all 3.1.3.*
+
+<details>
+<summary><b>What 3.1.2 changed — the icons sat where they belong, and the outbox got its brake</b></summary>
 
 This release's report came from the setup-completion screen itself: **some symbols simply refused to sit in the right place and jumped straight at the user** — with a few more of the same in other sections. The three main offenders:
 
@@ -128,6 +151,8 @@ With those three fixed, the whole setup screen was re-verified on a real install
 - **The two outbound-mail triggers were the only unmetered ones.** `POST /api/emails/send` is now capped at **20 per 10 minutes per IP** and `POST /api/admin/test-send` at **10** — a leaked session or an over-privileged guest can no longer pump unlimited mail through the owner's Brevo/Resend account until the provider suspends it. The answer is 429; every IP owns its own clean bucket.
 - **COOP and CORP everywhere.** The two modern companions of HSTS and X-Frame-Options: the panel opens no pop-ups to or for other sites, and its resources are nobody else's to embed (COOP also cuts the cross-site tab-nabbing channels).
 - **The security matrix is now 100/100.** Six fresh checks: the send storm hits the wall exactly at 20, the test-send storm at 10, a different IP keeps its own clean bucket, and COOP/CORP ride both the shell and the API.
+
+</details>
 
 <details>
 <summary><b>What 3.1.1 changed — the padlock is the server's, not a prop</b></summary>
@@ -320,9 +345,9 @@ Users found it, and they were right: **too much of the security was a performanc
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.2/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v3.1.2:** [`CMail-v3.1.2.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.2/CMail-v3.1.2.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
-- The zip mirrors the v3.1.2 tag — the layout fixes for the setup screen and every section (symbols in place, true responsiveness at 320px), the outbound-mail brake (send/test-send caps), COOP/CORP and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.3/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v3.1.3:** [`CMail-v3.1.3.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.3/CMail-v3.1.3.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- The zip mirrors the v3.1.3 tag — the deploy step that explains itself (the free plan's 10-database ceiling, caught early and explained in plain words), the one-tidy-line D1 inspector on phones, the TOTP replay wall and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 

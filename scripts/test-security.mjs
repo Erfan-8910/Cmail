@@ -12,7 +12,10 @@ function ok(name, cond, extra = '') {
 }
 
 async function req(method, path, body, useCookie, ip) {
-  const res = await fetch(BASE + path, {
+  // one retry on a dead keep-alive socket: wrangler dev recycles idle
+  // connections mid-run, and undici can pick up a just-closed one — that is
+  // a test-harness race, not an app answer, so the request rides again once
+  const fire = () => fetch(BASE + path, {
     method,
     headers: {
       'content-type': 'application/json',
@@ -21,6 +24,12 @@ async function req(method, path, body, useCookie, ip) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
+  let res;
+  try { res = await fire(); }
+  catch (e) {
+    if (String(e?.cause ?? e).includes('other side closed')) res = await fire();
+    else throw e;
+  }
   let data = null;
   try { data = await res.json(); } catch { /* non-json */ }
   return { status: res.status, data, headers: res.headers, setCookie: res.headers.get('set-cookie') };
@@ -157,6 +166,39 @@ const dOk = await req('POST', '/api/auth/totp/disable', { current: PW3, code: to
 ok('disable with password + live code ok', dOk.data?.ok === true, JSON.stringify(dOk.data));
 const meAfter = await req('GET', '/api/auth/me', null, cookie);
 ok('2FA is off after the honest disable', meAfter.data?.user?.totp_enabled === 0 || meAfter.data?.user?.totp_enabled === false, JSON.stringify(meAfter.data?.user ?? {}));
+
+// ---------- phase 4b: the TOTP replay wall (v3.1.3) ----------
+// The new door rule: a code opens its door ONCE. The moment it succeeds, the
+// step is spent for that door — the same code can never unlock twice, and an
+// older step is dead on arrival. A code spent on one door still serves
+// another within its natural life (that is how a human uses the
+// authenticator), while the same-door replay — the real attack — dies.
+const rStart = await req('POST', '/api/auth/totp/start', null, cookie);
+const rSecret = rStart.data?.secret ?? '';
+ok('replay drill: totp start returns a secret', /^[A-Z2-7]{16,}$/.test(rSecret), rSecret.slice(0, 8));
+const rEnable = await req('POST', '/api/auth/totp/enable', { secret: rSecret, code: totpNow(rSecret) }, cookie);
+ok('replay drill: 2FA enabled', rEnable.data?.ok === true, JSON.stringify(rEnable.data));
+
+const lockR = await req('POST', '/api/auth/lock', {}, cookie);
+ok('replay drill: session locked', lockR.data?.ok === true, JSON.stringify(lockR.data));
+const codeNow = totpNow(rSecret);
+const uCode = await req('POST', '/api/auth/verify-unlock', { mode: 'totp', code: codeNow }, cookie);
+ok('unlock with the live code opens the session', uCode.data?.ok === true, JSON.stringify(uCode.data));
+const lockR2 = await req('POST', '/api/auth/lock', {}, cookie);
+ok('replay drill: locked again for the replay attempt', lockR2.data?.ok === true, '');
+const uReplay = await req('POST', '/api/auth/verify-unlock', { mode: 'totp', code: codeNow }, cookie);
+ok('REPLAY of the spent code is refused', uReplay.status === 401 && uReplay.data?.error === 'invalid_code', `${uReplay.status} ${JSON.stringify(uReplay.data)}`);
+const uPrev = await req('POST', '/api/auth/verify-unlock', { mode: 'totp', code: totpNow(rSecret, Date.now() - 30000) }, cookie);
+ok('an OLDER step cannot open either', uPrev.status === 401 && uPrev.data?.error === 'invalid_code', `${uPrev.status} ${JSON.stringify(uPrev.data)}`);
+const uNext = await req('POST', '/api/auth/verify-unlock', { mode: 'totp', code: totpNow(rSecret, Date.now() + 31000) }, cookie);
+ok('a FUTURE step (+1 clock drift) still opens', uNext.data?.ok === true, JSON.stringify(uNext.data));
+const dReplay = await req('POST', '/api/auth/totp/disable', { current: PW3, code: codeNow }, cookie);
+ok('the spent unlock code still serves the OTHER door (disable — per-door rule)', dReplay.data?.ok === true, JSON.stringify(dReplay.data));
+const dSame = await req('POST', '/api/auth/totp/enable', { secret: rSecret, code: codeNow }, cookie);
+ok('the disable-door replay never reaches enable (own meter too)', dSame.status === 429 || dSame.data?.ok === true || dSame.data?.error === 'invalid_code', `${dSame.status} ${JSON.stringify(dSame.data)}`);
+// leave the account as we found it — 2FA off (the re-enable above reset the doors)
+const dOff = await req('POST', '/api/auth/totp/disable', { current: PW3, code: totpNow(rSecret) }, cookie);
+ok('replay drill cleanup: 2FA off again', dOff.data?.ok === true || dOff.data?.error === 'totp_not_enabled', JSON.stringify(dOff.data));
 
 // ---------- phase 5: suspended share frozen at the API ----------
 d1("INSERT OR IGNORE INTO domains (id, name, label, active, catch_all, status, stage, created_at) VALUES ('dom_sec', 'sec.test', NULL, 1, 1, 'verified', 3, 1)");

@@ -21,7 +21,11 @@ export async function createSession(env: Env, userId: string, ua?: string, ip?: 
 export function setSessionCookie(c: Context, token: string) {
   setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
-    sameSite: 'Lax',
+    // v3.1.3: Lax → Strict — the cookie never rides a cross-site navigation,
+    // so even a top-level arrival from a foreign page cannot silently carry
+    // the session in. The SPA still signs in seamlessly: same-origin API
+    // fetches send the cookie as before.
+    sameSite: 'Strict',
     secure: true,
     path: '/',
     maxAge: 60 * 60 * 24 * 30,
