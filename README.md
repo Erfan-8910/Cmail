@@ -385,7 +385,7 @@ Same hand, same taste — go give it a star.
 
 Made with intention by **[Erfan](https://github.com/Erfan-8910)** and **AI**
 
-**Cmail** — *your mailbox, your rules.*
+**[Cmail](https://github.com/Erfan-8910/Cmail)** — *your mailbox, your rules.*
 
 [Deploy guide](docs/DEPLOY.md) · [Usage guide](docs/USAGE.md) · [Releases](https://github.com/Erfan-8910/Cmail/releases) · [Climind-W](https://github.com/Erfan-8910/Climind-W) · [فارسی](README.fa.md)
 
