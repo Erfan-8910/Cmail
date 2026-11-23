@@ -27,6 +27,11 @@ app.use('*', async (c, next) => {
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('X-Frame-Options', 'SAMEORIGIN');
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // v3.1.2 — cross-origin isolation companions: the panel never opens
+  // pop-ups from or for other sites, and its resources are nobody else's
+  // to embed (COOP also cuts off cross-site tab-nabbing channels)
+  c.header('Cross-Origin-Opener-Policy', 'same-origin');
+  c.header('Cross-Origin-Resource-Policy', 'same-origin');
   // v3.1.0: HSTS everywhere — the panel is HTTPS-only by nature (Workers),
   // the header makes the browser refuse to even try plain HTTP next time
   c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');

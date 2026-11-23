@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
 import { uid, now, clean, getSettings, setSetting, hashPassword, passwordStrong, sealText, RE_LOCAL_PART, randomLocalPart } from '../util';
-import { requireAdmin, tokenFrom } from '../auth';
+import { requireAdmin, tokenFrom, clientIp, rateLimit } from '../auth';
 import { testProvider } from '../emailout';
 import { TABLES, EXPECTED } from '../tables';
 
@@ -134,6 +134,9 @@ app.put('/settings', requireAdmin, async (c) => {
 });
 
 app.post('/test-send', requireAdmin, async (c) => {
+  // v3.1.2 — a live outbound trigger deserves the same brake as /send:
+  // 10 probes / 10 min / IP keeps it a diagnostic, not a mail cannon.
+  if (!(await rateLimit(c.env, clientIp(c), 'test-send', 10))) return c.json({ ok: false, error: 'rate_limited' }, 429);
   const body = await c.req.json<{ to?: string }>().catch(() => null);
   const to = clean(body?.to, 120);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return c.json({ ok: false, error: 'invalid_email' }, 400);

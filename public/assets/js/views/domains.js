@@ -74,7 +74,7 @@ export async function renderDomains(root) {
     const head = h('div', { class: 'dom-card__head' },
       h('span', { class: 'dom-card__globe' }, icon('globe')),
       h('div', { class: 'dom-card__namebox' },
-        h('div', { class: 'dom-card__name mono', onclick: async () => { await copyText(d.name); toast(t('copied'), 'ok', 1300); }, title: t('copy') }, d.name, icon('copy')),
+        h('div', { class: 'dom-card__name mono', onclick: async () => { await copyText(d.name); toast(t('copied'), 'ok', 1300); }, title: t('copy') }, h('span', { class: 'dom-card__txt' }, d.name), icon('copy')),
         h('div', { class: 'dom-card__status' }, statusChip(d))),
     );
     if (unfinished) {

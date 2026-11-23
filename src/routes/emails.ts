@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
 import { uid, now, clean, getSetting } from '../util';
-import { requireUser, shareCan, blockSuspendedShare } from '../auth';
+import { requireUser, shareCan, blockSuspendedShare, clientIp, rateLimit } from '../auth';
 import { sendViaProvider } from '../emailout';
 
 const app = new Hono<AppEnv>();
@@ -282,6 +282,10 @@ app.get('/attachment/:attId', requireUser, async (c) => {
 app.post('/send', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
   if (!shareCan(u, 'compose')) return c.json({ ok: false, error: 'forbidden' }, 403);
+  // v3.1.2 — the outbox is a metered resource: without a cap, one compromised
+  // session (or one over-privileged guest) could pump unlimited mail through
+  // the owner's provider account until it gets suspended. 20 / 10 min / IP.
+  if (!(await rateLimit(c.env, clientIp(c), 'send', 20))) return c.json({ ok: false, error: 'rate_limited' }, 429);
   const body = await c.req.json<{ from_address_id?: string; to?: string; subject?: string; text?: string; html?: string }>().catch(() => null);
   const to = clean(body?.to, 120);
   const subject = clean(body?.subject, 200) || '(no subject)';

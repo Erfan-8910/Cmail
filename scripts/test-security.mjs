@@ -308,8 +308,11 @@ const home = await fetch(BASE + '/');
 ok('HSTS on the shell', (home.headers.get('strict-transport-security') ?? '').includes('max-age=31536000'), home.headers.get('strict-transport-security') ?? '(none)');
 ok('frame-ancestors in shell CSP', (home.headers.get('content-security-policy') ?? '').includes("frame-ancestors 'self'"), home.headers.get('content-security-policy') ?? '(none)');
 ok('X-Frame-Options kept', home.headers.get('x-frame-options') === 'SAMEORIGIN', home.headers.get('x-frame-options') ?? '(none)');
+ok('COOP same-origin on the shell (v3.1.2)', home.headers.get('cross-origin-opener-policy') === 'same-origin', home.headers.get('cross-origin-opener-policy') ?? '(none)');
+ok('CORP same-origin on the shell (v3.1.2)', home.headers.get('cross-origin-resource-policy') === 'same-origin', home.headers.get('cross-origin-resource-policy') ?? '(none)');
 const health = await fetch(BASE + '/api/health');
 ok('HSTS reaches API answers too', (health.headers.get('strict-transport-security') ?? '').length > 0, '(none)');
+ok('COOP reaches API answers too (v3.1.2)', health.headers.get('cross-origin-opener-policy') === 'same-origin', '(none)');
 
 // ---------- phase 13: mail frame hardening (static, in the built bundle) ----------
 const bundle = (await import('node:fs')).readFileSync('worker.js', 'utf8');
@@ -319,6 +322,27 @@ ok('server-enforced lock gate in the bundle', bundle.includes('session_locked'),
 ok('no global recovery constant in the bundle', !bundle.includes('Recover-Cmail-2026') && !bundle.includes('lvVylyVdxsS9'), '');
 ok('peppered hash scheme in the bundle', bundle.includes('pbkdf2mac'), '');
 ok('platform iteration ceiling respected (no 300k anywhere)', !bundle.includes('300000') || !bundle.includes('PBKDF2_DEFAULT = 300'), '');
+
+// ---------- phase 14: the outbox is metered (v3.1.2) ----------
+// /send and /admin/test-send used to be the only unmetered outbound-mail
+// triggers: one compromised session could pump unlimited mail through the
+// owner's provider account until it got suspended.
+const STORM_IP = '203.0.113.77';
+let send429 = 0, sendOther = 0;
+for (let i = 0; i < 21; i++) {
+  const r = await req('POST', '/api/emails/send', { to: 'storm@probe.test', subject: 'meter', text: 'x' }, cookie, STORM_IP);
+  if (r.status === 429 && r.data?.error === 'rate_limited') send429++;
+  else sendOther++;
+}
+ok('send storm: 21st call hits the 429 wall', send429 === 1 && sendOther === 20, `429s=${send429} other=${sendOther}`);
+let ts429 = 0;
+for (let i = 0; i < 11; i++) {
+  const r = await req('POST', '/api/admin/test-send', { to: 'storm@probe.test' }, cookie, STORM_IP);
+  if (r.status === 429) ts429++;
+}
+ok('test-send storm: capped at 10 per window', ts429 === 1, `429s=${ts429}`);
+const otherIp = await req('POST', '/api/admin/test-send', { to: 'calm@probe.test' }, cookie, '198.51.100.9');
+ok('a different IP keeps its own clean bucket', otherIp.status !== 429, `got ${otherIp.status}`);
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

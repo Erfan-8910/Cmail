@@ -107,7 +107,30 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 3.1.1 — the padlock is the server's, not a prop
+## What's new in 3.1.2 — the icons sit where they belong, and the outbox got its brake
+
+This release's report came from the setup-completion screen itself: **some symbols simply refused to sit in the right place and jumped straight at the user** — with a few more of the same in other sections. The three main offenders:
+
+- **The "Optional" tag had become a giant stretched dashed box.** In the setup screen's check rows, a broad CSS selector (`check__txt span`) meant for the row description was hijacking the little tag and turning it into a full-width block — a big empty-looking dashed rectangle under the title. The selector now scopes to the description only, and "Optional" is a small inline chip again.
+- **The "SERVER ONLINE" badge landed on top of the floating logo.** Logo and badge were both inline elements sharing one line box — on narrow screens the badge sat exactly on the wordmark. The logo is a block now and the badge owns its own line below it; the same fix went to the sign-in page's logo.
+- **The celebration confetti rained ON TOP of the card.** The confetti layer sat above everything (z-index 320) — pieces fell over titles, buttons and the "Connected" pills and read as broken elements. Confetti now falls BEHIND the app: only on the background and faintly through the glass — and it stays fully hidden under reduced motion.
+
+With those three fixed, the whole setup screen was re-verified on a real install: at 320px width, in both languages and both themes, none of mail, addresses, vault, domains, settings or about overflows by a single pixel anymore.
+
+**And general responsiveness got hard braces:**
+
+- **Eleven `minmax(NNNpx, 1fr)` auto-grids now carry the `min(NNNpx, 100%)` guard.** Without it, on 320–360px phones the health cards in Settings were pushed half off-screen (RTL grid overflow) — the health, settings, about, stats, palette and shortcut grids all got the brace.
+- **Long domain names now truly ellipsize**, and the copy icon is never pushed out of the card (the name lives in its own shrinkable span).
+- D1 inspector rows wrap instead of squeezing; wizard rail labels ellipsize at ≤360px; status pills compress; the sign-in logo got its floating-animation headroom back.
+
+**And security climbed one more step, as it does every release:**
+
+- **The two outbound-mail triggers were the only unmetered ones.** `POST /api/emails/send` is now capped at **20 per 10 minutes per IP** and `POST /api/admin/test-send` at **10** — a leaked session or an over-privileged guest can no longer pump unlimited mail through the owner's Brevo/Resend account until the provider suspends it. The answer is 429; every IP owns its own clean bucket.
+- **COOP and CORP everywhere.** The two modern companions of HSTS and X-Frame-Options: the panel opens no pop-ups to or for other sites, and its resources are nobody else's to embed (COOP also cuts the cross-site tab-nabbing channels).
+- **The security matrix is now 100/100.** Six fresh checks: the send storm hits the wall exactly at 20, the test-send storm at 10, a different IP keeps its own clean bucket, and COOP/CORP ride both the shell and the API.
+
+<details>
+<summary><b>What 3.1.1 changed — the padlock is the server's, not a prop</b></summary>
 
 The follow-up report to 3.1.0 was specific and honest: **the panel lock (the two-step password) could still be walked around** — right-click, delete the overlay element in the inspector, and the panel opened without any password. True: 3.1.0 verified the unlock credential on the server, but the *locked state itself* was still a browser flag — the server never knew the session was locked, so it kept answering every data call behind that deleted overlay. 3.1.1 moves the lock itself into the server:
 
@@ -118,6 +141,8 @@ The follow-up report to 3.1.0 was specific and honest: **the panel lock (the two
 - **A second wall against cross-site writes.** Every state-changing API call now checks its `Origin`/`Referer` against the request host — a forged cross-site POST that somehow carried the cookie (old browsers, Lax quirks) is refused before it runs. SameSite=Lax remains the first wall; this is the second.
 - **Housekeeping:** expired 2FA pending tokens are swept by the hourly cron instead of lingering forever.
 - **Verified end-to-end: 94/94.** The security matrix now proves the lock itself on a real worker: the session row really carries the lock, every data surface refuses while locked (mail, vault, addresses, admin, send), a locked `/me` leaks no mailbox facts, the *other* session keeps working, a wrong unlock credential keeps the lock, the right one opens it, foreign `Origin`/`Referer` writes are refused, same-origin writes pass — plus all 71 checks of the 3.1.0 matrix, still green.
+
+</details>
 
 <details>
 <summary><b>What 3.1.0 changed — the security release: nothing left to cheat</b></summary>
@@ -295,9 +320,9 @@ Users found it, and they were right: **too much of the security was a performanc
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.1/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v3.1.1:** [`CMail-v3.1.1.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.1/CMail-v3.1.1.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
-- The zip mirrors the v3.1.1 tag — the full security release (the server-owned padlock, peppered hashes, server-owned password bar, the frozen-share lock) is inside; the Deploy button and a fresh clone always carry the newest of everything.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.2/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v3.1.2:** [`CMail-v3.1.2.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.2/CMail-v3.1.2.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- The zip mirrors the v3.1.2 tag — the layout fixes for the setup screen and every section (symbols in place, true responsiveness at 320px), the outbound-mail brake (send/test-send caps), COOP/CORP and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 
