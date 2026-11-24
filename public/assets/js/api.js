@@ -121,6 +121,20 @@ export function errText(e) {
     suspended_share: 'suspendedShare',
     cannot_change_own_role: 'cannotChangeOwnRole',
     session_locked: 'lockTitle',
+    // v3.1.5 — database failures and provider failures arrive as classified
+    // codes and leave as one human sentence each
+    send_failed: 'sendFailed',
+    db_error: 'dbErrGeneric',
+    db_not_authorized: 'dbErrAuth',
+    schema_outdated: 'dbErrSchema',
   };
-  return map[e?.code] ? t(map[e.code]) : (e?.detail ? `${t('error')} — ${e.detail}` : t('error'));
+  const mapped = map[e?.code];
+  // the provider's own answer is diagnostic gold for outgoing mail — keep
+  // it, trimmed. Database codes never show their raw detail; the pointer to
+  // the Health panel is the only "detail" a human needs.
+  if (mapped) {
+    if (e?.code === 'send_failed' && e.detail) return `${t(mapped)} — ${String(e.detail).slice(0, 140)}`;
+    return t(mapped);
+  }
+  return e?.detail ? `${t('error')} — ${e.detail}` : t('error');
 }

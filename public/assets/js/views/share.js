@@ -183,20 +183,26 @@ export async function sharePane() {
     createBtn.disabled = false;
   });
 
-  pane.append(h('div', { class: 'glass card' },
+  // v3.1.5 — the creation form sits in two calm columns on wide screens
+  // (who gets in, what they may do — beside how long, how many devices),
+  // so the pane reads like a form, not an endless scroll
+  pane.append(h('div', { class: 'glass card share-create' },
     h('h3', { style: { margin: '0 0 4px', fontSize: '15px' } }, t('shareNewTitle')),
     h('p', { class: 'small muted', style: { margin: '0 0 12px' } }, t('shareNewSub')),
-    h('div', { class: 'field' }, h('label', {}, t('shareMailboxes')), picker,
-      h('p', { class: 'small muted', style: { margin: '6px 2px 0' } }, t('shareMailboxesHint'))),
-    h('div', { class: 'field mt-1' }, h('label', {}, t('shareLabel')), labelIn),
-    h('div', { class: 'mt-1', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' } },
-      h('div', { class: 'field' }, h('label', {}, t('username')), h('div', { class: 'row' }, userIn, dice(userIn, genUsername))),
-      h('div', { class: 'field' }, h('label', {}, t('password')), h('div', { class: 'row' }, passIn, dice(passIn, genPassword)))),
-    h('div', { class: 'field mt-1' }, h('label', {}, t('sharePerms')), permRow),
-    h('div', { class: 'field mt-1' }, h('label', {}, t('shareDevices')), devRow,
-      h('p', { class: 'small muted', style: { margin: '6px 2px 0' } }, t('shareDevicesHint'))),
-    h('div', { class: 'field mt-1' }, h('label', {}, t('shareNote')), noteIn),
-    h('div', { class: 'field mt-1' }, h('label', {}, t('shareExpiry')), presetRow, h('div', { class: 'small muted', style: { margin: '6px 0' } }, t('shareCustom')), customIn),
+    h('div', { class: 'share-create__grid' },
+      h('div', { class: 'share-create__col' },
+        h('div', { class: 'field' }, h('label', {}, t('shareMailboxes')), picker,
+          h('p', { class: 'small muted', style: { margin: '6px 2px 0' } }, t('shareMailboxesHint'))),
+        h('div', { class: 'field mt-1' }, h('label', {}, t('shareLabel')), labelIn),
+        h('div', { class: 'field mt-1' }, h('label', {}, t('sharePerms')), permRow)),
+      h('div', { class: 'share-create__col' },
+        h('div', { class: 'share-create__creds' },
+          h('div', { class: 'field' }, h('label', {}, t('username')), h('div', { class: 'row' }, userIn, dice(userIn, genUsername))),
+          h('div', { class: 'field' }, h('label', {}, t('password')), h('div', { class: 'row' }, passIn, dice(passIn, genPassword)))),
+        h('div', { class: 'field mt-1' }, h('label', {}, t('shareDevices')), devRow,
+          h('p', { class: 'small muted', style: { margin: '6px 2px 0' } }, t('shareDevicesHint'))),
+        h('div', { class: 'field mt-1' }, h('label', {}, t('shareNote')), noteIn),
+        h('div', { class: 'field mt-1' }, h('label', {}, t('shareExpiry')), presetRow, h('div', { class: 'small muted', style: { margin: '6px 0' } }, t('shareCustom')), customIn))),
     h('div', { class: 'row mt-2' }, createBtn),
   ));
 

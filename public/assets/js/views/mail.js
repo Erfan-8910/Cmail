@@ -1009,7 +1009,7 @@ function emailRow(em) {
   // per-row overflow menu — the touch-proof way to star / mark / delete
   const kebab = h('button', {
     class: 'email-row__kebab', title: t('more'), 'aria-label': t('more'),
-    onclick: (e) => { e.stopPropagation(); vibrate(5); rowMenu(em); },
+    onclick: (e) => { e.stopPropagation(); vibrate(5); rowMenu(em, e.currentTarget); },
   }, icon('more'));
 
   // one row, one line — the way a grown-up mail client reads:
@@ -1056,8 +1056,15 @@ function emailRow(em) {
     }, 480); }, { passive: true });
     row.addEventListener('touchmove', () => { moved = true; clearTimeout(lpT); }, { passive: true });
     row.addEventListener('touchend', () => clearTimeout(lpT), { passive: true });
-    row.addEventListener('contextmenu', (e) => { if (selecting || selected.size) e.preventDefault(); });
   }
+
+  // v3.1.5 — right-click is the desktop's management surface: the full
+  // context menu opens at the pointer. In selection mode the native menu
+  // stays suppressed so the checkboxes keep charge.
+  row.addEventListener('contextmenu', (e) => {
+    if (selecting || selected.size) { e.preventDefault(); return; }
+    openCtxMenu(e, em);
+  });
 
   // touch: the Gmail-grade shortcut — flick a row and it acts.
   // left flick deletes, right flick stars; a gentle push springs back.
@@ -1131,46 +1138,243 @@ function toggleSelect(id) {
   drawBulkBar();
 }
 
-// ---------- per-row action sheet (touch-proof star / read / file / delete) ----------
-function rowMenu(em) {
-  let m = null;
-  const act = (label, icn, fn, cls = 'btn') => h('button', {
-    class: `${cls} menu-act`,
-    onclick: () => { m.close(); fn(); },
-  }, icon(icn), label);
+// ---------- the floating context menu (right-click / kebab) ----------
+// v3.1.5: row actions moved out of the heavy dialog into a real context
+// menu — right-click a letter (or press the row's kebab) and the menu opens
+// exactly where the pointer is, clamped inside the viewport, RTL-aware; on
+// phones it docks to the bottom as a sheet. One menu, every management
+// action the credential allows — nothing a guest may not do is ever shown.
+let ctxEl = null;
+function closeCtxMenu() {
+  if (!ctxEl) return;
+  const el = ctxEl; ctxEl = null;
+  el.classList.remove('is-open');
+  setTimeout(() => el.remove(), 180);
+  window.removeEventListener('pointerdown', ctxOutside, true);
+  window.removeEventListener('keydown', ctxEsc, true);
+  window.removeEventListener('scroll', ctxCloseScroll, true);
+  window.removeEventListener('resize', closeCtxMenu);
+}
+function ctxOutside(e) { if (ctxEl && !ctxEl.contains(e.target)) closeCtxMenu(); }
+function ctxEsc(e) { if (e.key === 'Escape') { e.stopPropagation(); closeCtxMenu(); } }
+function ctxCloseScroll() { if (ctxEl) closeCtxMenu(); }
 
+function openCtxMenu(ev, em, anchor) {
+  ev.preventDefault?.(); ev.stopPropagation?.();
+  closeCtxMenu();
+  const items = ctxItems(em);
+  if (!items.length) return;
+  const menu = h('div', { class: 'ctxmenu glass', role: 'menu' });
+  for (const it of items) {
+    if (it.sep) { menu.append(h('div', { class: 'ctxmenu__sep', role: 'separator' })); continue; }
+    if (it.head) { menu.append(h('div', { class: 'ctxmenu__head' }, it.head)); continue; }
+    menu.append(h('button', {
+      class: `ctxmenu__it ${it.danger ? 'ctxmenu__it--danger' : ''}`, role: 'menuitem',
+      onclick: () => { closeCtxMenu(); vibrate(5); it.fn(); },
+    }, icon(it.icn), h('span', {}, it.label)));
+  }
+  document.body.append(menu);
+  ctxEl = menu;
+  // position: at the pointer for a real right-click, or above/below the
+  // kebab that was pressed — always clamped inside the viewport
+  const r = menu.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let x, y;
+  if (anchor?.getBoundingClientRect) {
+    const a = anchor.getBoundingClientRect();
+    x = a.left + a.width / 2 - r.width / 2;
+    y = a.bottom + 6;
+    if (y + r.height > vh - 8) y = a.top - r.height - 6;
+  } else {
+    x = ev.clientX ?? 40; y = ev.clientY ?? 40;
+  }
+  x = Math.max(8, Math.min(x, vw - r.width - 8));
+  y = Math.max(8, Math.min(y, vh - r.height - 8));
+  menu.style.left = `${Math.round(x)}px`;
+  menu.style.top = `${Math.round(y)}px`;
+  menu.classList.add('is-open');
+  window.addEventListener('pointerdown', ctxOutside, true);
+  window.addEventListener('keydown', ctxEsc, true);
+  window.addEventListener('scroll', ctxCloseScroll, true);
+  window.addEventListener('resize', closeCtxMenu);
+}
+
+// the menu's contents — the full management set of one letter, permission-
+// filtered. Filing options ride in as a labeled group when folders exist.
+function ctxItems(em) {
   const items = [];
-  if (can('star')) {
-    items.push(act(em.starred ? t('unstar') : t('star'), 'star', async () => {
-      try { await api.patch(`/api/emails/${em.id}`, { starred: !em.starred }); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
-    }));
+  items.push({ icn: 'mail', label: t('openMail'), fn: () => { cursorIdx = emails.findIndex((x) => x.id === em.id); location.hash = `#/mail/m/${em.id}`; } });
+  if (can('compose') && sendReady()) {
+    items.push({ icn: 'arrow', label: t('reply'), fn: () => replyToMail(em) });
   }
-  items.push(act(em.is_read ? t('markUnread') : t('markRead'), 'eye', async () => {
+  if (can('star')) items.push({ icn: 'star', label: em.starred ? t('unstar') : t('star'), fn: async () => {
+    try { await api.patch(`/api/emails/${em.id}`, { starred: !em.starred }); em.starred = em.starred ? 0 : 1; loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
+  } });
+  items.push({ icn: 'eye', label: em.is_read ? t('markUnread') : t('markRead'), fn: async () => {
     try { await api.patch(`/api/emails/${em.id}`, { is_read: !em.is_read }); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
-  }));
-  // filing — this mail slides into one of the account's own folders
-  if (can('archive')) {
-    const movable = folders.filter((f) => f.id !== em.folder_id);
-    if (movable.length) {
-      items.push(h('div', { class: 'menu-act__label' }, t('moveTo')));
-      for (const f of movable) {
-        items.push(h('button', { class: 'btn menu-act', onclick: () => { m.close(); moveMail(em, f.id); } },
-          h('span', { class: `fdot fdot--${f.color || 'amber'}` }, ''), f.name));
-      }
+  } });
+  items.push({ sep: true });
+  items.push({ icn: 'download', label: t('pdfExport'), fn: () => exportPdfFromId(em.id) });
+  const peer = em.direction === 'out' ? (em.to_addr || em.from_addr) : (em.from_addr || em.to_addr);
+  if (peer) items.push({ icn: 'copy', label: `${t('copyAddress')}: ${peer}`, fn: () => { copyText(peer); toast(t('copied'), 'ok', 1200); } });
+  if (can('archive') && folders.length) {
+    const movable = folders.filter((f) => f.id !== em.folder_id).slice(0, 4);
+    if (movable.length || em.folder_id) {
+      items.push({ sep: true });
+      items.push({ head: t('moveTo') });
+      for (const f of movable) items.push({ icn: 'folder', label: f.name, fn: () => moveMail(em, f.id) });
+      if (em.folder_id) items.push({ icn: 'x', label: t('folderRemove'), fn: () => moveMail(em, null) });
     }
-    if (em.folder_id) items.push(act(t('folderRemove'), 'x', () => moveMail(em, null)));
   }
-  if (can('delete')) items.push(act(t('delete'), 'trash', () => confirmEmailDelete(1, em.address_id, async () => {
-    try { await api.del(`/api/emails/${em.id}`); toast(t('deletedN'), 'ok', 1400); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
-  }, true), 'btn btn--danger'));
+  if (can('delete')) {
+    items.push({ sep: true });
+    items.push({ icn: 'trash', label: t('delete'), danger: true, fn: () => confirmEmailDelete(1, em.address_id, async () => {
+      try { await api.del(`/api/emails/${em.id}`); toast(t('deletedN'), 'ok', 1400); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
+    }, true) });
+  }
+  return items;
+}
 
-  m = modal({
-    title: (em.subject || '(no subject)').slice(0, 64), iconName: 'mail',
-    body: [
-      h('div', { class: 'menu-stack' }, items),
-    ],
-    footer: [h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('cancel'))],
+// reply with a real quote — the original text rides into the composer under
+// a dated header, prefixed line by line, the way a proper mail client does
+async function replyToMail(em) {
+  let text = em.preview ?? '';
+  try { const full = await api.get(`/api/emails/${em.id}`); text = full.email?.text_body ?? text; }
+  catch { /* the preview is an honest fallback */ }
+  const subject = em.subject && /^re:/i.test(em.subject.trim()) ? em.subject : `Re: ${em.subject ?? ''}`;
+  openCompose({
+    to: em.direction === 'out' ? (em.to_addr || em.from_addr) : em.from_addr,
+    subject,
+    quote: { from: em.direction === 'out' ? (em.to_addr || em.from_addr) : (em.from_name ? `${em.from_name} <${em.from_addr}>` : em.from_addr), date: em.received_at, text },
   });
+}
+
+// ---------- official PDF export ----------
+// v3.1.5: any letter can leave as a formal paper copy — a print-ready page
+// with the Cmail letterhead, the official seal, the full routing details
+// (SPF · DKIM · DMARC verdicts included) and the body, all in the language
+// the panel speaks. The browser's own print dialog does the "Save as PDF"
+// — RTL glyphs stay perfect because no PDF library ever reshapes them.
+async function exportPdfFromId(id) {
+  toast(t('pdfPreparing'), 'info', 1600);
+  let r;
+  try { r = await api.get(`/api/emails/${id}`); }
+  catch (e) { toast(errText(e), 'err'); return; }
+  exportMailPdf(r);
+}
+
+function exportMailPdf(r) {
+  const em = r.email;
+  const FA = lang === 'fa';
+  const FA_D = (n) => FA ? String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : String(n);
+  const doc = em.html_body ? sanitizeEmailHtml(em.html_body) : null;
+  const rawText = em.text_body || em.preview || '—';
+  const bodyHtml = doc ? doc.body.innerHTML
+    : `<div style="white-space:pre-wrap">${esc(rawText)}</div>`;
+  const vdir = doc ? detectDir(doc) : (FA || /[\u0600-\u06FF]/.test(rawText.slice(0, 400)) ? 'rtl' : 'ltr');
+  const when = new Date(em.received_at).toLocaleString(FA ? 'fa-IR' : 'en-GB');
+  const exported = new Date().toLocaleString(FA ? 'fa-IR' : 'en-GB');
+  const host = location.host || 'cmail';
+  const version = state.setup?.version || '';
+
+  // authentication verdicts — the same lift the reader's details drawer does
+  const headers = Array.isArray(r.headers) ? r.headers : [];
+  const authRaw = headers.filter((h2) => ['authentication-results', 'arc-authentication-results', 'received-spf'].includes(h2.k)).map((h2) => h2.v).join(' ');
+  const verdict = (re) => authRaw.match(re)?.[1]?.toLowerCase() ?? null;
+  const spf = verdict(/\bspf\s*=\s*(pass|fail|softfail|neutral|none|temperror|permerror)/i);
+  const dkim = verdict(/\bdkim\s*=\s*(pass|fail|none|temperror|permerror)/i);
+  const dmarc = verdict(/\bdmarc\s*=\s*(pass|fail|none|temperror|permerror)/i);
+  const authLine = [spf && `SPF: ${spf}`, dkim && `DKIM: ${dkim}`, dmarc && `DMARC: ${dmarc}`].filter(Boolean).join('  ·  ');
+
+  const metaRow = (k, v) => `<tr><td class="k">${esc(k)}</td><td>${esc(v)}</td></tr>`;
+  const outgoing = em.direction === 'out';
+  let meta = '';
+  meta += metaRow(FA ? 'از' : 'From', outgoing ? em.from_addr : (em.from_name ? `${em.from_name} — ${em.from_addr}` : em.from_addr));
+  meta += metaRow(FA ? 'به' : 'To', em.to_addr ?? '');
+  meta += metaRow(FA ? 'صندوق' : 'Mailbox', em.address ?? em.address_label ?? '');
+  meta += metaRow(FA ? 'نوع' : 'Type', outgoing ? (FA ? 'نامهٔ ارسال‌شده' : 'Sent mail') : (FA ? 'نامهٔ دریافتی' : 'Received mail'));
+  meta += metaRow(FA ? 'تاریخ و ساعت' : 'Date & time', when);
+  meta += metaRow(FA ? 'حجم' : 'Size', fmtBytes(em.size ?? 0));
+  if (outgoing && em.provider) meta += metaRow(FA ? 'مسیر ارسال' : 'Sent via', em.provider);
+  if (authLine) meta += metaRow(FA ? 'احراز' : 'Authentication', authLine);
+
+  const atts = (r.attachments ?? []).filter((a) => a.available);
+  const attHtml = atts.length
+    ? `<div class="attline"><b>${FA ? 'پیوست‌ها' : 'Attachments'} (${FA_D(atts.length)}):</b> ${atts.map((a) => esc(a.filename ?? 'file')).join(' · ')}</div>`
+    : '';
+  const noteHtml = r.note?.body
+    ? `<div class="noteline"><b>${FA ? 'یادداشت' : 'Note'}:</b> ${esc(r.note.body)}</div>`
+    : '';
+
+  // the official seal — a round stamp that names the exporter and the date
+  const sealText = 'CMAIL · OFFICIAL COPY · ';
+  const seal = `<svg class="seal" viewBox="0 0 120 120" aria-hidden="true">
+    <defs><path id="sealArc" d="M60,60 m-46,0 a46,46 0 1,1 92,0 a46,46 0 1,1 -92,0"/></defs>
+    <circle cx="60" cy="60" r="57" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <circle cx="60" cy="60" r="36" fill="none" stroke="currentColor" stroke-width="1"/>
+    <text font-size="9.4" letter-spacing="2.2" fill="currentColor"><textPath href="#sealArc">${sealText}</textPath></text>
+    <text x="60" y="56" text-anchor="middle" font-size="13" font-weight="800" fill="currentColor">Cmail</text>
+    <text x="60" y="70" text-anchor="middle" font-size="7.4" fill="currentColor">${esc(FA ? 'خروجی رسمی' : 'OFFICIAL EXPORT')}</text>
+    <text x="60" y="80" text-anchor="middle" font-size="6.6" fill="currentColor">${esc(exported.split(',')[0] ?? '')}</text>
+  </svg>`;
+
+  const html = `<!doctype html><html dir="${FA ? 'rtl' : 'ltr'}" lang="${lang}"><head><meta charset="utf-8">
+<title>Cmail — ${esc(em.subject || 'email')}</title><style>
+  @page { size: A4; margin: 12mm 12mm 16mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @font-face { font-family: 'Vazirmatn'; src: url('/assets/fonts/Vazirmatn-var.woff2') format('woff2-variations'); font-weight: 100 900; }
+  @font-face { font-family: 'Inter'; src: url('/assets/fonts/Inter-var.woff2') format('woff2-variations'); font-weight: 100 900; }
+  body { margin: 0; font-family: ${FA ? "'Vazirmatn'" : "'Inter'"}, Tahoma, sans-serif; color: #1d2718; font-size: 13px; }
+  .head { display: flex; align-items: center; gap: 14px; border-bottom: 2.5px solid #38512e; padding-bottom: 14px; }
+  .head img { width: 46px; height: auto; flex: none; }
+  .brand h1 { margin: 0; font-size: 22px; letter-spacing: .4px; color: #38512e; }
+  .brand p { margin: 3px 0 0; font-size: 10.5px; color: #6d7c62; }
+  .brand p bdi { direction: ltr; unicode-bidi: embed; }
+  .seal { width: 92px; height: 92px; color: #38512e; margin-inline-start: auto; flex: none; }
+  table.meta { width: 100%; border-collapse: collapse; margin: 16px 0 4px; font-size: 12px; }
+  table.meta td { border: 1px solid #d6dccc; padding: 6.5px 10px; vertical-align: top; }
+  table.meta td.k { width: 128px; background: #f1f4ea; font-weight: 700; color: #40513a; white-space: nowrap; }
+  h2.subj { font-size: 17.5px; margin: 16px 0 10px; line-height: 1.5; }
+  .body { font-size: 13px; line-height: 1.9; }
+  .body img, .body table { max-width: 100% !important; }
+  .vbody { direction: ${vdir}; text-align: start; }
+  .attline, .noteline { margin-top: 14px; font-size: 11.5px; color: #46543e; border-top: 1px dashed #c6cfb8; padding-top: 8px; }
+  .noteline { background: #f6f8f0; border: 1px solid #dde3cf; border-radius: 8px; padding: 8px 10px; }
+  .foot { margin-top: 24px; border-top: 1px solid #d6dccc; padding-top: 8px; font-size: 10px; color: #86927a; display: flex; justify-content: space-between; gap: 10px; }
+</style></head><body>
+  <div class="head">
+    <img src="/assets/img/icon-black.png" alt="Cmail">
+    <div class="brand"><h1>Cmail</h1><p><bdi>${esc(host)}</bdi> · ${FA ? 'خروجی رسمی پست — سند این نامه' : 'Official mail export — this letter as a document'}</p></div>
+    ${seal}
+  </div>
+  <table class="meta">${meta}</table>
+  <h2 class="subj">${esc(em.subject || '(no subject)')}</h2>
+  <div class="body vbody">${bodyHtml}</div>
+  ${attHtml}${noteHtml}
+  <div class="foot">
+    <span>Cmail${version ? ' v' + esc(version) : ''} · <bdi>${esc(host)}</bdi></span>
+    <span>${FA ? 'تاریخ خروجی' : 'Exported'}: ${esc(exported)}</span>
+  </div>
+</body></html>`;
+
+  // the print stage: an off-screen frame that carries the document and hands
+  // it to the browser's own dialog — "Save as PDF" is one press away there
+  const f = h('iframe', {
+    title: 'Cmail PDF export',
+    style: { position: 'fixed', left: '-10000px', top: '0', width: '820px', height: '640px', border: '0', background: '#fff' },
+  });
+  f.setAttribute('srcdoc', html);
+  f.addEventListener('load', () => {
+    try { f.contentWindow.focus(); f.contentWindow.print(); }
+    catch { toast(t('pdfOpenFail'), 'err', 3000); }
+    setTimeout(() => f.remove(), 45_000);
+  });
+  document.body.append(f);
+}
+
+// ---------- per-row action sheet (touch-proof star / read / file / delete) ----------
+function rowMenu(em, anchor) {
+  openCtxMenu({ preventDefault() {}, stopPropagation() {}, clientX: 40, clientY: 40 }, em, anchor);
 }
 
 // file one message — folder_id null puts it back in the plain inbox
@@ -1187,7 +1391,7 @@ async function moveMail(em, fid) {
 document.addEventListener('keydown', (e) => {
   const onReader = !!document.querySelector('.reader');
   if (!document.getElementById('email-list') && !onReader) return;   // only in mail context
-  if (document.querySelector('.modal-back, .cmdk-back, .menu')) return; // nothing overlaying
+  if (document.querySelector('.modal-back, .cmdk-back, .menu, .ctxmenu')) return; // nothing overlaying
   const typing = /^(input|textarea|select)$/i.test(e.target.tagName) || e.target.isContentEditable;
   if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
 
@@ -1329,7 +1533,11 @@ async function drawReader(wrap, r) {
         class: `btn btn--sm btn--ghost ${sendReady() ? '' : 'is-frozen'}`,
         title: sendReady() ? t('reply') : t('sendLockedTitle'),
         onclick: () => sendReady()
-          ? openCompose({ to: replyTo, subject: `Re: ${em.subject ?? ''}` })
+          ? openCompose({
+              to: replyTo,
+              subject: em.subject && /^re:/i.test(em.subject.trim()) ? em.subject : `Re: ${em.subject ?? ''}`,
+              quote: { from: replyTo, date: em.received_at, text: em.text_body ?? '' },
+            })
           : toast(t('sendLockedToast'), 'err'),
       }, icon('arrow'), h('span', { class: 'hide-sm' }, t('reply')), sendReady() ? '' : lockBadge('frozen', t('sendLockedTitle'))));
   }
@@ -1341,6 +1549,8 @@ async function drawReader(wrap, r) {
         location.hash = '#/mail';
       } catch (e) { toast(errText(e), 'err'); }
     } }, icon('eye'), h('span', { class: 'hide-sm' }, t('markUnread'))),
+    h('button', { class: 'btn btn--sm btn--ghost', title: t('pdfExport'), onclick: () => exportMailPdf(r) },
+      icon('download'), h('span', { class: 'hide-sm' }, t('pdfExport'))),
     h('button', { class: 'btn btn--sm btn--ghost', title: t('copy'), onclick: async () => { await copyText(em.from_addr); toast(t('copied'), 'ok', 1400); } }, icon('copy')),
   );
 
@@ -1627,6 +1837,15 @@ export async function openCompose(prefill = {}) {
   const subj = h('input', { class: 'input compose__in', placeholder: t('subject'), value: useSaved ? (saved.subject ?? '') : (prefill.subject ?? '') });
   const body = h('textarea', { class: 'input compose__body', placeholder: t('body') });
   if (useSaved) body.value = saved.body ?? '';
+  else if (prefill.quote) {
+    // v3.1.5 — reply carries the original letter with it: a dated header and
+    // the text, prefixed line by line, ready under the cursor
+    const q = String(prefill.quote.text ?? '');
+    if (q.trim()) {
+      const head = `${t('quoteHead')} ${prefill.quote.from} (${new Date(prefill.quote.date ?? Date.now()).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-GB')}):`;
+      body.value = `\n\n${head}\n${q.split('\n').map((l) => `> ${l}`).join('\n')}`;
+    }
+  }
   const toErr = h('div', { class: 'compose__err hidden' }, icon('x'), h('span', {}, ''));
 
   // the draft rides in localStorage — closed tab, reload, nothing is lost

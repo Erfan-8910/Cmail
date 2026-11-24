@@ -412,7 +412,25 @@ export async function renderGate(root) {
   const checksBox = h('div', { class: 'gate__checks' }, rows.map((r) => [r.row, r.tutBox]).flat());
 
   // recheck button + auto label
-  const reBtn = h('button', { class: 'btn btn--primary', onclick: () => recheck(true) }, icon('refresh'), t('gateRecheck'));
+  // one button, two honest modes: while pieces are missing it re-checks;
+  // the moment everything is green it becomes the door into the panel.
+  // (the old build swapped the handler but the original addEventListener
+  // listener survived underneath — one press fired both actions)
+  let reMode = 'recheck';
+  const reBtn = h('button', { class: 'btn btn--primary', onclick: () => {
+    if (reMode === 'enter') location.hash = state.user ? '#/mail' : '#/login';
+    else recheck(true);
+  } }, icon('refresh'), t('gateRecheck'));
+  function setRe(mode) {
+    reMode = mode;
+    clear(reBtn);
+    if (mode === 'enter') reBtn.append(icon('inbox'), t('gateEnter'));
+    else reBtn.append(icon('refresh'), t('gateRecheck'));
+  }
+  const stayBtn = h('button', { class: 'btn btn--ghost gate__stay', onclick: () => {
+    clearInterval(leaveT); autoLbl.textContent = '';
+    location.hash = '#/status?stay';
+  } }, t('gateStay'));
   const autoLbl = h('span', { class: 'gate__auto' });
 
   // ---------- draw ----------
@@ -432,28 +450,40 @@ export async function renderGate(root) {
       h('div', { class: 'gate__top-txt' },
         h('h2', {}, allOk ? t('gateAllOk') : `${lang === 'fa' ? toFa(okN) : okN} ${t('gateOf')} ${lang === 'fa' ? toFa(total) : total} ${lang === 'fa' ? 'اتصال برقرار است' : 'connections up'}`),
         h('p', {}, allOk ? t('gateAllOkSub') : (state.user ? t('gateHintFix') : t('gateAdminNote'))),
-        h('div', { class: 'row', style: { gap: '8px', marginTop: '10px' } }, reBtn, autoLbl)));
+        h('div', { class: 'row', style: { gap: '8px', marginTop: '10px' } }, reBtn, ...(allOk && !stay ? [stayBtn] : []), autoLbl)));
     card.append(top, checksBox);
     rows.forEach((r) => r.refresh(false));
+    if (allOk && !stay) setRe('enter'); else setRe('recheck');
 
     if (allOk) {
       card.classList.add('is-done');
-      const stay = location.hash.includes('stay');
       if (!card.dataset.celebrated) {
         card.dataset.celebrated = '1';
         celebrate();
       }
       if (stay && state.user) {
-        clear(reBtn);
-        reBtn.append(icon('inbox'), t('navMail'));
-        reBtn.onclick = () => { location.hash = '#/mail'; };
+        clearInterval(leaveT);
         autoLbl.textContent = '';
       } else if (!stay) {
-        setTimeout(() => { location.hash = state.user ? '#/mail' : '#/login'; }, 1500);
+        // the goodbye is honest now: a visible, truthful countdown on the
+        // page itself — no silent setTimeout while the label pretends nothing
+        // is happening. The stay hand-brake beside it stops the clock.
+        clearInterval(leaveT);
+        let left = 5;
+        const tick = () => {
+          if (!card.isConnected) { clearInterval(leaveT); return; }
+          if (location.hash.includes('stay')) { clearInterval(leaveT); autoLbl.textContent = ''; return; }
+          autoLbl.textContent = t('gateLeavingIn').replace('{n}', lang === 'fa' ? toFa(Math.max(left, 0)) : String(Math.max(left, 0)));
+          if (left <= 0) { clearInterval(leaveT); location.hash = state.user ? '#/mail' : '#/login'; return; }
+          left -= 1;
+        };
+        tick();
+        leaveT = setInterval(tick, 1000);
       }
     } else {
       card.classList.remove('is-done');
       delete card.dataset.celebrated;
+      clearInterval(leaveT);
     }
     updateEyebrow();
   }
@@ -521,20 +551,34 @@ export async function renderGate(root) {
     drawCard();
   }
 
-  // auto re-check loop
+  // auto re-check loop — the heartbeat that makes this page self-updating.
+  // v3.1.5 fixes two quiet lies: the loop used to give up forever once a
+  // single fetch failed (offline was a dead end until a human pressed the
+  // button), and it kept ticking after the page was gone. Now the counter
+  // also counts down while offline (and genuinely retries), the loop retires
+  // itself when its card leaves the DOM, and a flipped `ready` always wins a
+  // repaint even when the checks array looks identical.
+  let leaveT = null;   // the goodbye countdown on the completion state
   timer = setInterval(async () => {
-    if (offline) { count = RECHECK_EVERY; autoLbl.textContent = ''; return; }
+    if (!card.isConnected) { clearInterval(timer); clearInterval(leaveT); return; }
     if (state.setup?.ready) { autoLbl.textContent = ''; return; }
     count -= 1;
-    autoLbl.textContent = `${t('gateAutoIn')} ${lang === 'fa' ? toFa(Math.max(count, 0)) : Math.max(count, 0)}${t('gateSeconds')}`;
+    autoLbl.textContent = offline
+      ? t('gateReconnectIn').replace('{n}', `${lang === 'fa' ? toFa(Math.max(count, 0)) : Math.max(count, 0)}${t('gateSeconds')}`)
+      : `${t('gateAutoIn')} ${lang === 'fa' ? toFa(Math.max(count, 0)) : Math.max(count, 0)}${t('gateSeconds')}`;
     if (count <= 0) {
       count = RECHECK_EVERY;
       try {
         const s = await api.get('/api/setup/status');
         const before = JSON.stringify(state.setup?.checks ?? []);
-        state.setup = s; offline = false;
-        if (JSON.stringify(s.checks ?? []) !== before) drawCard();
-      } catch { offline = true; drawCard(); }
+        const wasReady = !!state.setup?.ready;
+        state.setup = s;
+        const recovered = offline;
+        offline = false;
+        if (recovered || JSON.stringify(s.checks ?? []) !== before || !!s.ready !== wasReady) drawCard();
+      } catch {
+        if (!offline) { offline = true; drawCard(); }
+      }
     }
   }, 1000);
 

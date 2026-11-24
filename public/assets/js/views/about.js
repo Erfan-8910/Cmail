@@ -1,10 +1,72 @@
 // Cmail — About view: the story, the features, the numbers, the maker.
 // Liquid-glass polish: count-up numbers, pointer tilt, mood-tinted glow.
-import { state } from '../api.js';
+// v3.1.5 — the page also tells the truth about the build itself: which
+// version is installed on this worker, whether a newer release exists, and
+// one press straight into the repository when it does.
+import { api, state, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
-import { h, icon } from '../ui.js';
+import { h, icon, clear } from '../ui.js';
 
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- update check: the installed build vs the newest release ----------
+// opens with an automatic quiet check; the button re-asks with force=1 and
+// the worker's ten-minute cache steps aside. When a newer version exists,
+// the card names it and hands the visitor the repo link — no release note
+// hunting, no guessing what the install is running.
+function updateCard(VERSION) {
+  const status = h('div', { class: 'ab-update__st small muted' }, t('updChecking'));
+  const btn = h('button', { class: 'btn btn--sm' }, icon('refresh'), t('updCheckBtn'));
+
+  async function check(force) {
+    btn.disabled = true;
+    btn.classList.add('is-busy');
+    status.className = 'ab-update__st small muted';
+    status.textContent = t('updChecking');
+    try {
+      const r = await api.get(`/api/update-check${force ? '?force=1' : ''}`);
+      clear(status);
+      if (r.ok && r.update_available) {
+        status.className = 'ab-update__st ab-update__st--new';
+        status.append(
+          h('span', { class: 'ab-update__newt' }, icon('spark'), t('updNew').replace('{v}', r.latest ?? '')),
+          h('div', { class: 'row mt-1', style: { flexWrap: 'wrap', gap: '8px' } },
+            h('a', { class: 'btn btn--sm btn--primary', href: r.url || 'https://github.com/Erfan-8910/CMail/releases', target: '_blank', rel: 'noopener' }, icon('external'), t('updGoRepo')),
+            r.name ? h('span', { class: 'small muted', style: { alignSelf: 'center' } }, r.name) : ''),
+        );
+      } else if (r.ok) {
+        // three honest truths: behind (go get it), equal (all good), ahead
+        // (the repo has not caught up with this install yet — release window)
+        const cmp = (x, y) => {
+          const a = String(x).replace(/^v/, '').split('.').map(Number);
+          const b = String(y).replace(/^v/, '').split('.').map(Number);
+          for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0); }
+          return 0;
+        };
+        const ahead = r.latest && r.current && cmp(r.latest, r.current) < 0;
+        status.append(icon('check'), h('span', {}, ahead ? t('updAhead').replace('{v}', r.latest) : t('updLatest').replace('{v}', r.latest || VERSION)));
+      } else {
+        status.append(icon('info'), h('span', {}, t('updFail')));
+      }
+    } catch (e) {
+      status.className = 'ab-update__st small muted';
+      clear(status);
+      status.append(icon('info'), h('span', {}, errText(e)));
+    }
+    btn.disabled = false;
+    btn.classList.remove('is-busy');
+  }
+
+  btn.addEventListener('click', () => check(true));
+  const card = h('section', { class: 'ab-update glass' },
+    h('div', { class: 'ab-update__head' },
+      h('div', { class: 'ab-update__t' }, icon('zap'), h('b', {}, t('updTitle'))),
+      h('span', { class: 'chip' }, icon('code'), `${t('updInstalled')} v${VERSION}`),
+      btn),
+    status);
+  check(false);
+  return card;
+}
 
 export function renderAbout(root) {
   const app = root;
@@ -107,7 +169,7 @@ export function renderAbout(root) {
       h('div', {},
         h('div', { class: 'eyebrow' }, icon('heart'), t('eyebrowAbout')),
         h('h1', { class: 'page-title' }, t('navAbout')))),
-    hero, ribbon, grid, stats, stackRow, creator, made,
+    hero, updateCard(VERSION), ribbon, grid, stats, stackRow, creator, made,
   );
 
   // ---------- effects ----------

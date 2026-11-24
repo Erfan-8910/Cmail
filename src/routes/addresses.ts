@@ -85,8 +85,13 @@ app.post('/domains/:id/wizard', requireAdmin, async (c) => {
   const action = body?.action ?? '';
 
   if (action === 'connect') {
-    // "I connected the domain" (or resuming/resending) — arm a fresh loop code
-    const code = 'cm-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+    // "I connected the domain" (or resending, or coming back after a skip).
+    // v3.1.5 — the loop address is FOR LIFE now: if this domain was issued a
+    // code before, the very same code keeps its place (and just gains a
+    // fresh 24h window) — a wizard the owner left mid-way greets them with
+    // the SAME verify email they already mailed to, instead of silently
+    // moving into a new address that invalidates the old letter.
+    const code = d.verify_code ?? 'cm-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8);
     const expires = now() + 24 * 3600_000;
     await c.env.DB.prepare("UPDATE domains SET status = 'verifying', stage = 2, verify_code = ?, verify_expires = ? WHERE id = ?")
       .bind(code, expires, id).run();
@@ -108,13 +113,13 @@ app.post('/domains/:id/wizard', requireAdmin, async (c) => {
 
   if (action === 'resume') {
     if (d.stage >= 2) {
+      // v3.1.5 — the saved code is the domain's identity: an alive code is
+      // reused untouched, an expired one keeps its address and only the
+      // clock is wound forward. Exit → come back → the same email still
+      // receives the confirmation, exactly as the wizard promised.
       const alive = d.verify_code && d.verify_expires && d.verify_expires > now();
-      if (alive) {
-        await c.env.DB.prepare("UPDATE domains SET status = 'verifying' WHERE id = ?").bind(id).run();
-        return c.json({ ok: true, status: 'verifying', stage: 2, verify_code: d.verify_code, verify_expires: d.verify_expires, verify_address: `${d.verify_code}@${d.name}` });
-      }
-      const code = 'cm-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8);
-      const expires = now() + 24 * 3600_000;
+      const code = d.verify_code ?? 'cm-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+      const expires = alive ? d.verify_expires! : now() + 24 * 3600_000;
       await c.env.DB.prepare("UPDATE domains SET status = 'verifying', verify_code = ?, verify_expires = ? WHERE id = ?")
         .bind(code, expires, id).run();
       return c.json({ ok: true, status: 'verifying', stage: 2, verify_code: code, verify_expires: expires, verify_address: `${code}@${d.name}` });

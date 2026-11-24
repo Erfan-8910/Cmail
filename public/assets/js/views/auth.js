@@ -111,11 +111,13 @@ export function renderLogin(root) {
   let door = 'account';
 
   const card = h('div', { class: 'auth-card glass' });
-  wrap.append(card);
 
   // ---------- the two doors: account ↔ shared access ----------
-  // a slim segmented control above the card; the guest door only exists once
-  // the admin account exists (before that there is nothing to share yet)
+  // a slim segmented control ABOVE the card; the guest door only exists once
+  // the admin account exists (before that there is nothing to share yet).
+  // v3.1.5: the tabs used to be appended after the card and sat stranded
+  // below it on desktop — the door tabs are the first thing the eye meets,
+  // the card follows them, in that order on every screen size.
   let seg = null;
   if (!firstRun) {
     const accBtn = h('button', { class: 'auth-seg__btn is-on', type: 'button' }, icon('user'), t('loginTabAccount'));
@@ -135,6 +137,10 @@ export function renderLogin(root) {
     seg = h('div', { class: 'auth-seg', role: 'tablist' }, accBtn, shareBtn);
     wrap.append(seg);
   }
+
+  // the card is painted after the tabs — when the guest door does not exist
+  // (first run), the card simply follows the logo and tagline as before
+  wrap.append(card);
 
   function field(label, type, name, value, autofocus) {
     const input = h('input', { class: 'input', type, name, value, autocomplete: type === 'password' ? (firstRun ? 'new-password' : 'current-password') : 'username', required: true });
