@@ -439,7 +439,7 @@ GPL-3.0 © [Erfan-8910](https://github.com/Erfan-8910) — سی‌میل نرم�
 
 <div align="center" dir="rtl">
 
-[![Climind-W — اپ آب‌وهوای مدرن وب از همان سازنده](docs/img/climind-promo-fa.png)](https://github.com/Erfan-8910/Climind-W)
+[![Climind-W — اپ آب‌وهوای مدرن وب](docs/img/climind-promo-fa.png)](https://github.com/Erfan-8910/Climind-W)
 
 **[Climind-W](https://github.com/Erfan-8910/Climind-W)** — اپ آب‌وهوای مدرن وب، با همان وسواس شیشه‌ای.
 همان دست، همان سلیقه — یک ستاره مهمانش کن.
