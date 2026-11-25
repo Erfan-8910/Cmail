@@ -116,6 +116,21 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
+## What's new in 3.2.2 — attachments grow up, the disk gets a fuel gauge
+
+3.2.2 answers two new reports and turns the second one into the release's biggest upgrade: the attachment system was rebuilt end to end, and the mailbox disk — one D1 database — finally got an honest, manageable gauge.
+
+- 🛠️ **Pressing the alert banner's × no longer tears the page down.** Dismissing a system banner retired the card but left the `has-alert` state behind — the view kept its banner-era padding and shrunken height with nothing above it, so the whole app slid up under the pill bar: the "we pressed the × and everything fell apart" report. The banner chrome now syncs in one place (`has-alert` + the banners' **measured** height in a CSS var), the hidden state is real CSS, and the layout reads the banners' actual height instead of a guessed 150 px — correct with one banner, three banners, or Persian text wrapping to three lines.
+- 📎 **Attachments grew up.** A payload bigger than the old ~650 KB row budget used to be stored as metadata with a dead chip that could never open or download — while the list still showed the paperclip, because the flag guessed from the letter's size. Now: **chunked storage** (migration 0014, ordered slices in `attachment_chunks`, reassembled on read) carries **8 files up to 6 MB each, 18 MB per letter** — the photos, voice notes and PDFs real mail actually brings. The paperclip flag is the attachment's own truth (`has_att`), refused files say so honestly, download names ride RFC 5987 (Persian filenames survive), and a storage hiccup on one file can never reject the whole letter — rule zero stands: the old code answered `setReject()` and bounced mail the inbox had already half-stored.
+- 🖼️ **The attachment studio.** Images preview as live thumbnails and open in a **lightbox** (keyboard arrows, zoom, download). Audio gets **Cmail's own player** — a glass bar that docks to the bottom: play/pause, waveform seek, timer, speed cycling (0.75×–2×), download. Video opens in the viewer; PDF and plain text open in-app; everything downloads. And the letter body finally shows its own pictures: **`cid:` references are rewritten** into real same-origin URLs inside the sandboxed frame — embedded images render in the letter instead of broken boxes.
+- ⛽ **The fuel gauge.** One D1 database is the whole disk, and its first symptom of being full is mail that stops syncing — so now the panel speaks first. Settings → General carries **Storage management**: a donut gauge, a segmented bar and per-kind rows (bodies · images · video · audio · pdf · documents · archives · other), the quota editor (default 450 MB — the free plan's D1 ceiling), an **auto-clean permission** ("when storage is full, the oldest letters step aside for fresh ones — never starred ones, the newest ten stay"), and a one-press cleanup. At ≥80% the admin gets the low-storage banner — *"your storage is low; if it stays like this, your mail may stop syncing"* — and a full disk raises a serious alert. The gauge is honest about itself too: content bytes, not invented numbers.
+- 🧮 **The composer matches.** 8 files, 6 MB each, with a live total meter and honest toasts when a file or the letter's budget tops out.
+
+Tested: `tsc` clean, i18n parity **935/935**, the security matrix **111/111** on a fresh install, the v3.2 feature E2E **22/22**, and the new v3.2.2 suite **29/29** — chunked byte-exact read-back, the inline/MIME discipline (SVG never renders inline), the storage endpoints, the quota/auto-clean flow and the health flags, all on a live worker.
+
+<details>
+<summary><b>3.2.1 — the seal earns its face, the context menu returns, and the lock shuts tighter</b></summary>
+
 ## What's new in 3.2.1 — the seal earns its face, the context menu returns, and the lock shuts tighter
 
 3.2.1 answers three reports from the first days on paper — and all three turned out to be honest bugs worth telling in full.
@@ -126,6 +141,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 - 🧬 **The cache buster grew a fingerprint.** Every release stamped its asset URLs with the package version (`?v=3.2.0`) — and a rebuild under the same number could leave some browsers on the old css/js for good; that same-version cache was the quiet hand behind the first two reports. Asset URLs now carry a fingerprint of every embedded file's bytes — any content change anywhere mints a fresh URL by itself.
 
 Tested: `tsc` clean, i18n parity **893/893**, the security matrix **111/111** on a fresh install, the v3.2 feature E2E **22/22**, and the print document walked live in both languages — seal, plaque, certificate, note and watermark all on the page.
+
+</details>
 
 <details>
 <summary><b>3.2.0 — the paper release: letters become paperwork</b></summary>
@@ -393,9 +410,9 @@ Verified end-to-end, 21/21 checks: the second install came up with its own empty
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.1/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v3.2.1:** [`CMail-v3.2.1.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.1/CMail-v3.2.1.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
-- The zip mirrors the v3.2.1 tag — the official house seal and the richer print paperwork, the hardened lock screen, the fingerprinted asset cache, real outgoing attachments, the rebuilt composer and update center, the inbox's right-click menu, the full domain dossier with live DNS troubleshooting, the TOTP replay wall and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.2/worker.js)** — the entire application in one file (~1.9 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v3.2.2:** [`CMail-v3.2.2.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.2/CMail-v3.2.2.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- The zip mirrors the v3.2.2 tag — chunked attachment storage with the attachment studio and the dedicated audio player, the storage fuel gauge with auto-cleanup, the storage warning banners, the official house seal and the richer print paperwork, the hardened lock screen, the fingerprinted asset cache, real outgoing attachments, the rebuilt composer and update center, the inbox's right-click menu, the full domain dossier with live DNS troubleshooting, the TOTP replay wall and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 

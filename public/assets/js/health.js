@@ -103,6 +103,25 @@ function issueBanners(health) {
         actions: [{ label: t('shareTab'), icon: 'users', fn: () => { location.hash = '#/settings/share'; } }],
       });
     }
+    // v3.2.2 — the fuel gauge banners: the disk is one D1 database, and its
+    // first symptom of being full is mail that stops syncing. The banner
+    // speaks before that: ≥80% is "low", full is "err", both with the fix
+    // one press away (the storage card owns quota + auto-clean + cleanup).
+    if (is.code === 'storage_low') {
+      out.push({
+        code: is.code, severity: 'warn',
+        title: t('alertStorageLow'),
+        desc: t('alertStorageLowDesc').replace('{p}', n(is.detail)),
+        actions: [{ label: t('storageTitle'), icon: 'database', fn: () => { location.hash = '#/settings/general'; } }],
+      });
+    }
+    if (is.code === 'storage_full') {
+      out.push({
+        code: is.code, severity: 'err',
+        title: t('alertStorageFull'), desc: t('alertStorageFullDesc'),
+        actions: [{ label: t('storageTitle'), icon: 'database', fn: () => { location.hash = '#/settings/general'; } }],
+      });
+    }
   }
   return out;
 }
@@ -110,14 +129,29 @@ function issueBanners(health) {
 const dismissKey = (code) => `cmail_alert_off_${code}`;
 const dismissed = (code) => sessionStorage.getItem(dismissKey(code)) === '1';
 
+// v3.2.2 — the banners' chrome lives in ONE function: the body class and the
+// measured banner height (a CSS var) always mirror what is actually on
+// stage. Dismissing a banner used to retire the card but leave `has-alert`
+// behind — the view kept its banner-era padding and shrunken height with
+// nothing above it, and the whole app slid up under the pill bar: the "press
+// the × and the page falls apart" report. Now every path paints and then
+// syncs, so dismissing can never leave the layout in yesterday's shape.
+export function syncAlertChrome() {
+  const host = document.getElementById('sysalert');
+  const on = !!(host && !host.hidden && host.children.length > 0);
+  document.body.classList.toggle('has-alert', on);
+  const hpx = on ? `${host.offsetHeight}px` : '0px';
+  document.documentElement.style.setProperty('--alert-h', hpx);
+}
+
 // ---------- banner strip ----------
 export async function renderInto(host, force = false) {
   if (!host) return;
   const health = await getHealth(force);
   clear(host);
-  if (!health || health.status === 'ok') { host.hidden = true; return; }
+  if (!health || health.status === 'ok') { host.hidden = true; syncAlertChrome(); return; }
   const banners = issueBanners(health).filter((b) => !dismissed(b.code));
-  if (!banners.length) { host.hidden = true; return; }
+  if (!banners.length) { host.hidden = true; syncAlertChrome(); return; }
   host.hidden = false;
   for (const b of banners.slice(0, 3)) {
     const actions = h('div', { class: 'alert-card__acts' });
@@ -129,7 +163,12 @@ export async function renderInto(host, force = false) {
     }
     actions.append(h('button', {
       class: 'icon-btn alert-card__x', title: t('alertDismiss'), 'aria-label': t('alertDismiss'),
-      onclick: () => { sessionStorage.setItem(dismissKey(b.code), '1'); host.contains(card) && card.remove(); if (!host.children.length) host.hidden = true; },
+      onclick: () => {
+        sessionStorage.setItem(dismissKey(b.code), '1');
+        if (host.contains(card)) card.remove();
+        if (!host.children.length) host.hidden = true;
+        syncAlertChrome();
+      },
     }, icon('x')));
     const card = h('div', { class: `alert-card alert-card--${b.severity}` },
       h('span', { class: 'alert-card__pulse', 'aria-hidden': 'true' }),
@@ -139,6 +178,7 @@ export async function renderInto(host, force = false) {
       actions);
     host.append(card);
   }
+  syncAlertChrome();
 }
 
 // ---------- Settings → Health tab ----------

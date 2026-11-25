@@ -579,9 +579,11 @@ button.avatar:hover { transform: scale(1.08); box-shadow: 0 0 0 3px var(--acc-so
 .view { padding: var(--shell-top) 20px 40px; max-width: 1200px; width: 100%; margin-inline: auto; animation: viewFade .35s var(--ease); }
 @keyframes viewFade { from { opacity: 0; } to { opacity: 1; } }
 .view--full { display: flex; flex-direction: column; height: calc(100vh - var(--shell-top) - 14px); height: calc(100svh - var(--shell-top) - 14px); min-height: 0 !important; padding-bottom: 16px !important; max-width: none !important; }
-/* when serious-issue banners take the top zone, content slides right under them */
+/* when serious-issue banners take the top zone, content slides right under
+   them — the reserved height is the banners' own measured height (var set by
+   syncAlertChrome), never a guessed constant (v3.2.2) */
 body.has-alert .view { padding-top: 14px; }
-body.has-alert .view--full { height: calc(100vh - 150px); height: calc(100svh - 150px); }
+body.has-alert .view--full { height: calc(100vh - var(--shell-top) - var(--alert-h, 0px) - 14px); height: calc(100svh - var(--shell-top) - var(--alert-h, 0px) - 14px); }
 
 /* page header: eyebrow · big title · sub */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin: 2px 2px 14px; flex-wrap: wrap; }
@@ -2620,6 +2622,12 @@ button.note-panel__head { cursor: pointer; }
   max-width: 1240px; margin: var(--shell-top) auto 0; padding: 0 20px; width: 100%;
   position: relative; z-index: 85;
 }
+/* v3.2.2 — the display:flex above overrode the [hidden] attribute (author CSS
+   beats the UA rule), and an "empty" wrap still carried its margins. Now the
+   hidden state is real, and the app layout reads the banners' measured height
+   from --alert-h (set by health.js syncAlertChrome) — no more magic 150px that
+   broke the moment a banner was dismissed or wrapped to more lines. */
+.sysalert-wrap[hidden] { display: none; }
 @media (max-width: 860px) { .sysalert-wrap { padding: 0 12px; margin-top: calc(var(--shell-top) + 2px); } }
 .alert-card {
   display: flex; align-items: center; gap: 12px;
@@ -3939,3 +3947,220 @@ body.is-locked .fab-shell {
 
 /* ---------- the setup gate's completion row ---------- */
 .gate__stay { font-size: 12.5px; }
+
+/* ============================================================
+   v3.2.2 — the attachment studio, the lightbox & viewers,
+   the Cmail audio player, the storage fuel gauge
+   ============================================================ */
+
+/* ---------- attachment studio (reader) ---------- */
+.atts { padding: 12px 24px 4px; border-top: 1px solid var(--stroke); }
+.atts__head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg); opacity: .92; margin-bottom: 9px; }
+.atts__head .icn svg { width: 14px; height: 14px; }
+.atts__grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.att-card {
+  display: flex; align-items: center; gap: 9px; padding: 7px 10px;
+  border-radius: 12px; background: color-mix(in srgb, var(--panel) 72%, transparent);
+  border: 1px solid var(--stroke); font-size: 12px; text-align: start;
+  transition: border-color .2s, background .2s, transform .15s;
+  max-width: 100%;
+}
+button.att-card { cursor: pointer; color: var(--fg); }
+.att-card:hover { border-color: color-mix(in srgb, var(--acc) 45%, transparent); background: var(--panel-2); }
+.att-card:active { transform: scale(.985); }
+.att-card--img { flex-direction: column; align-items: stretch; padding: 6px; width: 128px; }
+.att-card__thumb {
+  width: 100%; height: 76px; object-fit: cover; border-radius: 9px;
+  background: var(--field); display: block; cursor: zoom-in;
+}
+.att-card__meta { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.att-card--img .att-card__meta { padding: 4px 2px 1px; }
+.att-card__meta b { font-size: 11.5px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-card--img .att-card__meta b { max-width: 100%; }
+.att-card__glyph {
+  display: inline-flex; width: 30px; height: 30px; border-radius: 9px; flex: none;
+  align-items: center; justify-content: center; background: var(--field);
+}
+.att-card__glyph svg { width: 15px; height: 15px; }
+.att-card__glyph--audio { background: color-mix(in srgb, var(--acc) 16%, transparent); color: var(--acc); }
+.att-card__glyph--video { background: color-mix(in srgb, #7c6cff 16%, transparent); color: #a99bff; }
+.att-card__glyph--pdf { background: color-mix(in srgb, #ff6b6b 14%, transparent); color: #ff8f8f; }
+.att-card__glyph--text { background: color-mix(in srgb, #4aa3ff 15%, transparent); color: #7dbcff; }
+.att-card__glyph.is-dead { opacity: .5; }
+.att-card--dead { opacity: .62; border-style: dashed; }
+.att-card--dead b { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 55%, transparent); text-decoration-thickness: 1.5px; }
+.att-card__act {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 8px; flex: none; color: var(--faint);
+  transition: all .18s; cursor: pointer;
+}
+.att-card__act:hover { color: var(--fg); background: var(--hover); }
+.att-card__act svg { width: 14px; height: 14px; }
+.att-card__act--go { background: color-mix(in srgb, var(--acc) 14%, transparent); color: var(--acc); }
+.att-card__act--go:hover { background: color-mix(in srgb, var(--acc) 26%, transparent); color: var(--acc); }
+@media (max-width: 860px) {
+  .atts { padding: 10px 14px 2px; }
+  .att-card__meta b { max-width: 150px; }
+}
+
+/* ---------- the lightbox: a letter's pictures, edge to edge ---------- */
+.lightbox {
+  position: fixed; inset: 0; z-index: 900; display: flex; flex-direction: column;
+  background: color-mix(in srgb, #060a08 88%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  opacity: 0; transition: opacity .24s var(--ease);
+}
+.lightbox.is-in { opacity: 1; }
+.lightbox__stage { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 26px; cursor: zoom-in; min-height: 0; }
+.lightbox__frame { max-width: 100%; max-height: 100%; display: flex; }
+.lightbox__img { max-width: 100%; max-height: calc(100svh - 120px); object-fit: contain; border-radius: 10px; box-shadow: 0 22px 70px -22px rgba(0,0,0,.75); transition: transform .25s var(--spring); }
+.lightbox__img.is-zoom { transform: scale(1.55); cursor: zoom-out; }
+.lightbox__bar {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+  border-top: 1px solid var(--stroke); background: color-mix(in srgb, var(--panel) 82%, transparent);
+  color: var(--fg);
+}
+.lightbox__name { font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
+.lightbox__counter { font-size: 11.5px; color: var(--faint); flex: none; }
+.lightbox__close { margin-inline-start: 0; }
+.lightbox__nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--panel) 76%, transparent); border: 1px solid var(--stroke);
+  color: var(--fg); cursor: pointer; transition: all .2s; z-index: 2;
+}
+.lightbox__nav:hover { background: var(--panel-2); border-color: var(--acc); }
+.lightbox__nav svg { width: 17px; height: 17px; }
+.lightbox__nav--prev { inset-inline-start: 14px; }
+.lightbox__nav--next { inset-inline-end: 14px; }
+.lightbox { position: fixed; }
+.lightbox .lightbox__nav { position: fixed; }
+
+/* ---------- the attachment viewer (video / pdf / text) ---------- */
+.attview .modal__body { padding: 12px 16px 16px; }
+.attview__video { width: 100%; max-height: 62svh; border-radius: 12px; background: #000; display: block; }
+.attview__pdf { width: 100%; height: min(66svh, 560px); border: 1px solid var(--stroke); border-radius: 12px; background: #171b17; }
+.attview__text {
+  margin: 0; padding: 14px 16px; border-radius: 12px; background: var(--field);
+  max-height: min(60svh, 520px); overflow: auto; font-size: 12.5px; line-height: 1.8;
+  white-space: pre-wrap; word-break: break-word;
+}
+
+/* ---------- the Cmail audio player ---------- */
+.cmplayer {
+  position: fixed; inset-inline: 12px; bottom: 12px; z-index: 760;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 16px;
+  /* a mostly-solid mood surface — the player floats over the white letter
+     body too, and pure glass goes light-on-light there (v3.2.2 walkthrough) */
+  background: color-mix(in srgb, var(--bg) 93%, var(--panel-3));
+  border: 1px solid color-mix(in srgb, var(--acc) 26%, var(--stroke));
+  box-shadow: var(--shadow), 0 18px 50px -18px color-mix(in srgb, var(--acc) 40%, rgba(0,0,0,.5));
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  transform: translateY(90px); opacity: 0; transition: transform .34s var(--spring), opacity .3s var(--ease);
+  max-width: 720px; margin-inline: auto;
+}
+.cmplayer.is-in { transform: translateY(0); opacity: 1; }
+.cmplayer__play {
+  width: 36px; height: 36px; border-radius: 50%; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--acc-l, var(--acc)), var(--acc-d, var(--acc)));
+  color: #0d130d; border: 0; cursor: pointer; transition: transform .18s var(--spring), filter .2s;
+}
+.cmplayer__play:hover { transform: scale(1.07); filter: brightness(1.08); }
+.cmplayer__play:active { transform: scale(.92); }
+.cmplayer__play svg { width: 15px; height: 15px; fill: currentColor; stroke: none; }
+/* the two glyphs swap with the state — !important wins over icon()'s inline display */
+.cmplayer__play .icn:nth-child(2) { display: none !important; }
+.cmplayer__play.is-playing .icn:nth-child(1) { display: none !important; }
+.cmplayer__play.is-playing .icn:nth-child(2) { display: inline-flex !important; }
+.cmplayer__t { display: flex; flex-direction: column; min-width: 0; max-width: 200px; line-height: 1.3; }
+.cmplayer__t b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmplayer__sub { font-size: 10.5px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmplayer__rail {
+  flex: 1; height: 22px; display: flex; align-items: center; cursor: pointer; min-width: 80px;
+  position: relative; border-radius: 8px; touch-action: none;
+}
+.cmplayer__rail::before {
+  content: ''; position: absolute; inset-inline: 0; height: 5px; border-radius: 4px;
+  background: repeating-linear-gradient(90deg, var(--field) 0 3px, transparent 3px 5px);
+}
+.cmplayer__fill {
+  position: absolute; inset-inline-start: 0; height: 5px; border-radius: 4px; width: 0%;
+  background: linear-gradient(90deg, var(--acc), color-mix(in srgb, var(--acc) 55%, #b8ffdd));
+  box-shadow: 0 0 12px -2px color-mix(in srgb, var(--acc) 70%, transparent);
+}
+.cmplayer__time { font-size: 10.5px; color: var(--faint); flex: none; }
+.cmplayer__speed {
+  flex: none; font-size: 10.5px; font-weight: 700; padding: 5px 9px; border-radius: 9px;
+  background: var(--field); border: 1px solid var(--stroke); color: var(--fg); cursor: pointer; transition: all .18s;
+}
+.cmplayer__speed:hover { color: var(--acc); border-color: color-mix(in srgb, var(--acc) 40%, transparent); }
+.cmplayer__dl { color: var(--faint); text-decoration: none; }
+.cmplayer__dl:hover { color: var(--fg); background: var(--hover); }
+@media (max-width: 620px) {
+  .cmplayer { inset-inline: 8px; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); gap: 7px; padding: 8px 9px; }
+  .cmplayer__t { max-width: 110px; }
+  .cmplayer__sub { display: none; }
+}
+
+/* ---------- the storage fuel gauge (settings → general) ---------- */
+.st-card { display: flex; flex-direction: column; gap: 13px; }
+.st-card__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.st-card--low { border-color: color-mix(in srgb, var(--warn) 34%, transparent); }
+.st-card--full { border-color: color-mix(in srgb, var(--danger) 44%, transparent); }
+.st-warn {
+  display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border-radius: 12px;
+  font-size: 12.5px; line-height: 1.65; font-weight: 600;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 36%, transparent);
+  color: color-mix(in srgb, var(--warn) 72%, var(--fg));
+  animation: alert-in .35s var(--ease) both;
+}
+.st-warn svg { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+.st-warn--full { background: color-mix(in srgb, var(--danger) 10%, transparent); border-color: color-mix(in srgb, var(--danger) 40%, transparent); color: color-mix(in srgb, var(--danger) 76%, var(--fg)); }
+.st-gauge { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.st-ring { width: 82px; height: 82px; flex: none; }
+.st-ring--ok { color: var(--acc); }
+.st-ring--low { color: var(--warn); }
+.st-ring--full { color: var(--danger); }
+.st-gauge__n { font-size: 14px; }
+.st-gauge__n b { font-size: 21px; letter-spacing: -.3px; }
+.st-gauge__meta { display: flex; gap: 14px; font-size: 12px; color: var(--faint); margin-top: 3px; }
+.st-bar { display: flex; width: 100%; height: 9px; border-radius: 6px; overflow: hidden; margin-top: 10px; gap: 2px; }
+.st-bar__seg { display: block; height: 100%; border-radius: 3px; min-width: 6px; transition: width .4s var(--ease); }
+.k-body    { background: #58b380; }
+.k-image   { background: #6aa6e8; }
+.k-video   { background: #9b86f0; }
+.k-audio   { background: #e8a44a; }
+.k-pdf     { background: #e86565; }
+.k-doc     { background: #56b8c9; }
+.k-archive { background: #b8b094; }
+.k-other   { background: #8a9490; }
+.st-kinds { display: flex; flex-direction: column; gap: 2px; }
+.st-kind {
+  display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-radius: 9px; font-size: 12.5px;
+}
+.st-kind:hover { background: var(--hover); }
+.st-kind__icn {
+  display: inline-flex; width: 26px; height: 26px; border-radius: 8px; flex: none;
+  align-items: center; justify-content: center; color: #dfe7df;
+}
+.st-kind__icn svg { width: 13px; height: 13px; }
+.st-kind__pct { min-width: 34px; text-align: end; }
+.st-controls { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--stroke); padding-top: 11px; }
+.st-last { display: flex; align-items: center; gap: 6px; padding: 2px 4px; }
+.st-last svg { width: 13px; height: 13px; flex: none; }
+.st-big { border-top: 1px solid var(--stroke); padding-top: 9px; }
+.st-big__t { margin-bottom: 5px; padding: 0 4px; font-weight: 700; }
+.st-big__row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 9px; font-size: 12.5px;
+}
+.st-big__row:hover { background: var(--hover); }
+.st-big__subj { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+/* ---------- the compose attachment meter ---------- */
+.compose__meter { display: flex; align-items: center; gap: 8px; padding: 4px 2px 0; }
+.compose__meter-rail { flex: 1; height: 4px; border-radius: 4px; background: var(--field); overflow: hidden; display: block; }
+.compose__meter-fill { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--acc), color-mix(in srgb, var(--acc) 55%, #b8ffdd)); transition: width .3s var(--ease); }
+.compose__meter-fill.is-hot { background: var(--danger); }

@@ -120,14 +120,28 @@ CREATE TABLE IF NOT EXISTS emails (
   provider    TEXT                                    -- how a sent mail left (brevo / resend)
 );
 
--- Attachments are stored base64 inside the row — one database, no buckets.
+-- Attachments are stored base64 inside the database — one database, no buckets.
+-- A payload within the inline budget lives in content_b64; a bigger one is
+-- split into ordered rows of attachment_chunks (0014) and reassembled on
+-- read. chunks counts those rows; content_id carries the MIME Content-ID so
+-- cid: references inside the letter body can be rewritten to real URLs.
 CREATE TABLE IF NOT EXISTS attachments (
   id           TEXT PRIMARY KEY,
   email_id     TEXT NOT NULL REFERENCES emails(id) ON DELETE CASCADE,
   filename     TEXT,
   content_type TEXT,
   size         INTEGER NOT NULL DEFAULT 0,
-  content_b64  TEXT
+  content_b64  TEXT,
+  chunks       INTEGER NOT NULL DEFAULT 0,
+  content_id   TEXT
+);
+
+-- the ordered payload slices of a chunked attachment (0014)
+CREATE TABLE IF NOT EXISTS attachment_chunks (
+  att_id TEXT NOT NULL REFERENCES attachments(id) ON DELETE CASCADE,
+  idx    INTEGER NOT NULL,
+  data   TEXT NOT NULL,
+  PRIMARY KEY (att_id, idx)
 );
 
 -- Colored sticky notes, one per email at most. has_note on emails mirrors
@@ -271,6 +285,7 @@ CREATE INDEX IF NOT EXISTS idx_emails_direction ON emails(user_id, direction, re
 CREATE INDEX IF NOT EXISTS idx_emails_unread    ON emails(address_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_emails_expir     ON emails(received_at);
 CREATE INDEX IF NOT EXISTS idx_att_email        ON attachments(email_id);
+CREATE INDEX IF NOT EXISTS idx_attchunks_att    ON attachment_chunks(att_id);
 CREATE INDEX IF NOT EXISTS idx_totp_user        ON totp_entries(user_id);
 CREATE INDEX IF NOT EXISTS idx_totp_addr        ON totp_entries(address_id);
 CREATE INDEX IF NOT EXISTS idx_totp_folder      ON totp_entries(folder_id);
@@ -293,3 +308,21 @@ CREATE INDEX IF NOT EXISTS idx_emails_folder    ON emails(folder_id);
 --  so this ALTER is skipped harmlessly as "duplicate column".
 -- ============================================================================
 ALTER TABLE sessions ADD COLUMN locked_at INTEGER NOT NULL DEFAULT 0;
+
+-- ============================================================================
+--  Heal (v3.2.2) — chunked attachments
+-- ----------------------------------------------------------------------------
+--  Installs created before this release get the attachments.chunks /
+--  attachments.content_id columns and the attachment_chunks table here (the
+--  Setup gate / Health repair runs the same statement list as this file).
+--  On a fresh database the CREATE TABLE already carries them, so these
+--  statements are skipped harmlessly as "duplicate column" / "already exists".
+-- ============================================================================
+ALTER TABLE attachments ADD COLUMN chunks INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE attachments ADD COLUMN content_id TEXT;
+CREATE TABLE IF NOT EXISTS attachment_chunks (
+  att_id TEXT NOT NULL REFERENCES attachments(id) ON DELETE CASCADE,
+  idx    INTEGER NOT NULL,
+  data   TEXT NOT NULL,
+  PRIMARY KEY (att_id, idx)
+);

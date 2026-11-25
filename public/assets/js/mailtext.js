@@ -43,6 +43,40 @@ export function detectDir(doc) {
   return rtlChars > text.length * 0.25 ? 'rtl' : 'ltr';
 }
 
+// v3.2.2 — cid: → real URL rewriting. The big clients embed their pictures
+// as MIME parts the HTML references by Content-ID (cid:…); those parts are
+// attachments, so the letter body used to show broken image boxes with the
+// pictures listed beside it. The reader hands in a map of Content-ID →
+// same-origin attachment URL and every reference becomes a real image —
+// inside the frame's CSP (img-src https:), with the session cookie, sandboxed.
+export function rewriteCidRefs(doc, cidMap) {
+  if (!cidMap || !cidMap.size) return doc;
+  const resolve = (cid) => {
+    const k = String(cid ?? '').replace(/^\s*cid:/i, '').replace(/^<|>$/g, '').trim();
+    return cidMap.get(k) ?? cidMap.get(k.toLowerCase()) ?? null;
+  };
+  for (const el of [...doc.querySelectorAll('*')]) {
+    for (const a of ['src', 'poster', 'background']) {
+      const v = el.getAttribute?.(a);
+      if (!v || !/^\s*cid:/i.test(v)) continue;
+      const hit = resolve(v);
+      if (hit) el.setAttribute(a, hit); else el.removeAttribute(a);
+    }
+    const ss = el.getAttribute?.('srcset');
+    if (ss && /cid:/i.test(ss)) {
+      const parts = ss.split(',').map((cand) => {
+        const t = cand.trim().split(/\s+/);
+        if (!t[0] || !/^cid:/i.test(t[0])) return cand.trim();
+        const hit = resolve(t[0]);
+        return hit ? [hit, ...t.slice(1)].join(' ') : '';
+      }).filter(Boolean);
+      if (parts.length) el.setAttribute('srcset', parts.join(', '));
+      else el.removeAttribute('srcset');
+    }
+  }
+  return doc;
+}
+
 // the base stylesheet injected into every rendered email
 export function mailFrameCss() {
   return `

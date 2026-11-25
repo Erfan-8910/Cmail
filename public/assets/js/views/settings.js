@@ -461,6 +461,13 @@ async function generalPane() {
       tile(ov.emails, t('navMail')), tile(ov.notes, t('noted')), tile(ov.totp_entries, t('navVault')),
       tile(fmtBytes(ov.storage_bytes), t('storageUsed'))));
   }
+
+  // v3.2.2 — the fuel gauge: one D1 database is the whole disk. The card
+  // speaks honestly — what is stored, split by kind, against the quota the
+  // admin set; the low/full warnings live here and in the top banners.
+  const storage = await storageCard();
+  if (storage) pane.append(storage);
+
   pane.append(h('div', { class: 'glass card' },
     h('h3', { style: { margin: '0 0 12px', fontSize: '15px' } }, t('general')),
     row(t('defaultTtl'), ttl),
@@ -484,6 +491,165 @@ async function generalPane() {
   function tile(n, l) { return h('div', { class: 'glass stat-tile' }, h('div', { class: 'stat-tile__n' }, String(n)), h('div', { class: 'stat-tile__l' }, l)); }
   function row(label, input) { return h('div', { class: 'set-row' }, h('div', { class: 'set-row__t' }, label), h('div', { style: { width: '170px' } }, input)); }
   return pane;
+}
+
+// ---------- the storage card (v3.2.2): the mailbox's fuel gauge ----------
+const ST_KIND_META = {
+  body:    { icn: 'mail',     cls: 'k-body' },
+  image:   { icn: 'image',    cls: 'k-image' },
+  video:   { icn: 'film',     cls: 'k-video' },
+  audio:   { icn: 'music',    cls: 'k-audio' },
+  pdf:     { icn: 'pdf',      cls: 'k-pdf' },
+  doc:     { icn: 'fileText', cls: 'k-doc' },
+  archive: { icn: 'zip',      cls: 'k-archive' },
+  other:   { icn: 'paperclip', cls: 'k-other' },
+};
+
+// the donut ring — same honest gauge family the health hero uses
+function storageRing(pct, state) {
+  const R = 30, C = 2 * Math.PI * R;
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const circle = document.createElementNS(svgNS, 'circle');
+  circle.setAttribute('cx', '36'); circle.setAttribute('cy', '36'); circle.setAttribute('r', String(R));
+  circle.setAttribute('fill', 'none'); circle.setAttribute('stroke', 'currentColor');
+  circle.setAttribute('stroke-width', '6'); circle.setAttribute('stroke-linecap', 'round');
+  circle.setAttribute('stroke-dasharray', String(C));
+  circle.setAttribute('stroke-dashoffset', String(C * (1 - Math.max(0, Math.min(100, pct)) / 100)));
+  circle.style.transform = 'rotate(-90deg)'; circle.style.transformOrigin = 'center';
+  const track = circle.cloneNode();
+  track.setAttribute('stroke', 'var(--field)'); track.removeAttribute('style');
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 72 72'); svg.setAttribute('class', `st-ring st-ring--${state}`);
+  svg.append(track, circle);
+  const lbl = document.createElementNS(svgNS, 'text');
+  lbl.setAttribute('x', '36'); lbl.setAttribute('y', '40'); lbl.setAttribute('text-anchor', 'middle');
+  lbl.setAttribute('font-size', '14'); lbl.setAttribute('font-weight', '700'); lbl.setAttribute('fill', 'currentColor');
+  lbl.textContent = `${lang === 'fa' ? String(Math.round(pct)).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : Math.round(pct)}٪`.replace('٪', lang === 'fa' ? '٪' : '%');
+  svg.append(lbl);
+  return svg;
+}
+
+async function storageCard() {
+  let st;
+  try { st = (await api.get('/api/storage')).storage; } catch { return null; }
+  const faNum = (s) => lang === 'fa' ? String(s).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : String(s);
+
+  const state = st.full ? 'full' : st.low ? 'low' : 'ok';
+  const card = h('div', { class: `glass card st-card st-card--${state}` });
+
+  // ----- head: icon · title · state chip -----
+  card.append(h('div', { class: 'st-card__head' },
+    h('h3', { style: { margin: 0, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' } }, icon('database'), t('storageTitle')),
+    h('span', { class: `chip ${st.full ? 'chip--warn' : st.low ? 'chip--warn' : 'is-on'}` },
+      st.full ? t('storageStateFull') : st.low ? t('storageStateLow') : t('storageStateOk'))));
+
+  // ----- the honest warning strip (the user's exact ask) -----
+  if (st.low || st.full) {
+    card.append(h('div', { class: `st-warn ${st.full ? 'st-warn--full' : ''}` },
+      icon(st.full ? 'alarm' : 'leaf'),
+      h('span', {}, st.full ? t('storageFullWarn') : t('storageLowWarn'))));
+  }
+
+  // ----- gauge row: ring + numbers -----
+  const used = fmtBytes(st.used_bytes);
+  const quota = fmtBytes(st.quota_bytes);
+  const gauge = h('div', { class: 'st-gauge' },
+    storageRing(st.pct, state),
+    h('div', { class: 'grow' },
+      h('div', { class: 'st-gauge__n' }, h('b', {}, used), h('span', { class: 'muted' }, ` ${t('storageOf')} ${quota}`)),
+      h('div', { class: 'small muted' }, t('storageD1Note')),
+      h('div', { class: 'st-gauge__meta' },
+        h('span', {}, `${faNum(st.emails)} ${t('navMail')}`),
+        h('span', {}, `${faNum(st.stored_attachments)} ${t('attachTitle')}`))));
+
+  // ----- the segmented bar: every kind in its own color -----
+  const kinds = st.kinds ?? [];
+  if (kinds.length && st.used_bytes > 0) {
+    const bar = h('div', { class: 'st-bar', role: 'img', 'aria-label': t('storageTitle') });
+    for (const k of kinds) {
+      const share = Math.max(2, (k.bytes / st.used_bytes) * 100);
+      bar.append(h('span', { class: `st-bar__seg ${ST_KIND_META[k.kind]?.cls ?? 'k-other'}`, style: { width: `${share}%` }, title: `${t('stKind_' + k.kind)} · ${fmtBytes(k.bytes)}` }, ''));
+    }
+    gauge.append(bar);
+  }
+  card.append(gauge);
+
+  // ----- per-kind rows -----
+  if (kinds.length) {
+    const rows = h('div', { class: 'st-kinds' });
+    for (const k of kinds) {
+      const meta = ST_KIND_META[k.kind] ?? ST_KIND_META.other;
+      rows.append(h('div', { class: 'st-kind' },
+        h('span', { class: `st-kind__icn ${meta.cls}` }, icon(meta.icn)),
+        h('b', {}, t('stKind_' + k.kind)),
+        h('span', { class: 'small muted' }, `${faNum(k.count)} ×`),
+        h('span', { style: { flex: '1' } }),
+        h('b', { class: 'mono' }, fmtBytes(k.bytes)),
+        h('span', { class: 'small muted mono st-kind__pct' }, `${faNum(st.used_bytes ? Math.round((k.bytes / st.used_bytes) * 100) : 0)}%`)));
+    }
+    card.append(rows);
+  }
+
+  // ----- controls: quota · auto-clean · one-press cleanup -----
+  const quotaIn = h('input', { class: 'input ltr', type: 'number', min: 10, max: 10000, value: String(st.quota_mb) });
+  const autoBtn = h('button', { class: `chip ${st.auto_clean ? 'is-on' : ''}`, role: 'switch', 'aria-checked': st.auto_clean ? 'true' : 'false' },
+    st.auto_clean ? icon('check') : icon('x'), t('storageAutoClean'));
+  autoBtn.addEventListener('click', async () => {
+    try {
+      const r = await api.post('/api/storage/autoclean', { on: !st.auto_clean });
+      st.auto_clean = r.auto_clean;
+      autoBtn.classList.toggle('is-on', st.auto_clean);
+      autoBtn.setAttribute('aria-checked', st.auto_clean ? 'true' : 'false');
+      clear(autoBtn).append(st.auto_clean ? icon('check') : icon('x'), t('storageAutoClean'));
+      toast(t('settingsSaved'), 'ok', 1200);
+    } catch (e) { toast(errText(e), 'err'); }
+  });
+  const cleanBtn = h('button', { class: 'btn btn--sm' }, icon('trash'), t('storageCleanNow'));
+  cleanBtn.addEventListener('click', async () => {
+    cleanBtn.disabled = true;
+    try {
+      const r = await api.post('/api/storage/clean');
+      toast(r.deleted > 0 ? t('storageCleaned').replace('{n}', faNum(r.deleted)).replace('{s}', fmtBytes(r.freed)) : t('storageCleanNone'), 'ok', 3000);
+      const fresh = await storageCard();
+      if (fresh) card.replaceWith(fresh);
+    } catch (e) { toast(errText(e), 'err'); cleanBtn.disabled = false; }
+  });
+
+  card.append(h('div', { class: 'st-controls' },
+    h('div', { class: 'set-row' }, h('div', { class: 'set-row__t' }, t('storageQuota')), h('div', { class: 'row', style: { gap: '6px', width: '190px' } }, quotaIn,
+      h('button', { class: 'btn btn--sm btn--primary', onclick: async () => {
+        try { await api.post('/api/storage/quota', { quota_mb: +quotaIn.value }); toast(t('settingsSaved'), 'ok', 1200); const fresh = await storageCard(); if (fresh) card.replaceWith(fresh); }
+        catch (e) { toast(errText(e), 'err'); }
+      } }, t('save')))),
+    h('div', { class: 'set-row' }, h('div', { class: 'set-row__t' }, t('storageAutoCleanT'), h('div', { class: 'small muted' }, t('storageAutoCleanD'))), autoBtn),
+    h('div', { class: 'set-row' }, h('div', { class: 'set-row__t' }, t('storageManualT'), h('div', { class: 'small muted' }, t('storageManualD'))), cleanBtn)));
+
+  // ----- last auto-clean memory -----
+  if (st.last_cleanup?.at) {
+    card.append(h('div', { class: 'small muted st-last' }, icon('clock'),
+      ' ', t('storageLastClean').replace('{n}', faNum(st.last_cleanup.deleted)).replace('{s}', fmtBytes(st.last_cleanup.freed)).replace('{w}', timeAgo(st.last_cleanup.at, t))));
+  }
+
+  // ----- the biggest letters — the honest way to take out the trash -----
+  if ((st.biggest ?? []).length) {
+    const list = h('div', { class: 'st-big' }, h('div', { class: 'small muted st-big__t' }, t('storageBiggest')));
+    for (const m of st.biggest) {
+      list.append(h('div', { class: 'st-big__row' },
+        h('span', { class: 'st-big__subj' }, m.subject || '(no subject)'),
+        h('span', { class: 'small muted mono' }, fmtBytes(m.size)),
+        h('button', { class: 'icon-btn', title: t('openMail'), 'aria-label': t('openMail'), onclick: () => { location.hash = `#/mail/m/${m.id}`; } }, icon('external')),
+        h('button', { class: 'icon-btn', title: t('delete'), 'aria-label': t('delete'), onclick: () => confirmBox(t('delOneConfirm'), async () => {
+          try {
+            await api.del(`/api/emails/${m.id}`);
+            const fresh = await storageCard();
+            if (fresh) card.replaceWith(fresh);
+            toast(t('deletedN'), 'ok', 1400);
+          } catch (e) { toast(errText(e), 'err'); }
+        }) }, icon('trash'))));
+    }
+    card.append(list);
+  }
+  return card;
 }
 
 // ---------- admin: sending ----------

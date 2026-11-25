@@ -22,18 +22,25 @@ async function req(method, path, body, cookie) {
 const cookieOf = (r) => r.setCookie ? r.setCookie.split(';')[0] : '';
 
 function d1(sql) {
-  const out = execSync(`npx wrangler d1 execute cmail-db --local --json --command "${sql.replace(/\$/g, '\\$')}"`, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+  // the worker under test may run against a non-default persist dir —
+  // D1_PERSIST=/tmp/wf8791 node scripts/test-v32.mjs keeps the probe honest
+  const PERSIST = process.env.D1_PERSIST ? ` --persist-to ${process.env.D1_PERSIST}` : '';
+  const out = execSync(`npx wrangler d1 execute cmail-db --local${PERSIST} --json --command "${sql.replace(/\$/g, '\\$')}"`, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
   const j = JSON.parse(out.slice(out.indexOf('[')));
   return j?.[0]?.results ?? [];
 }
 
+// the expected version reads from the package itself — the test survives a
+// version bump without editing this line (the release flow bumps both)
+const { readFileSync } = await import('node:fs');
+const EXPECTED_VER = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 // ---------- bootstrapping: tables + admin + address ----------
 const init = await req('POST', '/api/setup/init', {});
 ok('schema initialized', init.status === 200 && init.data?.ok === true, JSON.stringify(init.data).slice(0, 120));
 
 const st = await req('GET', '/api/setup/status');
 ok('worker answers on 8791', st.status === 200 && st.data?.ok === true);
-ok('setup status reports 3.2.1', st.data?.version === '3.2.1', String(st.data?.version));
+ok(`setup status reports ${EXPECTED_VER}`, st.data?.version === EXPECTED_VER, String(st.data?.version));
 
 let cookie = '';
 if (!st.data?.admin_created) {
@@ -86,8 +93,9 @@ const noAuth = await req('GET', '/api/emails/print-identity');
 ok('print-identity refuses the anonymous', noAuth.status === 401, String(noAuth.status));
 
 // ---------- outgoing attachments ----------
-// too big (over 900KB b64) → 413 BEFORE the provider check
-const bigB64 = 'A'.repeat(950_000);
+// v3.2.2 budgets: 8 files, 8 MB b64 per file, 24 MB b64 per letter.
+// too big (over 8 MB b64) → 413 BEFORE the provider check
+const bigB64 = 'A'.repeat(8_500_000);
 const big = await sendAs({
   to: 'someone@probe32.test', subject: 'big', text: 'x',
   attachments: [{ filename: 'big.bin', content_type: 'application/octet-stream', content_b64: bigB64 }],
@@ -102,12 +110,12 @@ const noProv = await sendAs({
 });
 ok('valid attachment accepted, provider missing → 409', noProv.status === 409 && noProv.data?.error === 'sending_not_configured', `${noProv.status} ${JSON.stringify(noProv.data)}`);
 
-// 5 files → server accepts (client caps at 4; server slices to 4) and reaches the provider wall
+// 9 files → server slices to 8 (the composer caps at 8 too) and reaches the provider wall
 const five = await sendAs({
   to: 'someone@probe32.test', subject: 'five', text: 'x',
-  attachments: Array.from({ length: 5 }, (_, i) => ({ filename: `f${i}.txt`, content_type: 'text/plain', content_b64: smallB64 })),
+  attachments: Array.from({ length: 9 }, (_, i) => ({ filename: `f${i}.txt`, content_type: 'text/plain', content_b64: smallB64 })),
 });
-ok('server slices to 4 attachments, provider wall reached', five.status === 409, `${five.status}`);
+ok('server slices to 8 attachments, provider wall reached', five.status === 409, `${five.status}`);
 
 // no attachments, no provider → same honest 409
 const plain = await sendAs({ to: 'someone@probe32.test', subject: 'plain', text: 'x' });

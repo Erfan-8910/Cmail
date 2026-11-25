@@ -344,6 +344,20 @@ app.get('/health', requireAdmin, async (c) => {
   if (mail_stalled) issues.push({ code: 'mail_stalled', severity: 'warn' });
   if (stuck_domains.length > 0) issues.push({ code: 'domains_stuck', severity: 'warn', detail: String(stuck_domains.length) });
 
+  // ---- 4b) the fuel gauge (v3.2.2) — the disk is one D1 database; when it
+  // fills, the first symptom is mail that stops syncing. The banner names it
+  // BEFORE that: ≥80% = low (warn), full or flagged = err.
+  let storage_pct: number | null = null;
+  if (connected) {
+    try {
+      const { report } = await import('../storage');
+      const r = await report(env);
+      storage_pct = r.pct;
+      if (r.full) issues.push({ code: 'storage_full', severity: 'err' });
+      else if (r.low) issues.push({ code: 'storage_low', severity: 'warn', detail: String(Math.round(r.pct)) });
+    } catch { /* pre-0014 database — the gauge stays silent */ }
+  }
+
   // ---- 5) sending provider (informational) ----
   let sending = { provider: 'none', ready: false };
   try {
@@ -369,6 +383,7 @@ app.get('/health', requireAdmin, async (c) => {
       ready_domains, stuck_domains,
     },
     sending,
+    storage: storage_pct === null ? null : { pct: storage_pct },
   });
 
   function tables_ok(): boolean { return connected && missingTables === 0; }

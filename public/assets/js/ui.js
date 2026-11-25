@@ -92,6 +92,16 @@ export const icons = {
   // the Climind-W sibling mark: an open C holding a small world — drawn on
   // currentColor so the little ribbon logo re-tints itself with every mood
   climind: I('<path d="M19.2 6.2A8.6 8.6 0 1 0 19.2 17.8"/><circle cx="12" cy="12" r="3.6"/><path d="M9.5 12h5"/>'),
+  // v3.2.2 — media glyphs: the audio player, the attachment kinds and the
+  // viewer chrome all speak the same stroke language as the rest of the panel
+  play: I('<path d="M7 4.8v14.4a.6.6 0 0 0 .9.5l11.5-7.2a.6.6 0 0 0 0-1L7.9 4.3a.6.6 0 0 0-.9.5z"/>'),
+  pause: I('<rect x="6" y="4.5" width="4" height="15" rx="1.2"/><rect x="14" y="4.5" width="4" height="15" rx="1.2"/>'),
+  music: I('<circle cx="6.5" cy="17.5" r="3"/><circle cx="17.5" cy="15.5" r="3"/><path d="M9.5 17.5V6l11-2v11.5"/>'),
+  image: I('<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m4.5 18 5-5 3.5 3.5L16 13l4 4.5"/>'),
+  film: I('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 8.5h18M3 15.5h18M8 4v16M16 4v16"/>'),
+  fileText: I('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>'),
+  zip: I('<path d="M4 6a2 2 0 0 1 2-2h5v2h2V4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M11 6h2v2h-2zM11 10h2v2h-2zM11 14h2v3h-2z"/>'),
+  pdf: I('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 15c0-3.5 1-6 2-6s1.5 3.5 3.5 5.5 2.5 1 2.5 0-1.5-1.5-3-1"/>'),
 };
 
 // ---------- responsibility badge ----------

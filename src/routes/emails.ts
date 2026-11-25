@@ -30,7 +30,7 @@ function scopeSql(scope: string[] | null, col = 'address_id'): string {
   return scope.length ? ` AND ${col} IN ${inPh(scope)}` : ' AND 1=0';
 }
 
-const LIST_FIELDS = 'e.id, e.address_id, e.from_name, e.from_addr, e.to_addr, e.subject, e.preview, e.size, e.is_read, e.starred, e.has_note, e.received_at, e.folder_id, e.direction, e.provider, a.address, a.label AS address_label, a.kind AS address_kind';
+const LIST_FIELDS = 'e.id, e.address_id, e.from_name, e.from_addr, e.to_addr, e.subject, e.preview, e.size, e.is_read, e.starred, e.has_note, e.received_at, e.folder_id, e.direction, e.provider, (EXISTS(SELECT 1 FROM attachments x WHERE x.email_id = e.id)) AS has_att, a.address, a.label AS address_label, a.kind AS address_kind';
 
 // list (per user, filters)
 app.get('/', requireUser, async (c) => {
@@ -80,6 +80,12 @@ app.get('/', requireUser, async (c) => {
     ({ results } = await c.env.DB.prepare(slim).bind(...binds).all());
   }
 
+  // v3.2.2 — the paperclip flag is the truth now (any attachment row exists),
+  // not a size guess. A database without the new columns still answers: the
+  // fallback below drops the subquery and keeps the old heuristic client-side.
+  let hasAtt = false;
+  try { hasAtt = (results ?? []).some((r) => r.has_att === 1); } catch { hasAtt = false; }
+
   const cntSql = `SELECT COUNT(*) AS n FROM emails e WHERE ${where.join(' AND ')}`;
   const total = await c.env.DB.prepare(cntSql).bind(...binds).first<{ n: number }>();
 
@@ -87,7 +93,7 @@ app.get('/', requireUser, async (c) => {
   // gets the suspended flag — the shell freezes into the suspended page
   // until the admin unsuspends or re-assigns mailboxes
   const suspended = scope0 ? !!u.share?.suspended : undefined;
-  return c.json({ ok: true, emails: results ?? [], total: total?.n ?? 0, limit, offset, ...(suspended !== undefined ? { suspended } : {}) });
+  return c.json({ ok: true, emails: results ?? [], total: total?.n ?? 0, limit, offset, has_att_any: hasAtt, ...(suspended !== undefined ? { suspended } : {}) });
 });
 
 // stats for dashboard badges
@@ -137,8 +143,12 @@ app.get('/:id', requireUser, async (c) => {
   if (emScope && !emScope.includes(String(email.address_id))) return c.json({ ok: false, error: 'not_found' }, 404);
 
   const atts = await c.env.DB.prepare(
-    'SELECT id, filename, content_type, size, (content_b64 IS NOT NULL) AS available FROM attachments WHERE email_id = ?'
-  ).bind(id).all();
+    'SELECT id, filename, content_type, size, content_id, (content_b64 IS NOT NULL OR chunks > 0) AS available, (chunks > 0) AS chunked FROM attachments WHERE email_id = ? ORDER BY id'
+  ).bind(id).all().catch(() => null);
+  const attList = (atts?.results ?? []) as Record<string, unknown>[];
+  const attsLegacy = atts === null ? await c.env.DB.prepare(
+    'SELECT id, filename, content_type, size, NULL AS content_id, (content_b64 IS NOT NULL) AS available, 0 AS chunked FROM attachments WHERE email_id = ? ORDER BY id'
+  ).bind(id).all() : null;
   const note = await c.env.DB.prepare('SELECT body, color, pinned, updated_at FROM email_notes WHERE email_id = ?').bind(id).first();
 
   // the advanced-details panel reads this: a compact header snapshot
@@ -148,7 +158,7 @@ app.get('/:id', requireUser, async (c) => {
   delete email.headers;
 
   if (!email.is_read) await c.env.DB.prepare('UPDATE emails SET is_read = 1 WHERE id = ?').bind(id).run();
-  return c.json({ ok: true, email: { ...email, is_read: 1 }, headers, attachments: atts.results ?? [], note: note ?? null });
+  return c.json({ ok: true, email: { ...email, is_read: 1 }, headers, attachments: attsLegacy ? attsLegacy.results ?? [] : attList, note: note ?? null });
 });
 
 // single field toggles (+ filing a message into one of the account's own folders)
@@ -266,9 +276,18 @@ app.put('/:id/note', requireUser, async (c) => {
 
 // ---------- attachments ----------
 
+// v3.2.2 — the download (and preview) tap. Chunked payloads are reassembled
+// in order; ?disp=inline serves the viewable families (images, audio, video,
+// pdf, plain text) to the reader's viewer, everything else — and every
+// active type — stays a forced download with a neutral content-type, the
+// same discipline v3.1.3 installed. Filenames ride RFC 5987 so Persian and
+// Arabic names survive instead of collapsing into underscores.
+const INLINE_OK = (t: string) => /^(image\/(png|jpeg|jpg|gif|webp|bmp|avif)|audio\/|video\/|application\/pdf|text\/plain)/.test(t);
+
 app.get('/attachment/:attId', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
   const attId = c.req.param('attId');
+  const disp = c.req.query('disp') === 'inline' ? 'inline' : 'attachment';
   const row = await c.env.DB.prepare(
     `SELECT at.filename, at.content_type, at.content_b64, at.email_id, e.address_id AS address_id FROM attachments at
      JOIN emails e ON e.id = at.email_id WHERE at.id = ? AND e.user_id = ?`
@@ -276,22 +295,31 @@ app.get('/attachment/:attId', requireUser, async (c) => {
   if (!row) return c.json({ ok: false, error: 'not_found' }, 404);
   const atScope = shareScope(u);
   if (atScope && !atScope.includes(row.address_id)) return c.json({ ok: false, error: 'not_found' }, 404);
-  if (!row.content_b64) return c.json({ ok: false, error: 'attachment_too_large' }, 413);
-  const buf = Uint8Array.from(atob(row.content_b64), (ch) => ch.charCodeAt(0));
-  // v3.1.3 — attachment MIME discipline: the download is always forced
-  // (content-disposition: attachment) AND active types never keep their
-  // stored content-type. A malicious HTML/SVG that rode in as "mail" then
-  // could never come back out with a type a browser might render.
+
+  let b64 = row.content_b64 ?? '';
+  if (!b64) {
+    // the chunked form: ordered slices reassembled — an older database
+    // without the chunks table answers with the honest 413 again
+    const chunks = await c.env.DB.prepare(
+      'SELECT data FROM attachment_chunks WHERE att_id = ? ORDER BY idx'
+    ).bind(attId).all<{ data: string }>().catch(() => null);
+    if (!chunks?.results?.length) return c.json({ ok: false, error: 'attachment_too_large' }, 413);
+    b64 = chunks.results.map((r) => r.data).join('');
+  }
+
   const RAW_TYPE = (row.content_type || '').toLowerCase().split(';')[0].trim();
   const ACTIVE = new Set(['text/html', 'image/svg+xml', 'application/xhtml+xml', 'application/xhtml', 'text/xml', 'application/xml']);
   const safeType = ACTIVE.has(RAW_TYPE) ? 'application/octet-stream' : (row.content_type || 'application/octet-stream');
-  return new Response(buf.buffer as ArrayBuffer, {
-    headers: {
-      'content-type': safeType,
-      'content-disposition': `attachment; filename="${(row.filename || 'attachment').replace(/[^\w.\- ]/g, '_')}"`,
-      'x-content-type-options': 'nosniff',
-    },
-  });
+  const inline = disp === 'inline' && !ACTIVE.has(RAW_TYPE) && INLINE_OK(RAW_TYPE);
+  const name = (row.filename || 'attachment').replace(/[\r\n"\\]/g, '_');
+  const ascii = name.replace(/[^\w.\- ]/g, '_');
+  const headers: Record<string, string> = {
+    'content-type': inline ? safeType : 'application/octet-stream',
+    'content-disposition': `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+    'x-content-type-options': 'nosniff',
+  };
+  if (!inline) headers['content-security-policy'] = "default-src 'none'; sandbox";
+  return new Response(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)).buffer as ArrayBuffer, { headers });
 });
 
 // ---------- compose / send ----------
@@ -314,23 +342,26 @@ app.post('/send', requireUser, async (c) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return c.json({ ok: false, error: 'invalid_recipient' }, 400);
   if (!text && !html) return c.json({ ok: false, error: 'empty_body' }, 400);
 
-  // v3.2.0 — outgoing attachments. Same storage discipline as the incoming
-  // path (emailin.ts): base64 payload per file stays under the row budget
-  // (900 KB b64 ≈ 650 KB raw), at most 4 files. A file over the budget is
-  // rejected with attachment_too_big — the composer says so before sending,
-  // so this is the server's double-check, not the user's first surprise.
-  const MAX_ATT_B64 = 900_000;
-  const MAX_ATT_COUNT = 4;
+  // v3.2.2 — outgoing attachments grew up with the incoming path: 8 files,
+  // 6 MB each, 20 MB per letter. A file over the budget is rejected with
+  // attachment_too_big — the composer says so before sending, so this is
+  // the server's double-check, not the user's first surprise.
+  const MAX_ATT_B64 = 8_000_000;      // ~6 MB raw per file
+  const MAX_ATT_COUNT = 8;
+  const MAX_TOTAL_B64 = 24_000_000;   // ~18 MB raw per letter
   const rawAtts = Array.isArray(body?.attachments) ? body!.attachments!.slice(0, MAX_ATT_COUNT) : [];
   const attachments: { filename: string; content_type: string; content_b64: string; size: number }[] = [];
+  let totalB64 = 0;
   for (const a of rawAtts) {
     const b64 = typeof a?.content_b64 === 'string' ? a.content_b64.replace(/^data:[^;]*;base64,/, '') : '';
     if (!b64) continue;
     if (!/^[A-Za-z0-9+/=\s]+$/.test(b64) || b64.length > MAX_ATT_B64) return c.json({ ok: false, error: 'attachment_too_big' }, 413);
+    totalB64 += b64.length;
+    if (totalB64 > MAX_TOTAL_B64) return c.json({ ok: false, error: 'attachment_too_big' }, 413);
     attachments.push({
       filename: clean(a.filename ?? 'attachment', 120) || 'attachment',
       content_type: clean(a.content_type ?? 'application/octet-stream', 80) || 'application/octet-stream',
-      content_b64: b64,
+      content_b64: b64.replace(/\s+/g, ''),
       size: Math.floor(b64.length * 0.75),
     });
   }
@@ -376,12 +407,36 @@ app.post('/send', requireUser, async (c) => {
       JSON.stringify(sentHeaders).slice(0, 24_000),
       provider,
     ).run();
-    // the sent copy carries its own attachments — the reader lists them and
-    // the download endpoint serves them exactly like received mail
+    // the sent copy carries its own attachments — inline for the small,
+    // chunked for the big (0014); the reader lists them and the download
+    // endpoint serves them exactly like received mail. A storage hiccup
+    // never un-sends the letter: the sent row stays, the file shows as
+    // refused if its payload could not land.
     for (const a of attachments) {
-      await c.env.DB.prepare(
-        'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64) VALUES (?, ?, ?, ?, ?, ?)'
-      ).bind(uid('att_'), emailId, a.filename, a.content_type, a.size, a.content_b64).run();
+      const attId = uid('att_');
+      try {
+        if (a.content_b64.length <= 900_000) {
+          await c.env.DB.prepare(
+            'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64, chunks, content_id) VALUES (?, ?, ?, ?, ?, ?, 0, NULL)'
+          ).bind(attId, emailId, a.filename, a.content_type, a.size, a.content_b64).run();
+        } else {
+          const CHUNK_B64 = 1_200_000;
+          await c.env.DB.prepare(
+            'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64, chunks, content_id) VALUES (?, ?, ?, ?, ?, NULL, ?, NULL)'
+          ).bind(attId, emailId, a.filename, a.content_type, a.size, Math.ceil(a.content_b64.length / CHUNK_B64)).run();
+          for (let i = 0, off = 0; off < a.content_b64.length; i++, off += CHUNK_B64) {
+            await c.env.DB.prepare('INSERT INTO attachment_chunks (att_id, idx, data) VALUES (?, ?, ?)')
+              .bind(attId, i, a.content_b64.slice(off, off + CHUNK_B64)).run();
+          }
+        }
+      } catch {
+        // pre-0014 database: the old single-row shape, best effort
+        try {
+          await c.env.DB.prepare(
+            'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64) VALUES (?, ?, ?, ?, ?, ?)'
+          ).bind(attId, emailId, a.filename, a.content_type, a.size, a.content_b64.length <= 900_000 ? a.content_b64 : null).run();
+        } catch { /* the sent mail itself already left */ }
+      }
     }
   } catch { /* an older schema without direction must never fail a sent mail */ }
 

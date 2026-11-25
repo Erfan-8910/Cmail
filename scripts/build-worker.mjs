@@ -205,6 +205,7 @@ for (const m of [
   'migrations/0009_share_access.sql',
   'migrations/0011_share_control.sql',
   'migrations/0012_share_columns.sql',
+  'migrations/0014_attachment_chunks.sql',
 ]) {
   let sql;
   try { sql = readFileSync(join(ROOT, m), 'utf8'); } catch { continue; }

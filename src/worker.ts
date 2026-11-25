@@ -19,6 +19,7 @@ import totpRoutes from './routes/totp';
 import mailfolderRoutes from './routes/mailfolders';
 import adminRoutes from './routes/admin';
 import shareRoutes from './routes/share';
+import storageRoutes from './routes/storage';
 
 const app = new Hono<AppEnv>();
 
@@ -167,6 +168,7 @@ app.route('/api/totp', totpRoutes);
 app.route('/api/mail-folders', mailfolderRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/share', shareRoutes);
+app.route('/api/storage', storageRoutes);
 
 app.get('/api/health', (c) => c.json({ ok: true, service: 'cmail', time: Date.now() }));
 

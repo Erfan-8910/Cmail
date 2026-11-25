@@ -13,7 +13,7 @@ import { renderDomains } from './views/domains.js';
 import { renderSettings } from './views/settings.js';
 import { renderAbout } from './views/about.js';
 import { renderHelp } from './views/help.js';
-import { renderInto as renderAlerts } from './health.js';
+import { renderInto as renderAlerts, syncAlertChrome } from './health.js';
 import { lockNow, maybeLock, isLocked, forceLockUI } from './lockscreen.js';
 
 const app = document.getElementById('app');
@@ -120,16 +120,18 @@ async function route() {
     if (!authView && state.user?.role === 'admin') {
       await renderAlerts(alertHost);
       if (stale()) return;
-      document.body.classList.toggle('has-alert', !alertHost.hidden && alertHost.children.length > 0);
+      // v3.2.2 — has-alert and the measured banner height sync in one place
+      // (renderInto itself), so a dismissed banner can never leave yesterday's
+      // padding behind
     } else if (!authView && state.user?.role === 'share') {
       // the Dynamic Island floats fixed above the content — no banner, no
       // padding shift, the page keeps its full height
       alertHost.hidden = true; clear(alertHost);
-      document.body.classList.remove('has-alert');
+      syncAlertChrome();
       renderShareIsland();
     } else {
       alertHost.hidden = true; clear(alertHost);
-      document.body.classList.remove('has-alert');
+      syncAlertChrome();
       removeShareIsland();
     }
   }

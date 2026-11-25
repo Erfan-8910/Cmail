@@ -8,8 +8,9 @@ import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avata
 import { entryModal, tempGuard, tempAuthorized, grantTempAuth } from './vault.js';
 import { invalidateAccounts } from '../app.js';
 import * as island from '../island.js';
-import { sanitizeEmailHtml, detectDir, mailFrameCss, MAIL_FRAME_CSP } from '../mailtext.js';
+import { sanitizeEmailHtml, detectDir, mailFrameCss, MAIL_FRAME_CSP, rewriteCidRefs } from '../mailtext.js';
 import { openPrint } from '../print.js';
+import { playTrack, closePlayer } from '../player.js';
 
 let box = 'inbox';
 let search = '';
@@ -970,7 +971,10 @@ function emailRow(em) {
     flags.append(h('span', { class: `flag-folder fdot fdot--${f?.color || 'amber'}`, title: f?.name ?? '' }, ''));
   }
   if (em.has_note) flags.append(h('span', { class: 'flag-note' }, icon('note')));
-  if (em.size > 200_000) flags.append(h('span', { class: 'flag-clip' }, icon('paperclip')));
+  // v3.2.2 — the paperclip is the attachment's own truth now (the list API
+  // answers has_att), not a size guess that flagged heavy letters that
+  // carried no files at all
+  if (em.has_att) flags.append(h('span', { class: 'flag-clip' }, icon('paperclip')));
 
   // bulk selection machinery only exists where an action can follow — a
   // guest with no star/archive/delete permission reads without checkboxes
@@ -1382,6 +1386,8 @@ function backBtn() {
 
 async function drawReader(wrap, r) {
   const em = r.email;
+  // the player's subtitle — whose letter this sound rode in with
+  lastReaderPeer = (em.from_name || em.from_addr || '').slice(0, 40);
 
   // ----- top bar: back · older/newer · star · delete -----
   let navIds = null;
@@ -1478,13 +1484,16 @@ async function drawReader(wrap, r) {
     h('h2', { class: 'viewer__subj reader__subj' }, em.subject || '(no subject)'),
     meta));
 
-  // attachments row (above body, mail-client style)
-  if (r.attachments?.length) {
-    card.append(h('div', { class: 'attachments' },
-      r.attachments.map((a) => a.available
-        ? h('a', { class: 'att-chip', href: `/api/emails/attachment/${a.id}`, download: a.filename ?? 'file' }, icon('download'), a.filename ?? 'file', h('span', { class: 'faint small' }, fmtBytes(a.size)))
-        : h('span', { class: 'att-chip', title: t('attachmentTooBig'), style: { opacity: .5 } }, icon('paperclip'), a.filename ?? 'file'))));
+  // attachments (above body, mail-client style) — v3.2.2: the full studio.
+  // Images preview right here and open in a lightbox; audio gets the panel's
+  // own player; video and pdf/text open in the viewer; everything downloads.
+  // The cid: map rides along so embedded pictures render inside the letter.
+  const cidMap = new Map();
+  const attList = r.attachments ?? [];
+  for (const a of attList) {
+    if (a.available && a.content_id) cidMap.set(String(a.content_id).toLowerCase(), `/api/emails/attachment/${a.id}?disp=inline`);
   }
+  if (attList.length) card.append(buildAttArea(attList));
 
   // ----- render mode state -----
   let mode = em.html_body ? 'html' : 'text';
@@ -1512,7 +1521,7 @@ async function drawReader(wrap, r) {
   card.append(h('div', { class: 'mtools' }, seg, bWidth));
 
   function buildFrame() {
-    const doc = sanitizeEmailHtml(em.html_body);
+    const doc = rewriteCidRefs(sanitizeEmailHtml(em.html_body), cidMap);
     const dir = detectDir(doc);
     const f = h('iframe', {
       class: `mail-frame ${narrow ? 'mail-frame--narrow' : ''}`,
@@ -1651,6 +1660,195 @@ function buildMailx(r, em) {
   return details;
 }
 
+/* ============================================================
+   the attachment studio (v3.2.2)
+   An attachment stopped being a dead chip: images preview and
+   open in a lightbox, audio rides the panel's own player, video
+   and pdf/text open in the viewer, and every file downloads.
+   The area sits above the body, the way a mail client does it.
+   ============================================================ */
+
+const attKind = (a) => {
+  const ct = String(a.content_type ?? '').toLowerCase().split(';')[0].trim();
+  if (/^image\/(png|jpeg|jpg|gif|webp|bmp|avif)/.test(ct)) return 'image';
+  if (/^image\//.test(ct)) return 'imageOther'; // svg & friends: never rendered, download only
+  if (/^audio\//.test(ct)) return 'audio';
+  if (/^video\//.test(ct)) return 'video';
+  if (ct === 'application/pdf') return 'pdf';
+  if (/^text\/plain/.test(ct)) return 'text';
+  return 'file';
+};
+const attUrl = (a, disp) => `/api/emails/attachment/${a.id}${disp ? `?disp=${disp}` : ''}`;
+
+// the area itself: one header, then the cards — thumbnails for pictures,
+// kind glyphs for the rest, honest "refused" chips for files that could
+// never be stored
+function buildAttArea(atts) {
+  const viewable = atts.filter((a) => a.available);
+  const images = viewable.filter((a) => attKind(a) === 'image');
+
+  const head = h('div', { class: 'atts__head' },
+    icon('paperclip'),
+    h('b', {}, `${t('attachTitle')} · ${lang === 'fa' ? String(atts.length).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : atts.length}`));
+
+  const grid = h('div', { class: 'atts__grid' });
+  const imageIdx = (a) => images.indexOf(a);
+
+  for (const a of atts) {
+    const kind = attKind(a);
+    const name = a.filename ?? 'file';
+    if (!a.available) {
+      grid.append(h('span', {
+        class: 'att-card att-card--dead', title: t('attachmentTooBig'),
+      }, h('span', { class: 'att-card__glyph is-dead' }, icon('paperclip')),
+        h('span', { class: 'att-card__meta' }, h('b', {}, name), h('span', { class: 'faint small' }, t('attRefused')))));
+      continue;
+    }
+    if (kind === 'image') {
+      const card = h('button', { class: 'att-card att-card--img', title: name, onclick: () => { vibrate(5); openLightbox(images, imageIdx(a)); } },
+        h('img', { class: 'att-card__thumb', src: attUrl(a, 'inline'), alt: name, loading: 'lazy', draggable: 'false' }),
+        h('span', { class: 'att-card__meta' }, h('b', {}, name), h('span', { class: 'faint small' }, fmtBytes(a.size ?? 0))));
+      grid.append(card);
+      continue;
+    }
+    // the row shape: kind glyph · name+size · open · download
+    const rowAtts = { class: 'att-card att-card--row' };
+    const glyph = kind === 'audio' ? 'music' : kind === 'video' ? 'film' : kind === 'pdf' ? 'pdf' : kind === 'text' ? 'fileText' : 'zip';
+    const card = h('div', rowAtts,
+      h('span', { class: `att-card__glyph att-card__glyph--${kind}` }, icon(glyph)),
+      h('span', { class: 'att-card__meta' }, h('b', {}, name), h('span', { class: 'faint small' }, fmtBytes(a.size ?? 0))));
+    if (kind === 'audio') {
+      card.append(h('button', { class: 'att-card__act att-card__act--go', title: t('playerTitle'), 'aria-label': t('playerTitle'), onclick: () => playTrack({ url: attUrl(a, 'inline'), title: name, subtitle: emPeerLabel() }) }, icon('play')));
+    } else if (kind === 'video') {
+      card.append(h('button', { class: 'att-card__act att-card__act--go', title: t('attOpen'), 'aria-label': t('attOpen'), onclick: () => openVideoViewer(a) }, icon('play')));
+    } else if (kind === 'pdf' || kind === 'text') {
+      card.append(h('button', { class: 'att-card__act att-card__act--go', title: t('attOpen'), 'aria-label': t('attOpen'), onclick: () => openFileViewer(a, kind) }, icon('eye')));
+    }
+    card.append(h('a', { class: 'att-card__act', href: attUrl(a), download: name, title: t('attDownload'), 'aria-label': t('attDownload') }, icon('download')));
+    grid.append(card);
+  }
+
+  return h('div', { class: 'atts' }, head, grid);
+}
+
+// the peer label under the player's title — whose letter this sound came in with
+let lastReaderPeer = '';
+function emPeerLabel() { return lastReaderPeer; }
+
+// ---------- the lightbox: a letter's pictures, edge to edge ----------
+let lbEl = null;
+function closeLightbox() {
+  if (!lbEl) return;
+  const el = lbEl; lbEl = null;
+  el.classList.remove('is-in');
+  setTimeout(() => el.remove(), 240);
+  window.removeEventListener('keydown', lbKeys, true);
+}
+function lbKeys(e) {
+  if (!lbEl) return;
+  if (e.key === 'Escape') { e.stopPropagation(); closeLightbox(); }
+  if (e.key === 'ArrowLeft') { e.stopPropagation(); lbEl._step(-1); }
+  if (e.key === 'ArrowRight') { e.stopPropagation(); lbEl._step(1); }
+}
+function openLightbox(images, at) {
+  closeLightbox();
+  if (!images.length) return;
+  vibrate(6);
+  let idx = Math.max(0, Math.min(images.length - 1, at));
+  let zoomed = false;
+
+  const frame = h('div', { class: 'lightbox__frame' });
+  const counter = h('span', { class: 'lightbox__counter mono' }, '');
+  const img = h('img', { class: 'lightbox__img', alt: '', draggable: 'false' });
+  frame.append(img);
+  const stage = h('div', { class: 'lightbox__stage', onclick: () => { zoomed = !zoomed; img.classList.toggle('is-zoom', zoomed); } }, frame);
+
+  const dl = h('a', { class: 'icon-btn', title: t('attDownload'), 'aria-label': t('attDownload') }, icon('download'));
+  const prev = h('button', { class: 'lightbox__nav lightbox__nav--prev', 'aria-label': t('olderEmail') }, icon('chevron'));
+  const next = h('button', { class: 'lightbox__nav lightbox__nav--next', 'aria-label': t('newerEmail') }, icon('chevron', 'rot-180'));
+  const close = h('button', { class: 'icon-btn lightbox__close', title: t('close'), 'aria-label': t('close') }, icon('x'));
+
+  const paint = () => {
+    const a = images[idx];
+    img.src = attUrl(a, 'inline');
+    img.alt = a.filename ?? '';
+    zoomed = false;
+    img.classList.remove('is-zoom');
+    counter.textContent = `${idx + 1} / ${images.length}`;
+    dl.href = attUrl(a); dl.download = a.filename ?? 'image';
+    const many = images.length > 1;
+    prev.style.visibility = next.style.visibility = many ? '' : 'hidden';
+    const nameEl = lbEl.querySelector('.lightbox__name');
+    if (nameEl) nameEl.textContent = a.filename ?? '';
+  };
+  const step = (d) => { idx = (idx + d + images.length) % images.length; paint(); };
+  prev.addEventListener('click', (e) => { e.stopPropagation(); step(-1); });
+  next.addEventListener('click', (e) => { e.stopPropagation(); step(1); });
+  close.addEventListener('click', closeLightbox);
+
+  const el = h('div', { class: 'lightbox', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('attachTitle') },
+    stage,
+    h('div', { class: 'lightbox__bar' },
+      h('span', { class: 'lightbox__name' }, ''),
+      counter,
+      h('span', { style: { flex: '1' } }),
+      dl, close),
+    prev, next);
+  el._step = step;
+  document.body.append(el);
+  lbEl = el;
+  paint();
+  requestAnimationFrame(() => el.classList.add('is-in'));
+  window.addEventListener('keydown', lbKeys, true);
+}
+
+// ---------- the viewer: video / pdf / text in the panel's glass ----------
+function openVideoViewer(a) {
+  vibrate(5);
+  const v = h('video', { class: 'attview__video', controls: true, playsinline: true });
+  v.src = attUrl(a, 'inline');
+  const m = modal({
+    title: a.filename ?? 'video', iconName: 'film', wide: true, cls: 'attview',
+    body: [v],
+    footer: [h('a', { class: 'btn', href: attUrl(a), download: a.filename ?? 'video' }, icon('download'), t('attDownload')),
+      h('span', { style: { flex: '1' } }),
+      h('button', { class: 'btn btn--ghost', onclick: () => { try { v.pause(); } catch { /* */ } m.close(); } }, t('close'))],
+  });
+}
+
+async function openFileViewer(a, kind) {
+  vibrate(5);
+  if (kind === 'pdf') {
+    const frame = h('iframe', { class: 'attview__pdf', title: a.filename ?? 'pdf', src: attUrl(a, 'inline') });
+    const m = modal({
+      title: a.filename ?? 'pdf', iconName: 'pdf', wide: true, cls: 'attview',
+      body: [frame],
+      footer: [h('a', { class: 'btn', href: attUrl(a), download: a.filename ?? 'file' }, icon('download'), t('attDownload')),
+        h('span', { style: { flex: '1' } }),
+        h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('close'))],
+    });
+    return;
+  }
+  // plain text — fetch and set, word-wrap like the reader does
+  let text = '';
+  try {
+    const res = await fetch(attUrl(a, 'inline'), { credentials: 'same-origin' });
+    text = (await res.text()).slice(0, 200_000);
+  } catch { text = ''; }
+  const pre = h('pre', { class: 'attview__text mono' }, text || '—');
+  const m = modal({
+    title: a.filename ?? 'text', iconName: 'fileText', wide: true, cls: 'attview',
+    body: [pre],
+    footer: [h('a', { class: 'btn', href: attUrl(a), download: a.filename ?? 'file' }, icon('download'), t('attDownload')),
+      h('span', { style: { flex: '1' } }),
+      h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('close'))],
+  });
+}
+
+// leaving the reader retires its floating surfaces — a lightbox or a voice
+// note must never haunt the next page
+window.addEventListener('hashchange', () => { closeLightbox(); closePlayer(); });
+
 // ---------- compose — the writing table, done the way the big clients do it ----------
 // one honest window: inline rows instead of stacked labels, a body that grows
 // with the message, a draft that survives a closed tab, mistakes said out loud
@@ -1659,8 +1857,9 @@ function buildMailx(r, em) {
 // attachments (image chips carry a live thumbnail), the whole sheet carries
 // the studio polish — a gradient paper-plane sigil, icon rails beside the
 // fields, a footer where the send key leads and the tools trail behind it.
-const ATT_MAX_B64 = 900_000;   // matches the server's per-file budget (~650 KB raw)
-const ATT_MAX_COUNT = 4;
+const ATT_MAX_B64 = 8_000_000;    // matches the server's per-file budget (~6 MB raw)
+const ATT_MAX_COUNT = 8;
+const ATT_MAX_TOTAL_B64 = 24_000_000; // ~18 MB of attachments per letter
 
 function fileToB64(file) {
   return new Promise((resolve, reject) => {
@@ -1713,10 +1912,25 @@ export async function openCompose(prefill = {}) {
   const atts = []; // { name, type, b64 (dataURL), size, isImg }
   const attList = h('div', { class: 'compose__atts', 'aria-label': t('attachTitle') });
   const fileInput = h('input', { type: 'file', multiple: true, style: { display: 'none' }, accept: '*/*' });
+  let meterEl = null; // the letter's total attachment meter (v3.2.2)
+
+  const totalB64 = () => atts.reduce((n, a) => n + (a.b64.split(',')[1]?.length ?? 0), 0);
+
+  function drawMeter() {
+    if (!meterEl) return;
+    const tot = totalB64();
+    clear(meterEl);
+    if (!atts.length) { meterEl.style.display = 'none'; return; }
+    meterEl.style.display = '';
+    const pct = Math.min(100, Math.round((tot / ATT_MAX_TOTAL_B64) * 100));
+    meterEl.append(
+      h('span', { class: 'compose__meter-rail' }, h('span', { class: `compose__meter-fill ${pct >= 100 ? 'is-hot' : ''}`, style: { width: `${pct}%` } })),
+      h('span', { class: 'faint small mono' }, `${fmtBytes(Math.floor(tot * 0.75))} / ${fmtBytes(Math.floor(ATT_MAX_TOTAL_B64 * 0.75))}`));
+  }
 
   function drawAtts() {
     clear(attList);
-    if (!atts.length) { attList.style.display = 'none'; return; }
+    if (!atts.length) { attList.style.display = 'none'; drawMeter(); return; }
     attList.style.display = '';
     for (const a of atts) {
       const chip = h('div', { class: `att-chip--new ${a.isImg ? 'has-thumb' : ''}` },
@@ -1732,17 +1946,23 @@ export async function openCompose(prefill = {}) {
         }, icon('x')));
       attList.append(chip);
     }
+    if (!meterEl) {
+      meterEl = h('div', { class: 'compose__meter', 'aria-hidden': 'true' });
+      attList.append(meterEl);
+    } else attList.append(meterEl);
+    drawMeter();
     attList.append(h('span', { class: 'compose__att-hint' }, t('attachHint')));
   }
 
   async function addFiles(list) {
     for (const f of Array.from(list ?? [])) {
-      if (atts.length >= ATT_MAX_COUNT) { toast(t('attachHint'), 'err'); break; }
+      if (atts.length >= ATT_MAX_COUNT) { toast(t('attachCountMax').replace('{n}', String(ATT_MAX_COUNT)), 'err'); break; }
       try {
         const url = await fileToB64(f);
         const b64 = url.split(',')[1] ?? '';
         if (!b64) continue;
         if (b64.length > ATT_MAX_B64) { toast(t('attachTooBig').replace('{n}', f.name), 'err'); continue; }
+        if (totalB64() + b64.length > ATT_MAX_TOTAL_B64) { toast(t('attachTotalMax'), 'err'); break; }
         atts.push({ name: f.name || 'file', type: f.type || 'application/octet-stream', b64: url, size: f.size || Math.floor(b64.length * .75), isImg: /^image\//.test(f.type) });
       } catch { /* unreadable file — skip it */ }
     }

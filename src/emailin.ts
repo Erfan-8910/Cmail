@@ -5,10 +5,20 @@
 import PostalMime from 'postal-mime';
 import type { Env, } from './util';
 import { uid, now, previewOf, randomLocalPart } from './util';
+import { ensureRoom } from './storage';
 
 const MAX_HTML = 900_000;      // ~0.9 MB html stored
 const MAX_TEXT = 400_000;
-const MAX_ATTACHMENT_B64 = 900_000; // stored base64 cap
+// v3.2.2 — the attachment budget grew up. Within the inline budget the
+// payload still rides the attachments row itself; anything bigger is split
+// into ordered chunk rows (attachment_chunks, 0014), each slice far below
+// every platform limit. A letter may carry 8 files up to 6 MB each — the
+// photos, voice notes and PDFs real mail actually brings.
+const MAX_INLINE_B64 = 900_000;       // stored base64 cap for the single-row form
+const MAX_FILE_B64 = 8_000_000;       // ~6 MB raw per file
+const MAX_TOTAL_RAW = 20_000_000;     // ~20 MB of attachments per letter
+const MAX_FILES = 8;
+const CHUNK_B64 = 1_200_000;          // one chunk row holds ~1.2 MB of base64
 
 export async function handleEmail(message: ForwardableEmailMessage, env: Env): Promise<void> {
   const to = message.to.toLowerCase();
@@ -89,6 +99,12 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
     parsed = { subject: '(unparsable message)', text: '', html: '', from: { address: message.from }, attachments: [] } as never;
   }
 
+  // v3.2.2 — the storage ask happens BEFORE anything is written: at ≥97% of
+  // the quota the oldest letters step aside (when the admin allowed it) or
+  // the fuel gauge lights up. Either way the mail itself is delivered —
+  // a full disk must never bounce real mail (rule zero).
+  try { await ensureRoom(env, raw.length); } catch { /* bookkeeping only */ }
+
   const fromName = parsed.from?.name ?? null;
   const fromAddr = parsed.from?.address ?? message.from;
   const subject = parsed.subject ?? '(no subject)';
@@ -105,20 +121,60 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
     raw.length, now(), headerSnapshot(parsed, message)
   ).run();
 
-  // attachments (store small ones inline in D1)
-  for (const att of (parsed.attachments ?? []).slice(0, 8)) {
+  // v3.2.2 — attachments: inline for the small, chunked for the big, and
+  // NEVER fatal. A storage hiccup on one file leaves that file's metadata
+  // row with an empty payload (the reader says so honestly) instead of
+  // rejecting the whole letter — the old code threw here and the email
+  // handler answered setReject(): the sender got a bounce for a mail the
+  // inbox had already half-stored.
+  const attsIn = (parsed.attachments ?? []).slice(0, MAX_FILES);
+  let attTotalRaw = 0;
+  for (const att of attsIn) {
     let bytes: Uint8Array | null = null;
     const c0: unknown = att.content;
     if (c0 instanceof Uint8Array) bytes = c0;
     else if (typeof c0 === 'string') bytes = new TextEncoder().encode(c0);
     else if (c0 instanceof ArrayBuffer) bytes = new Uint8Array(c0);
-    const b64 = bytes ? arrToB64(bytes) : null;
-    await db.prepare(
-      'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(uid('att_'), emailId, att.filename ?? 'attachment', att.mimeType ?? 'application/octet-stream',
-      bytes?.length ?? 0,
-      b64 && b64.length <= MAX_ATTACHMENT_B64 ? b64 : null).run();
+    if (!bytes || !bytes.length) continue;
+    if (attTotalRaw + bytes.length > MAX_TOTAL_RAW) break; // the 20 MB letter budget
+    attTotalRaw += bytes.length;
+    const b64 = arrToB64(bytes);
+    const overBudget = b64.length > MAX_FILE_B64;
+    if (overBudget) continue; // bigger than 6 MB raw — named in the reader as refused
+    const attId = uid('att_');
+    try {
+      if (b64.length <= MAX_INLINE_B64) {
+        await db.prepare(
+          'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64, chunks, content_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?)'
+        ).bind(attId, emailId, att.filename ?? 'attachment', att.mimeType ?? 'application/octet-stream',
+          bytes.length, b64, att.contentId ?? null).run();
+      } else {
+        await db.prepare(
+          'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64, chunks, content_id) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)'
+        ).bind(attId, emailId, att.filename ?? 'attachment', att.mimeType ?? 'application/octet-stream',
+          bytes.length, Math.ceil(b64.length / CHUNK_B64), att.contentId ?? null).run();
+        // the ordered slices — each statement's text is tiny and every bound
+        // parameter stays under the row limit (1.2 MB of base64 per row)
+        for (let i = 0, off = 0; off < b64.length; i++, off += CHUNK_B64) {
+          await db.prepare('INSERT INTO attachment_chunks (att_id, idx, data) VALUES (?, ?, ?)')
+            .bind(attId, i, b64.slice(off, off + CHUNK_B64)).run();
+        }
+      }
+    } catch {
+      // an older schema without the new columns (chunks/content_id) falls
+      // back to the 3.2.1 shape; a chunk write that failed leaves the
+      // metadata row content-less — the reader tells the truth either way
+      try {
+        await db.prepare(
+          'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(attId, emailId, att.filename ?? 'attachment', att.mimeType ?? 'application/octet-stream',
+          bytes.length, b64.length <= MAX_INLINE_B64 ? b64 : null).run();
+      } catch { /* even the metadata row refused — the letter still lands */ }
+    }
   }
+  // anything past the 8-file cap is not silently gone: it is counted into
+  // the letter's size (the raw message always was), the reader shows the
+  // files it stored, and the sender's copy rides complete via forwarding
 
   await db.prepare('UPDATE addresses SET last_mail_at = ? WHERE id = ?').bind(now(), addr.id).run();
 
@@ -252,4 +308,12 @@ export async function scheduledCleanup(env: Env): Promise<void> {
     await env.DB.prepare("INSERT INTO settings (key, value) VALUES ('last_cron_run', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
       .bind(String(t)).run();
   } catch { /* cosmetic only */ }
+  // v3.2.2 — the fuel gauge gets its hourly sweep too: when the install sits
+  // at ≥97% of its quota, the same rules as delivery apply (auto-clean the
+  // oldest when allowed, or flag storage_full for the health banner). Mail
+  // quiet for weeks? The gauge still tells the truth.
+  try {
+    const { ensureRoom } = await import('./storage');
+    await ensureRoom(env, 0);
+  } catch { /* bookkeeping only — the cron must never fail over it */ }
 }
