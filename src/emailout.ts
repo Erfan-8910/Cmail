@@ -4,6 +4,17 @@ import { getSettings, openText } from './util';
 
 export type SendResult = { ok: true; id?: string } | { ok: false; error: string };
 
+// v3.1.5 — the provider call gets a hard ceiling: a hanging HTTP connection
+// used to pin the composer's spinner forever. 20s and the attempt is over,
+// with an honest error instead of an eternal "sending…".
+const PROVIDER_TIMEOUT_MS = 20_000;
+
+// plain text still deserves a real letter shape — a styled block that wraps
+// and breathes, not a bare <pre> strip (v3.1.5)
+function textToHtml(text: string): string {
+  return `<div style="font:14px/1.85 -apple-system,'Segoe UI',Tahoma,sans-serif;color:#1f2937;white-space:pre-wrap;max-width:640px">${escapeHtml(text)}</div>`;
+}
+
 // since v3.1.0 the provider key is stored SEALED (AES-GCM). Legacy plaintext
 // values keep working — and get sealed on the next settings save.
 async function sendingKey(env: Env, stored: string): Promise<string> {
@@ -44,10 +55,11 @@ export async function sendViaProvider(
           to: [{ email: opts.to, name: opts.toName ?? opts.to }],
           subject: opts.subject,
           textContent: opts.text,
-          htmlContent: opts.html || `<pre style="font:14px/1.6 sans-serif;white-space:pre-wrap">${escapeHtml(opts.text)}</pre>`,
+          htmlContent: opts.html || textToHtml(opts.text),
           replyTo: opts.replyTo ? { email: opts.replyTo } : undefined,
           attachment: atts.length ? atts.map((a) => ({ name: a.filename, content: a.content_b64 })) : undefined,
         }),
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
       });
       if (!res.ok) {
         const body = await res.text().catch(() => '');
@@ -66,10 +78,11 @@ export async function sendViaProvider(
           to: [opts.to],
           subject: opts.subject,
           text: opts.text,
-          html: opts.html,
+          html: opts.html || textToHtml(opts.text),
           reply_to: opts.replyTo,
           attachments: atts.length ? atts.map((a) => ({ filename: a.filename, content: a.content_b64 })) : undefined,
         }),
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
       });
       if (!res.ok) {
         const body = await res.text().catch(() => '');

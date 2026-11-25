@@ -5,7 +5,9 @@
 // and one D1 binding).
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from './util';
-import { attachUser } from './auth';
+import { attachUser, clientIp, rateLimit } from './auth';
+import { dbErrorCode } from './util';
+import { updateCheck } from './update';
 import { handleEmail, scheduledCleanup } from './emailin';
 import { ASSET_FILES } from './generated/assets';
 import { diagnosticResponse } from './diag';
@@ -168,6 +170,19 @@ app.route('/api/share', shareRoutes);
 
 app.get('/api/health', (c) => c.json({ ok: true, service: 'cmail', time: Date.now() }));
 
+// v3.1.5 — update check: the installed build vs the newest GitHub release.
+// The worker does the asking (CSP keeps the browser same-origin), caches the
+// answer for ten minutes, and answers in one honest shape: latest version,
+// whether the install should move, and the direct link to the repo.
+app.get('/api/update-check', async (c) => {
+  const ip = clientIp(c);
+  if (!(await rateLimit(c.env, ip, 'update-check', 30))) return c.json({ ok: false, error: 'rate_limited' }, 429);
+  const current = c.env.APP_VERSION || '';
+  const force = c.req.query('force') === '1';
+  const r = await updateCheck(current, force);
+  return c.json(r, r.ok ? 200 : 502);
+});
+
 // api 404
 app.all('/api/*', (c) => c.json({ ok: false, error: 'not_found' }, 404));
 
@@ -182,8 +197,14 @@ app.notFound((c) => {
 // API errors stay JSON; pages get the styled diagnostics page.
 app.onError((err, c) => {
   if (c.req.path.startsWith('/api')) {
+    // v3.1.5 — database failures arrive as one classified code, never as a
+    // raw "D1-Error: not authorized SQLITE_…" dump in the toast. The UI
+    // translates each code into a human sentence with the pointer to the
+    // Health panel, where the actual fix lives.
+    const raw = String((err as Error)?.message ?? err ?? '');
+    const code = dbErrorCode(err);
     return c.json(
-      { ok: false, error: 'server_error', detail: String(err?.message ?? err).slice(0, 200) },
+      { ok: false, error: code, detail: raw.slice(0, 200) },
       500
     );
   }

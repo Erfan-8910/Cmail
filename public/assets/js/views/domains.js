@@ -7,6 +7,7 @@ import { api, errText } from '../api.js';
 import { t, lang } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo } from '../ui.js';
 import { openDomainWizard } from './domwiz.js';
+import { dnsTable, copyLine } from './auth.js';
 
 export async function renderDomains(root) {
   const view = h('div', { class: 'view' });
@@ -96,6 +97,7 @@ export async function renderDomains(root) {
     );
 
     const actions = h('div', { class: 'dom-card__actions' },
+      h('button', { class: 'btn btn--sm', onclick: () => domainDetails(d) }, icon('info'), h('span', { class: 'hide-sm' }, t('domDetails'))),
       h('button', { class: 'btn btn--sm', onclick: () => dnsCheckModal(d) }, icon('zap'), h('span', { class: 'hide-sm' }, t('dnsCheckBtn'))),
       h('button', { class: 'btn btn--sm', onclick: () => dnsModal(d.name) }, icon('help'), h('span', { class: 'hide-sm' }, t('dnsGuide'))),
       h('span', { style: { flex: '1' } }),
@@ -171,6 +173,120 @@ export async function renderDomains(root) {
     catchAll.addEventListener('click', () => catchAll.classList.toggle('is-on'));
   }
 
+  // v3.1.5 — the full dossier of one domain, in one place: the lifecycle
+  // facts, the live DNS truth from a real resolver, and a diagnosis list
+  // that names every problem together with its fix — the way a pro control
+  // panel does it, not a guessing game.
+  function domainDetails(d) {
+    const unfinished = d.status === 'draft' || d.status === 'verifying';
+    const fact = (icn, k, v) => h('div', { class: 'dom-fact' },
+      h('span', { class: 'dom-fact__icn' }, icon(icn)),
+      h('div', {}, h('div', { class: 'dom-fact__k' }, k), h('div', { class: 'dom-fact__v' }, v)));
+
+    const facts = h('div', { class: 'dom-details__facts' },
+      fact('mail', t('addressesN'), String(d.address_count ?? 0)),
+      fact('clock', t('lastMail'), d.last_mail ? timeAgo(d.last_mail, t) : '—'),
+      fact('zap', t('active'), d.active ? t('switchOn') : t('switchOff')),
+      fact('users', t('catchAll'), d.catch_all ? t('switchOn') : t('switchOff')));
+
+    // ---- live DNS, straight from the resolver (auto-runs once)
+    let lastCheck = null;
+    const dnsBox = h('div', { class: 'dom-details__dns' }, h('div', { class: 'small muted', style: { padding: '6px 2px' } }, t('loading')));
+    const dnsBtn = h('button', { class: 'btn btn--sm', onclick: () => runDns(true) }, icon('refresh'), t('gateRecheck'));
+
+    async function runDns(manual) {
+      dnsBtn.disabled = true;
+      clear(dnsBox).append(h('div', { class: 'small muted', style: { padding: '6px 2px' } }, t('loading')));
+      let r;
+      try { r = await api.get(`/api/addresses/domains/${d.id}/dns-check`); }
+      catch (e) {
+        clear(dnsBox).append(h('div', { class: 'dns-line is-bad' }, h('span', { class: 'dns-line__icn' }, icon('x')), h('div', {}, h('b', {}, t('error')), h('span', { class: 'small muted' }, errText(e)))));
+        dnsBtn.disabled = false;
+        return;
+      }
+      lastCheck = r.check;
+      drawDns();
+      drawDiag();
+      dnsBtn.disabled = false;
+      if (manual) toast(t('dnsCheckNote'), 'ok', 1600);
+    }
+
+    function drawDns() {
+      const c = lastCheck;
+      clear(dnsBox);
+      if (!c) return;
+      const verdict = (ok, okTxt, badTxt, warmTxt) => {
+        const cls = ok ? 'is-ok' : (warmTxt ? 'is-warm' : 'is-bad');
+        const headline = ok ? okTxt : (warmTxt || badTxt);
+        const sub = headline === badTxt ? '' : badTxt;   // never say the same sentence twice
+        return h('div', { class: `dns-line ${cls}` },
+          h('span', { class: 'dns-line__icn' }, icon(ok ? 'check' : 'x')),
+          h('div', {}, h('b', {}, headline), sub ? h('span', { class: 'small muted' }, sub) : ''));
+      };
+      dnsBox.append(
+        verdict(c.mx_cloudflare, t('dnsMxOk'), t('dnsMxBad'), c.mx_ok ? t('dnsMxOther') : ''),
+        c.mx_records?.length ? h('div', { class: 'dns-records mono' }, c.mx_records.map((x) => h('div', {}, x))) : '',
+        verdict(c.spf_cloudflare, t('dnsSpfOk'), t('dnsSpfBad'), c.spf_ok ? t('dnsSpfOther') : ''),
+        c.spf_record ? h('div', { class: 'dns-records mono' }, h('div', {}, c.spf_record)) : '',
+      );
+    }
+
+    // ---- the diagnosis list: every check, its verdict, its fix
+    const diag = h('div', { class: 'dom-details__diag' });
+    function drawDiag() {
+      clear(diag);
+      const v = (ok, txt, fix, warn) => diag.append(h('div', { class: `diag-line ${ok === true ? 'is-ok' : ok === null || warn ? 'is-warn' : 'is-bad'}` },
+        h('span', { class: 'diag-line__icn' }, icon(ok === true ? 'check' : warn || ok === null ? 'info' : 'x')),
+        h('div', {}, h('b', {}, txt), fix ? h('span', { class: 'small muted' }, fix) : '')));
+
+      const regDone = d.status === 'verified' || d.status === 'unverified';
+      v(regDone, t('diagReg'), regDone ? '' : t('diagRegFix'));
+      if (!regDone) return;
+      v(!!d.active, t('diagActive'), d.active ? '' : t('diagActiveFix'));
+      v(!!d.catch_all, t('diagCatch'), d.catch_all ? '' : t('diagCatchFix'));
+      if (lastCheck) {
+        v(lastCheck.mx_ok && lastCheck.mx_cloudflare, t('diagMx'), lastCheck.mx_ok && lastCheck.mx_cloudflare ? '' : t('diagMxFix'));
+        v(lastCheck.spf_ok && lastCheck.spf_cloudflare, t('diagSpf'), lastCheck.spf_ok && lastCheck.spf_cloudflare ? '' : t('diagSpfFix'));
+      } else {
+        v(null, t('diagDnsPending'), t('diagDnsPendingFix'), true);
+      }
+      v(!!d.last_mail, t('diagFlow'), d.last_mail ? t('diagFlowOk').replace('{t}', timeAgo(d.last_mail, t)) : t('diagFlowFix'), !d.last_mail);
+    }
+    drawDiag();
+
+    // ---- the exact records a healthy domain carries (copyable)
+    const rec = h('details', { class: 'tut__manual dom-details__rec' },
+      h('summary', {}, t('dnsRecordsT')),
+      dnsTable([
+        ['MX', '@', 'route1.mx.cloudflare.net', '10'],
+        ['MX', '@', 'route2.mx.cloudflare.net', '20'],
+        ['MX', '@', 'route3.mx.cloudflare.net', '30'],
+      ]),
+      copyLine('v=spf1 include:_spf.mx.cloudflare.net ~all'));
+
+    const m = modal({
+      wide: true,
+      title: `${t('domDetails')} — ${d.name}`, iconName: 'globe',
+      body: [
+        facts,
+        h('div', { class: 'dom-details__sec' },
+          h('div', { class: 'row', style: { justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' } },
+            h('h4', { style: { margin: 0, fontSize: '13.5px' } }, icon('zap'), ' ', t('dnsLiveT')), dnsBtn),
+          dnsBox),
+        h('div', { class: 'dom-details__sec' },
+          h('h4', { style: { margin: '0 0 6px', fontSize: '13.5px' } }, icon('life'), ' ', t('diagT')),
+          diag),
+        rec,
+      ],
+      footer: [
+        unfinished ? h('button', { class: 'btn btn--primary', onclick: () => { m.close(); continueWizard(d); } }, icon('zap'), t('domContinue')) : '',
+        h('span', { style: { flex: '1' } }),
+        h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('done')),
+      ],
+    });
+    runDns(false);
+  }
+
   // the live reality-check: the worker asks a real resolver (DNS-over-HTTPS)
   // whether MX and SPF actually exist right now — no guessing, no refresh
   function dnsCheckModal(d) {
@@ -187,9 +303,11 @@ export async function renderDomains(root) {
 
     const verdict = (ok, okTxt, badTxt, warmTxt) => {
       const cls = ok ? 'is-ok' : (warmTxt ? 'is-warm' : 'is-bad');
+      const headline = ok ? okTxt : (warmTxt || badTxt);
+      const sub = headline === badTxt ? '' : badTxt;   // never say the same sentence twice
       return h('div', { class: `dns-line ${cls}` },
         h('span', { class: 'dns-line__icn' }, icon(ok ? 'check' : 'x')),
-        h('div', {}, h('b', {}, ok ? okTxt : (warmTxt || badTxt)), ok || !warmTxt ? h('span', { class: 'small muted' }, badTxt) : ''));
+        h('div', {}, h('b', {}, headline), sub ? h('span', { class: 'small muted' }, sub) : ''));
     };
 
     async function run() {

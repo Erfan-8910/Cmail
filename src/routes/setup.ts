@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
 import { createSession, setSessionCookie, clientIp, rateLimit, requireUser } from '../auth';
-import { usernameValid, passwordStrong, hashPassword, uid, now, getSettings, setSetting, RE_DOMAIN, appVersion } from '../util';
+import { usernameValid, passwordStrong, hashPassword, uid, now, getSettings, setSetting, RE_DOMAIN, appVersion, dbErrorCode } from '../util';
 import { SCHEMA } from '../generated/schema';
 import { TABLES, EXPECTED } from '../tables';
 
@@ -168,9 +168,16 @@ app.get('/tables', async (c) => {
   if (!g) return c.json({ ok: false, error: 'forbidden' }, c.get('user') ? 403 : 400);
   const { env } = g;
 
-  const { results } = await env.DB.prepare(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-  ).all<{ name: string }>();
+  // v3.1.5 — a broken binding answers as one classified code; the raw
+  // "D1-Error: not authorized SQLITE_…" never rides into the UI again
+  let results: { name: string }[] | undefined;
+  try {
+    ({ results } = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    ).all<{ name: string }>());
+  } catch (e) {
+    return c.json({ ok: false, error: dbErrorCode(e) }, 500);
+  }
   const existing = new Set((results ?? []).map((r) => r.name));
 
   const tables = [] as { name: string; exists: boolean; rows: number | null }[];

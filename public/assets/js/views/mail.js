@@ -1036,7 +1036,7 @@ function emailRow(em) {
   // per-row overflow menu — the touch-proof way to star / mark / delete
   const kebab = h('button', {
     class: 'email-row__kebab', title: t('more'), 'aria-label': t('more'),
-    onclick: (e) => { e.stopPropagation(); vibrate(5); rowMenu(em); },
+    onclick: (e) => { e.stopPropagation(); vibrate(5); rowMenu(em, e.currentTarget); },
   }, icon('more'));
 
   // one row, one line — the way a grown-up mail client reads:
@@ -1083,8 +1083,15 @@ function emailRow(em) {
     }, 480); }, { passive: true });
     row.addEventListener('touchmove', () => { moved = true; clearTimeout(lpT); }, { passive: true });
     row.addEventListener('touchend', () => clearTimeout(lpT), { passive: true });
-    row.addEventListener('contextmenu', (e) => { if (selecting || selected.size) e.preventDefault(); });
   }
+
+  // v3.1.5 — right-click is the desktop's management surface: the full
+  // context menu opens at the pointer. In selection mode the native menu
+  // stays suppressed so the checkboxes keep charge.
+  row.addEventListener('contextmenu', (e) => {
+    if (selecting || selected.size) { e.preventDefault(); return; }
+    openCtxMenu(e, em);
+  });
 
   // touch: the Gmail-grade shortcut — flick a row and it acts.
   // left flick deletes, right flick stars; a gentle push springs back.
@@ -1159,47 +1166,125 @@ function toggleSelect(id) {
   drawBulkBar();
 }
 
-// ---------- per-row action sheet (touch-proof star / read / file / delete) ----------
-function rowMenu(em) {
-  let m = null;
-  const act = (label, icn, fn, cls = 'btn') => h('button', {
-    class: `${cls} menu-act`,
-    onclick: () => { m.close(); fn(); },
-  }, icon(icn), label);
+// ---------- the floating context menu (right-click / kebab) ----------
+// v3.1.5: row actions moved out of the heavy dialog into a real context
+// menu — right-click a letter (or press the row's kebab) and the menu opens
+// exactly where the pointer is, clamped inside the viewport, RTL-aware; on
+// phones it docks to the bottom as a sheet. One menu, every management
+// action the credential allows — nothing a guest may not do is ever shown.
+let ctxEl = null;
+function closeCtxMenu() {
+  if (!ctxEl) return;
+  const el = ctxEl; ctxEl = null;
+  el.classList.remove('is-open');
+  setTimeout(() => el.remove(), 180);
+  window.removeEventListener('pointerdown', ctxOutside, true);
+  window.removeEventListener('keydown', ctxEsc, true);
+  window.removeEventListener('scroll', ctxCloseScroll, true);
+  window.removeEventListener('resize', closeCtxMenu);
+}
+function ctxOutside(e) { if (ctxEl && !ctxEl.contains(e.target)) closeCtxMenu(); }
+function ctxEsc(e) { if (e.key === 'Escape') { e.stopPropagation(); closeCtxMenu(); } }
+function ctxCloseScroll() { if (ctxEl) closeCtxMenu(); }
 
+function openCtxMenu(ev, em, anchor) {
+  ev.preventDefault?.(); ev.stopPropagation?.();
+  closeCtxMenu();
+  const items = ctxItems(em);
+  if (!items.length) return;
+  const menu = h('div', { class: 'ctxmenu glass', role: 'menu' });
+  for (const it of items) {
+    if (it.sep) { menu.append(h('div', { class: 'ctxmenu__sep', role: 'separator' })); continue; }
+    if (it.head) { menu.append(h('div', { class: 'ctxmenu__head' }, it.head)); continue; }
+    menu.append(h('button', {
+      class: `ctxmenu__it ${it.danger ? 'ctxmenu__it--danger' : ''}`, role: 'menuitem',
+      onclick: () => { closeCtxMenu(); vibrate(5); it.fn(); },
+    }, icon(it.icn), h('span', {}, it.label)));
+  }
+  document.body.append(menu);
+  ctxEl = menu;
+  // position: at the pointer for a real right-click, or above/below the
+  // kebab that was pressed — always clamped inside the viewport
+  const r = menu.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let x, y;
+  if (anchor?.getBoundingClientRect) {
+    const a = anchor.getBoundingClientRect();
+    x = a.left + a.width / 2 - r.width / 2;
+    y = a.bottom + 6;
+    if (y + r.height > vh - 8) y = a.top - r.height - 6;
+  } else {
+    x = ev.clientX ?? 40; y = ev.clientY ?? 40;
+  }
+  x = Math.max(8, Math.min(x, vw - r.width - 8));
+  y = Math.max(8, Math.min(y, vh - r.height - 8));
+  menu.style.left = `${Math.round(x)}px`;
+  menu.style.top = `${Math.round(y)}px`;
+  menu.classList.add('is-open');
+  window.addEventListener('pointerdown', ctxOutside, true);
+  window.addEventListener('keydown', ctxEsc, true);
+  window.addEventListener('scroll', ctxCloseScroll, true);
+  window.addEventListener('resize', closeCtxMenu);
+}
+
+// the menu's contents — the full management set of one letter, permission-
+// filtered. Filing options ride in as a labeled group when folders exist.
+function ctxItems(em) {
   const items = [];
-  if (can('star')) {
-    items.push(act(em.starred ? t('unstar') : t('star'), 'star', async () => {
-      em.starred = em.starred ? 0 : 1;
-      try { await api.patch(`/api/emails/${em.id}`, { starred: !!em.starred }); if (box === 'starred') loadEmails(true); else drawList(); } catch (e) { em.starred = em.starred ? 0 : 1; toast(errText(e), 'err'); }
-    }));
+  items.push({ icn: 'mail', label: t('openMail'), fn: () => { cursorIdx = emails.findIndex((x) => x.id === em.id); location.hash = `#/mail/m/${em.id}`; } });
+  if (can('compose') && sendReady()) {
+    items.push({ icn: 'arrow', label: t('reply'), fn: () => replyToMail(em) });
   }
-  items.push(act(em.is_read ? t('markUnread') : t('markRead'), 'eye', async () => {
+  // v3.2.0 — the star flips in place (optimistic paint, no full-list repaint
+  // flicker under the pointer), the same honest flip the hover pill uses
+  if (can('star')) items.push({ icn: 'star', label: em.starred ? t('unstar') : t('star'), fn: async () => {
+    em.starred = em.starred ? 0 : 1;
+    try { await api.patch(`/api/emails/${em.id}`, { starred: !!em.starred }); if (box === 'starred') loadEmails(true); else drawList(); } catch (e) { em.starred = em.starred ? 0 : 1; toast(errText(e), 'err'); }
+  } });
+  items.push({ icn: 'eye', label: em.is_read ? t('markUnread') : t('markRead'), fn: async () => {
     try { await api.patch(`/api/emails/${em.id}`, { is_read: !em.is_read }); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
-  }));
-  // filing — this mail slides into one of the account's own folders
-  if (can('archive')) {
-    const movable = folders.filter((f) => f.id !== em.folder_id);
-    if (movable.length) {
-      items.push(h('div', { class: 'menu-act__label' }, t('moveTo')));
-      for (const f of movable) {
-        items.push(h('button', { class: 'btn menu-act', onclick: () => { m.close(); moveMail(em, f.id); } },
-          h('span', { class: `fdot fdot--${f.color || 'amber'}` }, ''), f.name));
-      }
+  } });
+  items.push({ sep: true });
+  // v3.2.0 — the print studio replaces the 3.1.5 exporter: textured paper,
+  // the maker's mark, and the official stamp with the device's own date/time
+  items.push({ icn: 'printer', label: t('printBtn'), fn: () => openPrint(em) });
+  const peer = em.direction === 'out' ? (em.to_addr || em.from_addr) : (em.from_addr || em.to_addr);
+  if (peer) items.push({ icn: 'copy', label: `${t('copyAddress')}: ${peer}`, fn: () => { copyText(peer); toast(t('copied'), 'ok', 1200); } });
+  if (can('archive') && folders.length) {
+    const movable = folders.filter((f) => f.id !== em.folder_id).slice(0, 4);
+    if (movable.length || em.folder_id) {
+      items.push({ sep: true });
+      items.push({ head: t('moveTo') });
+      for (const f of movable) items.push({ icn: 'folder', label: f.name, fn: () => moveMail(em, f.id) });
+      if (em.folder_id) items.push({ icn: 'x', label: t('folderRemove'), fn: () => moveMail(em, null) });
     }
-    if (em.folder_id) items.push(act(t('folderRemove'), 'x', () => moveMail(em, null)));
   }
-  if (can('delete')) items.push(act(t('delete'), 'trash', () => confirmEmailDelete(1, em.address_id, async () => {
-    try { await api.del(`/api/emails/${em.id}`); toast(t('deletedN'), 'ok', 1400); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
-  }, true), 'btn btn--danger'));
+  if (can('delete')) {
+    items.push({ sep: true });
+    items.push({ icn: 'trash', label: t('delete'), danger: true, fn: () => confirmEmailDelete(1, em.address_id, async () => {
+      try { await api.del(`/api/emails/${em.id}`); toast(t('deletedN'), 'ok', 1400); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
+    }, true) });
+  }
+  return items;
+}
 
-  m = modal({
-    title: (em.subject || '(no subject)').slice(0, 64), iconName: 'mail',
-    body: [
-      h('div', { class: 'menu-stack' }, items),
-    ],
-    footer: [h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('cancel'))],
+// reply with a real quote — the original text rides into the composer under
+// a dated header, prefixed line by line, the way a proper mail client does
+async function replyToMail(em) {
+  let text = em.preview ?? '';
+  try { const full = await api.get(`/api/emails/${em.id}`); text = full.email?.text_body ?? text; }
+  catch { /* the preview is an honest fallback */ }
+  const subject = em.subject && /^re:/i.test(em.subject.trim()) ? em.subject : `Re: ${em.subject ?? ''}`;
+  openCompose({
+    to: em.direction === 'out' ? (em.to_addr || em.from_addr) : em.from_addr,
+    subject,
+    quote: { from: em.direction === 'out' ? (em.to_addr || em.from_addr) : (em.from_name ? `${em.from_name} <${em.from_addr}>` : em.from_addr), date: em.received_at, text },
   });
+}
+
+// ---------- per-row action sheet (touch-proof star / read / file / delete) ----------
+function rowMenu(em, anchor) {
+  openCtxMenu({ preventDefault() {}, stopPropagation() {}, clientX: 40, clientY: 40 }, em, anchor);
 }
 
 // file one message — folder_id null puts it back in the plain inbox
@@ -1216,7 +1301,7 @@ async function moveMail(em, fid) {
 document.addEventListener('keydown', (e) => {
   const onReader = !!document.querySelector('.reader');
   if (!document.getElementById('email-list') && !onReader) return;   // only in mail context
-  if (document.querySelector('.modal-back, .cmdk-back, .menu')) return; // nothing overlaying
+  if (document.querySelector('.modal-back, .cmdk-back, .menu, .ctxmenu')) return; // nothing overlaying
   const typing = /^(input|textarea|select)$/i.test(e.target.tagName) || e.target.isContentEditable;
   if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
 
@@ -1361,7 +1446,11 @@ async function drawReader(wrap, r) {
         class: `btn btn--sm btn--ghost ${sendReady() ? '' : 'is-frozen'}`,
         title: sendReady() ? t('reply') : t('sendLockedTitle'),
         onclick: () => sendReady()
-          ? openCompose({ to: replyTo, subject: `Re: ${em.subject ?? ''}` })
+          ? openCompose({
+              to: replyTo,
+              subject: em.subject && /^re:/i.test(em.subject.trim()) ? em.subject : `Re: ${em.subject ?? ''}`,
+              quote: { from: replyTo, date: em.received_at, text: em.text_body ?? '' },
+            })
           : toast(t('sendLockedToast'), 'err'),
       }, icon('arrow'), h('span', { class: 'hide-sm' }, t('reply')), sendReady() ? '' : lockBadge('frozen', t('sendLockedTitle'))));
   }
@@ -1609,6 +1698,15 @@ export async function openCompose(prefill = {}) {
   const subj = h('input', { class: 'input compose__in', placeholder: t('subject'), value: useSaved ? (saved.subject ?? '') : (prefill.subject ?? '') });
   const body = h('textarea', { class: 'input compose__body', placeholder: t('body') });
   if (useSaved) body.value = saved.body ?? '';
+  else if (prefill.quote) {
+    // v3.1.5 — reply carries the original letter with it: a dated header and
+    // the text, prefixed line by line, ready under the cursor
+    const q = String(prefill.quote.text ?? '');
+    if (q.trim()) {
+      const head = `${t('quoteHead')} ${prefill.quote.from} (${new Date(prefill.quote.date ?? Date.now()).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-GB')}):`;
+      body.value = `\n\n${head}\n${q.split('\n').map((l) => `> ${l}`).join('\n')}`;
+    }
+  }
   const toErr = h('div', { class: 'compose__err hidden' }, icon('x'), h('span', {}, ''));
 
   // ---------- attachments — files and images ride along ----------

@@ -3,7 +3,7 @@
 // v3.2.0 — the Update center: installed build vs the latest GitHub release,
 // one honest check, and an answer that either celebrates or escorts you
 // through the two-minute update. No more guessing which build is deployed.
-import { state } from '../api.js';
+import { api, state } from '../api.js';
 import { t, lang } from '../i18n.js';
 import { h, clear, icon, vibrate } from '../ui.js';
 
@@ -56,17 +56,16 @@ function updateCenter() {
     stage.append(spin);
   }
 
-  function drawUpToDate(rel) {
+  function drawUpToDate(rel, ahead = false) {
     clear(stage);
     clear(row);
     row.append(
       verPill(t('updCurrent'), `v${VERSION}`, 'is-now'),
       h('span', { class: 'upd__eq', 'aria-hidden': 'true' }, '='),
       verPill(t('updLatest'), `v${(rel.tag_name || '').replace(/^v/, '')}`, 'is-ok'));
-    const published = rel.published_at ? new Date(rel.published_at).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-GB') : '';
     const state1 = h('div', { class: 'upd__state upd--ok' },
       h('span', { class: 'upd__sigil' }, icon('check')),
-      h('div', {}, h('b', {}, t('updUpToDate')), h('span', { class: 'upd__stated' }, t('updUpToDateSub'))));
+      h('div', {}, h('b', {}, ahead ? t('updAhead').replace('{v}', String(rel.tag_name || '').replace(/^v/, '')) : t('updUpToDate')), h('span', { class: 'upd__stated' }, t('updUpToDateSub'))));
     stage.append(row, state1);
     if (!reducedMotion) {
       // one quiet celebratory pulse — the good news deserves a heartbeat
@@ -112,12 +111,27 @@ function updateCenter() {
     clear(checkBtn);
     checkBtn.append(h('span', { class: 'upd__btnspin' }, icon('refresh')), h('span', {}, t('updChecking')));
     drawChecking();
+    // v3.2.0 — the worker's own check rides first (its isolate cache spares
+    // the GitHub API and it answers with the redirect fallback when the REST
+    // quota bites); the browser falls back to the API directly so the card
+    // still works on an older deployed worker without the endpoint
     try {
-      const res = await fetch(REPO_API, { headers: { accept: 'application/vnd.github+json' } });
-      if (!res.ok) throw new Error(String(res.status));
-      const rel = await res.json();
-      sessionStorage.setItem(UPD_CACHE_KEY, JSON.stringify({ at: Date.now(), rel }));
-      if (cmpVer(String(rel.tag_name || ''), VERSION) > 0) drawNew(rel); else drawUpToDate(rel);
+      let latest = null, ahead = false;
+      try {
+        const r = await api.get(`/api/update-check${manual ? '?force=1' : ''}`);
+        if (r?.ok && r.latest) latest = r.latest;
+        if (r?.ok && !r.update_available && latest && cmpVer(VERSION, latest) > 0) ahead = true;
+      } catch { /* older worker without the endpoint — the browser asks itself */ }
+      if (!latest) {
+        const res = await fetch(REPO_API, { headers: { accept: 'application/vnd.github+json' } });
+        if (!res.ok) throw new Error(String(res.status));
+        const rel = await res.json();
+        latest = String(rel.tag_name || '');
+      }
+      sessionStorage.setItem(UPD_CACHE_KEY, JSON.stringify({ at: Date.now(), rel: { tag_name: latest } }));
+      if (cmpVer(latest, VERSION) > 0) drawNew({ tag_name: latest });
+      else if (ahead) drawUpToDate({ tag_name: latest }, true);
+      else drawUpToDate({ tag_name: latest });
     } catch {
       drawErr();
     }

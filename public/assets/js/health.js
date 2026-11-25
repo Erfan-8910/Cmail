@@ -166,13 +166,29 @@ export async function healthPane() {
   function draw(hp, health) {
     clear(hp);
 
-    // ----- hero state -----
+    // the honest score: how many expected tables are whole (exist + all
+    // columns present) — no invented percentage, the database's own words
+    const tb = health.tables ?? [];
+    const okTables = tb.filter((x) => x.exists && !x.missing_cols.length).length;
+    const totalTables = tb.length || 1;
+    const score = Math.round((okTables / totalTables) * 100);
+
+    // ----- hero state: pulse + score ring + quick actions -----
     const st = health.status;
     const hero = h('div', { class: `glass card health__hero health__hero--${st}` },
       h('span', { class: 'health__pulse', 'aria-hidden': 'true' }),
+      healthRing(score, st),
       h('div', { class: 'grow' },
         h('div', { class: 'health__state' }, t(st === 'ok' ? 'healthStateOk' : st === 'warn' ? 'healthStateWarn' : 'healthStateErr')),
-        h('div', { class: 'small muted' }, t(st === 'ok' ? 'healthStateOkSub' : st === 'warn' ? 'healthStateWarnSub' : 'healthStateErrSub'))),
+        h('div', { class: 'small muted' }, t(st === 'ok' ? 'healthStateOkSub' : st === 'warn' ? 'healthStateWarnSub' : 'healthStateErrSub')),
+        h('div', { class: 'row health__acts', style: { flexWrap: 'wrap', gap: '8px', marginTop: '10px' } },
+          h('button', { class: 'btn btn--sm', onclick: async (e) => {
+            const b = e.currentTarget; b.disabled = true;
+            try { await api.post('/api/admin/cleanup'); toast(t('cleanupDone'), 'ok'); paint(pane, true); }
+            catch (err) { toast(errText(err), 'err'); }
+            b.disabled = false;
+          } }, icon('trash'), t('runCleanup')),
+          h('button', { class: 'btn btn--sm', onclick: () => paint(pane, true) }, icon('refresh'), t('refresh')))),
       h('span', { class: 'chip' }, `${t('healthVersion')} ${health.version || '?'}`));
     hp.append(hero);
 
@@ -277,6 +293,15 @@ export async function healthPane() {
       h('ol', {}, [t('healthCheck1'), t('healthCheck2'), t('healthCheck3')].map((s) => h('li', {}, s)))));
     grid.append(mailCard);
 
+    // ----- sending card: the state of outgoing mail at a glance (v3.1.5) -----
+    const sd = health.sending ?? {};
+    const sendCard = h('div', { class: 'glass card' },
+      h('h3', { style: { margin: '0 0 10px', fontSize: '15px' } }, icon('send'), ' ', t('healthCardSend')),
+      kv(t('healthSendProvider'), chip(sd.provider && sd.provider !== 'none' ? sd.provider : '—', !!sd.ready)),
+      kv(t('healthSendState'), chip(sd.ready ? t('sendOpenTitle') : t('sendLockedTitle'), !!sd.ready)),
+      h('button', { class: 'btn btn--sm mt-1', onclick: () => { location.hash = '#/settings/sending'; } }, icon('settings'), t('healthSendGo')));
+    grid.append(sendCard);
+
     hp.append(grid);
     hp.append(h('p', { class: 'small muted', style: { margin: '10px 2px 0', opacity: .8 } }, icon('refresh'), ' ', t('healthAutoRefresh')));
   }
@@ -299,6 +324,30 @@ export async function healthPane() {
 }
 
 // ---------- small helpers ----------
+// the hero's score ring — same honest gauge family the setup gate uses
+function healthRing(score, st) {
+  const R = 26, C = 2 * Math.PI * R;
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const circle = document.createElementNS(svgNS, 'circle');
+  circle.setAttribute('cx', '32'); circle.setAttribute('cy', '32'); circle.setAttribute('r', String(R));
+  circle.setAttribute('fill', 'none'); circle.setAttribute('stroke', 'currentColor');
+  circle.setAttribute('stroke-width', '5.5'); circle.setAttribute('stroke-linecap', 'round');
+  circle.setAttribute('stroke-dasharray', String(C));
+  circle.setAttribute('stroke-dashoffset', String(C * (1 - Math.max(0, Math.min(100, score)) / 100)));
+  circle.style.transform = 'rotate(-90deg)'; circle.style.transformOrigin = 'center';
+  const track = circle.cloneNode();
+  track.setAttribute('stroke', 'var(--field)'); track.removeAttribute('style');
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 64 64'); svg.setAttribute('class', `health__ring health__ring--${st}`);
+  svg.append(track, circle);
+  const lbl = document.createElementNS(svgNS, 'text');
+  lbl.setAttribute('x', '32'); lbl.setAttribute('y', '36'); lbl.setAttribute('text-anchor', 'middle');
+  lbl.setAttribute('font-size', '13'); lbl.setAttribute('font-weight', '700'); lbl.setAttribute('fill', 'currentColor');
+  lbl.textContent = String(score);
+  svg.append(lbl);
+  return svg;
+}
+
 function chip(label, ok) {
   return h('span', { class: `chip ${ok ? 'is-on' : 'chip--warn'}` }, label);
 }

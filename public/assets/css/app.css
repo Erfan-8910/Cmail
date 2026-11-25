@@ -3683,7 +3683,8 @@ html[data-accent='crimson'] { --acc-l: #eda9a4; --acc-d: #bb4a42; --acc-ink: #2d
    v3.2.0 — settings, the tight studio cut: icon-led card titles,
    tighter rows, the print-identity plate. One shared language for
    every pane: less padding, more signal.
-   ============================================================ */
+
+==================================================== */
 .set-card { padding: 16px 18px 14px; }
 .set-card__t {
   display: flex; align-items: center; gap: 9px;
@@ -3831,3 +3832,100 @@ html[data-accent='crimson'] { --acc-l: #eda9a4; --acc-d: #bb4a42; --acc-ink: #2d
 .glass.card .set-row + .set-row { border-top: 1px dashed var(--stroke); }
 .glass.card .set-row:first-of-type { margin-top: 2px; }
 .glass.card > .field { margin-top: 6px; }
+=======
+   v3.1.5 — the context menu, the update card, the domain dossier,
+   the health ring, the compact share form
+   ============================================================ */
+
+/* ---------- the row context menu (right-click / kebab) ---------- */
+.ctxmenu {
+  position: fixed; z-index: 320; min-width: 208px; max-width: 300px;
+  padding: 6px; border-radius: 14px;
+  opacity: 0; transform: scale(.94) translateY(-4px);
+  transform-origin: top;
+  box-shadow: 0 18px 44px -14px rgba(0, 0, 0, .45), var(--shadow-soft);
+  transition: opacity .16s var(--ease), transform .18s var(--spring);
+}
+.ctxmenu.is-open { opacity: 1; transform: none; }
+.ctxmenu__it {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8.5px 10px; border: 0; border-radius: 9px; cursor: pointer;
+  background: transparent; color: var(--fg); text-align: start;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  transition: background .15s, color .15s;
+}
+.ctxmenu__it svg { width: 15px; height: 15px; flex: none; color: var(--muted); }
+.ctxmenu__it:hover { background: var(--hover); }
+.ctxmenu__it:hover svg { color: var(--acc); }
+.ctxmenu__it--danger { color: var(--danger); }
+.ctxmenu__it--danger svg { color: var(--danger); }
+.ctxmenu__it--danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.ctxmenu__sep { height: 1px; background: var(--stroke); margin: 5px 6px; }
+.ctxmenu__head { padding: 5px 10px 3px; font-size: 10px; font-weight: 800; letter-spacing: .4px; color: var(--faint); text-transform: uppercase; }
+@media (max-width: 640px) {
+  .ctxmenu {
+    left: 8px !important; right: 8px; top: auto !important;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    max-width: none; min-width: 0;
+    transform: translateY(14px); transform-origin: bottom;
+  }
+  .ctxmenu.is-open { transform: none; }
+  .ctxmenu__it { padding: 11.5px 12px; font-size: 13.5px; }
+}
+
+/* ---------- the about page's update card ---------- */
+.ab-update { border-radius: 18px; padding: 14px 16px; margin-top: 14px; }
+.ab-update__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ab-update__t { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.ab-update__t svg { width: 16px; height: 16px; color: var(--acc); }
+.ab-update__head .btn { margin-inline-start: auto; }
+.ab-update__st { display: flex; align-items: flex-start; gap: 7px; margin-top: 10px; line-height: 1.8; }
+.ab-update__st svg { width: 15px; height: 15px; flex: none; margin-top: 3px; }
+.ab-update__st--new { color: var(--fg); font-weight: 600; }
+.ab-update__newt { display: flex; align-items: center; gap: 7px; }
+.ab-update__newt svg { color: var(--acc); }
+
+/* ---------- the domain dossier ---------- */
+.dom-details__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.dom-fact { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-radius: 12px; background: var(--field); border: 1px solid var(--stroke); }
+.dom-fact__icn { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: color-mix(in srgb, var(--acc) 14%, transparent); color: var(--acc); flex: none; }
+.dom-fact__icn svg { width: 15px; height: 15px; }
+.dom-fact__k { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+.dom-fact__v { font-size: 12.5px; font-weight: 750; margin-top: 1px; }
+.dom-details__sec { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--stroke); }
+.dom-details__rec { margin-top: 12px; }
+.diag-line { display: flex; align-items: flex-start; gap: 9px; padding: 8px 4px; border-bottom: 1px dashed var(--stroke); }
+.diag-line:last-child { border-bottom: 0; }
+.diag-line__icn { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 8px; flex: none; margin-top: 1px; }
+.diag-line__icn svg { width: 13px; height: 13px; }
+.diag-line.is-ok .diag-line__icn { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.diag-line.is-warn .diag-line__icn { background: color-mix(in srgb, var(--warn, #d9a441) 16%, transparent); color: var(--warn, #d9a441); }
+.diag-line.is-bad .diag-line__icn { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.diag-line b { font-size: 12.5px; display: block; }
+.diag-line .small { display: block; margin-top: 1px; line-height: 1.7; }
+
+/* ---------- the health hero's score ring ---------- */
+.health__ring { width: 66px; height: 66px; flex: none; color: var(--acc); }
+.health__ring--ok { color: var(--ok, var(--acc)); }
+.health__ring--warn { color: var(--warn, #d9a441); }
+.health__ring--err { color: var(--danger); }
+.health__acts .btn svg { width: 14px; height: 14px; }
+
+/* ---------- compact share form (Settings → Share) ---------- */
+.share-create__creds { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.share-create__creds .row { flex-wrap: nowrap; }
+@media (min-width: 900px) {
+  .share-create__grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 0 26px; }
+  .share-create__col { min-width: 0; }
+}
+
+/* ---------- settings panes, a touch tighter ---------- */
+.settings-grid > .glass.card { padding: 16px 16px 14px; }
+.settings-grid .set-row { padding: 9px 0; }
+.settings-grid h3 { letter-spacing: -.2px; }
+
+/* ---------- help search ---------- */
+.help-search .input { margin-top: 2px; }
+
+/* ---------- the setup gate's completion row ---------- */
+.gate__stay { font-size: 12.5px; }

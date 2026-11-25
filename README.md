@@ -58,9 +58,13 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 <div align="center">
 
-| **The cockpit** — the identity oval (name + address + copy) above one living card; single-line rows, folder rail with live counts |
+| **The cockpit** — the identity oval (name + address + copy) above one living card; single-line rows, folder rail with live counts — and a right-click management menu on every letter |
 |---|
-| <img src="docs/img/en/inbox.png" width="620" alt="Inbox — identity oval, one card, single-line rows, folder rail with live counts"> |
+| <img src="docs/img/en/inbox.png" width="620" alt="Inbox — identity oval, one card, single-line rows, folder rail with live counts, right-click management"> |
+
+| **The right-click menu** — open, reply, star, read state, Print / PDF, copy the sender's address, move to folder, delete; it opens at the pointer, clamps inside the viewport and docks as a bottom sheet on phones |
+|---|
+| <img src="docs/img/en/ctxmenu.png" width="620" alt="Inbox context menu — Print / PDF, copy sender address, move to folder, delete"> |
 
 | **The account circle** — the one and only place accounts switch, with each account's details before you even enter |
 |---|
@@ -68,19 +72,23 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 | **One email, one page** — its own URL, back button and action bar; never a popup |
 |---|
-| <img src="docs/img/en/reader.png" width="620" alt="Dedicated email page — back to inbox, older/newer, star, delete, note"> |
+| <img src="docs/img/en/reader.png" width="620" alt="Dedicated email page — back to inbox, older/newer, star, Print / PDF, note"> |
 
-| **Mission control for your database** — connection, tables, cron heartbeat, mail flow; every problem carries its own fix button |
+| **Mission control for your database** — a score ring that reads the database itself, connection, tables, cron heartbeat, mail flow; every problem carries its own fix button |
 |---|
-| <img src="docs/img/en/health.png" width="620" alt="System health — D1 connection, tables and columns, cron heartbeat, mail flow"> |
+| <img src="docs/img/en/health.png" width="620" alt="System health — score ring, D1 connection, tables and columns, cron heartbeat, mail flow"> |
 
 | **The account's own vault** — live codes scoped per account, **folders bound to that account**; temp addresses wear the frozen badge until you decide |
 |---|
 | <img src="docs/img/en/vault.png" width="620" alt="2FA vault — per-account codes and folders, live countdown rings"> |
 
-| **Every domain, one card** — lifecycle trail, stat strip, Active & Catch-all keys, a heartbeat ring when mail is flowing |
+| **Every domain, one card** — lifecycle trail, stat strip, Active & Catch-all keys, a heartbeat ring when mail is flowing; the Details button opens the full dossier |
 |---|
-| <img src="docs/img/en/domains.png" width="620" alt="Domains — status chips, catch-all switches, inbox counts"> |
+| <img src="docs/img/en/domains.png" width="620" alt="Domains — status chips, catch-all switches, inbox counts, details dossier"> |
+
+| **The domain dossier** — live DNS verdicts (MX, SPF), a troubleshooting list that names each problem with its fix, and the exact records to compare against |
+|---|
+| <img src="docs/img/en/domain-details.png" width="620" alt="Domain dossier — live DNS status and full troubleshooting with the correct records"> |
 
 | **One account, one card** — stat strip, expiry countdown, one-click entry |
 |---|
@@ -102,9 +110,9 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 |---|
 | <img src="docs/img/en/login.png" width="560" alt="Sign-in — centered card, aurora stage, recovery guide"> |
 
-| **About — the maker card and the Climind-W ribbon** |
+| **About** — the maker card, the update check and the Climind-W ribbon |
 |---|
-| <img src="docs/img/en/about.png" width="620" alt="About panel with the maker card and the Climind-W ribbon"> |
+| <img src="docs/img/en/about.png" width="620" alt="About panel with the update-check card and the Climind-W ribbon"> |
 
 </div>
 
@@ -112,17 +120,39 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 This one began with a question nobody had answered for Cmail yet: **why does a letter have to stay glass?** Mail is paperwork. 3.2.0 lets it finally touch paper — and along the way it fixes the three things you actually reported, rebuilds the composer, and gives the app an honest answer about its own version.
 
-- 🖨️ **The print studio.** Every letter now has a **Print / PDF** button. It builds a real sheet of paper inside a hidden frame: warm textured stock with grain and laid lines, a letterhead with your mark, and — the ceremony — an **official round stamp** drawn live in SVG: double ring, star arc, laurel branches, the mark in the middle, a ribbon that says OFFICIAL, and a plaque that carries the **exact date and time from your device**, the second you press print. Wavy cancellation lines drag across the corner like the postman just left. Choose *Save as PDF* and the letter becomes paperwork.
+- 🖨️ **The print studio** *(the 3.1.5 exporter, rebuilt on real paper)*. Every letter now has a **Print / PDF** button. It builds a real sheet of paper inside a hidden frame: warm textured stock with grain and laid lines, a letterhead with your mark, and — the ceremony — an **official round stamp** drawn live in SVG: double ring, star arc, laurel branches, the mark in the middle, a ribbon that says OFFICIAL, and a plaque that carries the **exact date and time from your device**, the second you press print. Wavy cancellation lines drag across the corner like the postman just left. Choose *Save as PDF* and the letter becomes paperwork.
 - 🖋️ **Your mark, not ours.** Settings → Appearance → *Letter paper & stamp* takes any PNG/JPG and puts **your image** where the Cmail logo used to sit — in the center of the stamp and on the letterhead. No image? The drawn Cmail mark stands in.
 - 📎 **Real attachments, outgoing.** The composer now takes **files and images** — up to four, ~650 KB each. Images ride as live thumbnails; drop a file straight onto the body like the desktop clients taught you. Attachments go out through Brevo/Resend *and* stay in the sent copy, downloadable exactly like incoming mail.
 - ✈️ **The composer, rebuilt.** A gradient paper-plane sigil, icon rails beside the fields, a tool rail in the footer (attach · discard draft), a `Ctrl ↵` hint that says what it does, and errors inline instead of shouted.
-- 🔄 **The Update center.** About → Update center compares your installed build against the latest GitHub release in one honest check — pills, states, release notes, and the three steps to update when a new version lands. It celebrates when you're current. No more digging through dashboards to guess what's deployed.
+- 🔄 **The Update center, rebuilt.** 3.1.5's small check line grew into a full update center: pills comparing the installed build against the latest GitHub release, live states, release notes, and the three steps to update when a new version lands — backed by the worker's own cached check. It celebrates when you're current.
 - 🧭 **The version lie is dead.** Builds now carry their version **stamped into the bundle** (`scripts/build-worker.mjs` → esbuild `--define`). A worker pasted by hand into the Cloudflare dashboard — where `wrangler.jsonc` vars don't exist — used to fall back to a stale `3.0.0` in the UI. The build itself tells the truth now: deploy 3.2.0 and every surface says 3.2.0.
-- 🚪 **The sign-in doors sit where they belong.** The Account / Shared-access switch was being painted *below* the card it controls. Fixed: logo → doors → card, the way the margin always assumed.
 - ⭐ **The hover star tells the truth and stops flickering.** The quick-action star never showed a mail's starred state, and tapping it repainted the whole list under your pointer — the pill vanished mid-click. Stars flip in place now, filled amber when on, with a pop; the list only reloads when the Starred box really changes membership.
 - 🎛️ **Appearance, tightened.** The background presence picker retired (the living stage is the one backdrop — it doesn't need a settings row), the theme/language cards are icon-led and tighter, and every settings pane shares one card language: gradient-tile headers, dashed row rules, less padding, more signal.
 
-Tested: `tsc` clean, i18n parity **844/844**, the full security matrix green on a live worker, and the whole flow exercised through `wrangler dev` — version stamp, print doc, attachments in and out, the doors, the star.
+Tested: `tsc` clean, i18n parity **886/886**, the full security matrix green on a live worker, and the whole flow exercised through `wrangler dev` — version stamp, print doc, attachments in and out, the doors, the star.
+
+<details>
+<summary><b>3.1.5 — the right-click inbox, the first PDF export, the domain dossier, D1 errors as sentences</b></summary>
+
+## What's new in 3.1.5
+
+This release was assembled from a stack of real reports: the inbox wanted desktop-grade behavior (a right-click menu, like the clients people already know), the tables section kept surfacing raw `D1-Error: not authorized SQLITE_…` dumps, the sign-in page's tabs sat in the wrong place on desktop, the setup completion page pretended to update itself, and the domain wizard handed out a fresh verification address every time someone stepped away and came back. Beside them, the standing request to make several rooms read like a proper control panel: domain details, system health, the in-app guide, and the sharing and security settings. All of it went through one cycle:
+
+- **The inbox got a real context menu.** Right-click any letter and the management menu opens at the pointer: open, reply, star, mark read/unread, PDF export, copy the sender's address, move to folder and delete. The menu clamps inside the viewport, closes on scroll or Escape, and docks as a bottom sheet on phones — where the row's three-dot button now opens the same menu instead of a modal. A guest sees exactly the items its credential allows.
+- **Official PDF export.** Any letter — received or sent — can leave as an A4 document with the Cmail letterhead, a dated official seal, a details table (sender, recipient, mailbox, type, size, route, and the SPF/DKIM/DMARC verdicts), the body in its true direction, attachments and the note. The document speaks the panel's language — RTL Persian in Vazirmatn, English in Inter — and the browser's own print dialog provides "Save as PDF". No PDF library sits in the middle, so Persian text is never reshaped into mush.
+- **D1 errors arrive as sentences, not dumps.** Every database failure is classified before it reaches the UI and translated into one line in the panel's language, with the pointer to where the actual fix lives — Settings → System health. The setup screen's table inspector catches its own database errors and answers with the same classified code instead of stopping raw.
+- **The sign-in tabs moved above the card.** They were appended after it in the DOM and sat stranded below the form on desktop — exactly the "options in the wrong place" report.
+- **The setup completion page updates itself, honestly.** The auto-recheck loop no longer gives up forever after one failed fetch — it counts down and genuinely retries while offline; it retires itself when the page is gone; and the departure is visible: a real "moving on in 5s…" countdown on the page, the button becoming "Enter Cmail", and a "Stay here" brake for the admin who wants a last look first. (The rewrite also caught a double-handler bug: the main button fired both the old recheck listener and its new handler on one press.)
+- **The domain wizard keeps its promise.** Verification used to re-arm a new code on every resend or resume, silently invalidating the address the owner had already mailed to. The code is the domain's identity now: leave mid-way, come back later — the same verify address is still there, only its 24-hour window is re-armed, and a new letter to that address completes the loop.
+- **The full domain dossier.** A "Details" button on every domain card opens one complete window: the numbers, live DNS status from a real resolver (MX and SPF, auto-run), a troubleshooting list that names each problem with its fix — unfinished registration, inactive switch, closed catch-all, missing MX, unpublished SPF, silent mail flow — and the exact records to compare against. The DNS verdict lines also stopped repeating themselves.
+- **The sending core, tightened.** Provider calls get a hard 20-second ceiling so the composer can't hang on "sending…" forever; plain text now travels as a styled block instead of a bare `<pre>`; provider failures translate with their technical detail trimmed; and reply carries a proper quote — the dated original, prefixed line by line — with "Re:" added only when the subject doesn't have it.
+- **System health reads like an instrument.** The hero carries a score ring built from the database's own words (the share of whole tables), quick actions beside it (run cleanup, refresh), and a new outgoing-mail card with a shortcut into the sending settings.
+- **Sharing and security, compact.** The shared-access form sits in two calm columns on wide screens — who enters and what they may do, beside how long and from how many devices; the security cards tightened their spacing.
+- **The in-app guide became searchable.** A live filter at the top of the page steps irrelevant chapters aside; new chapters cover the inbox's right-click management, the PDF export and the domain dossier; troubleshooting moved to chapter seven.
+- **Update check in About.** A new card shows which version this install runs, checks the repository automatically (a ten-minute cache inside the worker; when the REST API's quota bites, the `releases/latest` redirect answers instead), and offers a manual re-check. When a newer release exists, its version and a direct link to the repository appear right there.
+
+Tested: the security matrix stands at 111/111 on a live worker, `tsc` clean, i18n parity 848/848, and every new surface walked in a browser in both languages — the context menu, the PDF document, the domain dossier, the guide search, the update card, the two-column share form and the health ring. The version badge, download links, single-file worker and one-click installer all ship on 3.1.5.
+</details>
 
 <details>
 <summary><b>3.1.3 — the last step of the Deploy button goes green, and a spent code stays spent</b></summary>
@@ -349,7 +379,7 @@ Verified end-to-end, 21/21 checks: the second install came up with its own empty
 
 - **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
 - **Full package v3.2.0:** [`CMail-v3.2.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.0/CMail-v3.2.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
-- The zip mirrors the v3.2.0 tag — the deploy step that explains itself (the free plan's 10-database ceiling, caught early and explained in plain words), the one-tidy-line D1 inspector on phones, the TOTP replay wall and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
+- The zip mirrors the v3.2.0 tag — the print studio, real outgoing attachments, the rebuilt composer and update center, the inbox's right-click menu, the full domain dossier with live DNS troubleshooting, the TOTP replay wall and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 
@@ -405,7 +435,7 @@ Same hand, same taste — go give it a star.
 
 Made with intention by **[Erfan](https://github.com/Erfan-8910)** and **AI**
 
-**Cmail** — *your mailbox, your rules.*
+**[Cmail](https://github.com/Erfan-8910/Cmail)** — *your mailbox, your rules.*
 
 [Deploy guide](docs/DEPLOY.md) · [Usage guide](docs/USAGE.md) · [Releases](https://github.com/Erfan-8910/Cmail/releases) · [Climind-W](https://github.com/Erfan-8910/Climind-W) · [فارسی](README.fa.md)
 

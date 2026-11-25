@@ -376,3 +376,18 @@ export function shareRemainingMs(s: ShareFlags): number | null {
   if (!s.expires_at) return null;
   return Number(s.expires_at) - shareEffectiveNow(s);
 }
+
+// --------------------------------------------------------------------------
+//  v3.1.5 — one classifier for every D1 failure the app can hit. The UI maps
+//  each code to a single human sentence in the user's language; the raw
+//  "D1-Error: not authorized SQLITE_…" dumps never reach the screen again.
+//  The full story (latency, per-table state, repair buttons) belongs to the
+//  Health panel, which is where the fix lives too.
+// --------------------------------------------------------------------------
+export function dbErrorCode(e: unknown): string {
+  const msg = String((e as Error)?.message ?? e ?? '');
+  if (/not authorized|unauthorized/i.test(msg)) return 'db_not_authorized';
+  if (/no such table/i.test(msg)) return 'tables_missing';
+  if (/no such column/i.test(msg)) return 'schema_outdated';
+  return 'db_error';
+}

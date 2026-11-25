@@ -1,4 +1,8 @@
 // Cmail — help / setup guide view
+// v3.1.5 — the guide grew into a searchable reference: one box filters every
+// section live, and the pages the panel gained this release (the right-click
+// menu, the official PDF export, the domain dossier) got chapters of their
+// own — written for the person reading, not for the changelog.
 import { t, lang } from '../i18n.js';
 import { h, icon } from '../ui.js';
 import { recoveryCopyLine, recoveryFreshBlock, stepRow } from './auth.js';
@@ -30,6 +34,20 @@ export function renderHelp(root) {
       K(['S'], t('kbStar')),
       K(['esc'], t('kbClose')),
     ));
+
+  // ---------- live search over every chapter ----------
+  const searchIn = h('input', { class: 'input', type: 'search', placeholder: t('helpSearchPh') });
+  const searchCard = h('section', { class: 'glass card kb-card help-search' },
+    h('div', { class: 'card-head' }, icon('search'), h('h3', {}, t('helpSearchT'))),
+    h('p', { class: 'small muted', style: { margin: '0 0 10px' } }, t('helpSearchHint')),
+    searchIn);
+  searchIn.addEventListener('input', () => {
+    const q = searchIn.value.trim().toLowerCase();
+    const hit = (el) => !q || (el.textContent || '').toLowerCase().includes(q);
+    for (const d of view.querySelectorAll('details.guide')) d.style.display = hit(d) ? '' : 'none';
+    for (const sec of content.children) sec.style.display = hit(sec) ? '' : 'none';
+    for (const sec of [shortcuts]) sec.style.display = hit(sec) ? '' : 'none';
+  });
 
   const content = h('div', { class: 'glass card' });
 
@@ -107,8 +125,31 @@ npx wrangler deploy`);
     recBody,
   ));
 
-  // 4 — troubleshooting
-  content.append(h('h3', { style: { fontSize: '16px', margin: '18px 0 10px' } }, '۴ · ' + (fa ? 'رفع اشکال' : 'Troubleshooting')));
+  // 4 — the inbox and its management surfaces (v3.1.5)
+  content.append(h('h3', { style: { fontSize: '16px', margin: '18px 0 10px' } }, '۴ · ' + (fa ? 'صندوق و مدیریت نامه‌ها' : 'Inbox & mail management')));
+  content.append(h('div', { class: 'step-list' },
+    stepRow(1, fa ? 'روی هر نامه راست‌کلیک کن — منوی مدیریت همان‌جای نشانگر باز می‌شود: بازکردن، پاسخ، ستاره، خوانده/نخوانده، خروجی PDF، کپی آدرس، انتقال به پوشه و حذف.' : 'Right-click any letter — the management menu opens right at the pointer: open, reply, star, read/unread, PDF export, copy address, move to folder, delete.',
+      fa ? 'روی موبایل هم دکمهٔ سه‌نقطهٔ هر ردیف همان منو را به‌صورت برگهٔ پایین صفحه باز می‌کند.' : 'On mobile, the row\'s three-dot button opens the same menu as a bottom sheet.'),
+    stepRow(2, fa ? 'جریان‌های سریع دستی سر جایشان هستند: کشیدن ردیف به چپ حذف، به راست ستاره؛ نگه‌داشتن انگشت هم حالت انتخاب گروهی.' : 'Fast gestures stay: flick a row left to delete, right to star; long-press starts multi-select.',
+      fa ? 'با کیبورد: J/K حرکت، Enter بازکردن، X انتخاب، S ستاره، / جست‌وجو.' : 'Keyboard: J/K move, Enter open, X select, S star, / search.'),
+  ));
+
+  // 5 — official PDF export (v3.1.5)
+  content.append(h('h3', { style: { fontSize: '16px', margin: '18px 0 10px' } }, '۵ · ' + (fa ? 'خروجی PDF رسمی' : 'Official PDF export')));
+  content.append(h('p', { class: 'small muted' },
+    fa
+      ? 'هر نامه — دریافتی یا ارسالی — می‌تواند به یک سند رسمی تبدیل شود: در صفحهٔ نامه دکمهٔ «خروجی PDF» هست، یا نامه را راست‌کلیک کن و همان گزینه را از منو بزن. سند خروجی سربرگ رسمی Cmail، مهر رسمی با تاریخ، جدول جزئیات (فرستنده، گیرنده، صندوق، نوع، حجم، مسیر ارسال و نتیجهٔ SPF/DKIM/DMARC)، خودِ نامه، فهرست پیوست‌ها و یادداشت را دارد — و همه‌چیز به همان زبانی که پنل تنظیم شده (فارسی راست‌به‌چپ یا انگلیسی) چاپ می‌شود. مرورگر پنجرهٔ چاپ را باز می‌کند؛ «ذخیره به‌صورت PDF» همان‌جاست.'
+      : 'Every letter — received or sent — can become a formal document: use the “PDF export” button on the letter page, or right-click it and pick the same option from the menu. The document carries the official Cmail letterhead, a dated seal, the full details table (sender, recipient, mailbox, type, size, route and the SPF/DKIM/DMARC verdicts), the body itself, attachments and any note — all in the panel\'s own language (RTL Persian or English). The browser opens its print dialog; “Save as PDF” sits right there.'));
+
+  // 6 — domains: the dossier and its troubleshooting (v3.1.5)
+  content.append(h('h3', { style: { fontSize: '16px', margin: '18px 0 10px' } }, '۶ · ' + (fa ? 'دامنه‌ها و عیب‌یابی' : 'Domains & troubleshooting')));
+  content.append(h('p', { class: 'small muted' },
+    fa
+      ? 'دکمهٔ «جزئیات» روی هر کارت دامنه یک پروندهٔ کامل باز می‌کند: آمار دامنه، وضعیت زندهٔ DNS از یک resolver واقعی (MX و SPF)، فهرست عیب‌یابی که هر مشکل را با راه‌حلش می‌گوید (ثبت ناتمام، کلید خاموش، Catch-all بسته، رکوردهای غایب، جریان نامهٔ ساکت) و جدول رکوردهای صحیح برای مقایسه. ویزارد اتصال هم حالا وفادار است: اگر وسط کار خارج شوی و برگردی، همان آدرس تأیید قبلی سر جایش است — فقط مهلتش ۲۴ ساعت تازه می‌شود و می‌توانی دوباره به همان ایمیل پیام بدهی.'
+      : 'Each domain card\'s “Details” button opens a full dossier: the domain\'s numbers, live DNS status from a real resolver (MX and SPF), a troubleshooting list that names each problem with its fix (unfinished registration, inactive switch, closed catch-all, missing records, silent mail flow) and the exact records to compare against. The connect wizard is loyal now too: leave mid-way and come back, the same verification address is still yours — only its 24h window is re-armed, and you can mail it again.'));
+
+  // 7 — troubleshooting
+  content.append(h('h3', { style: { fontSize: '16px', margin: '18px 0 10px' } }, '۷ · ' + (fa ? 'رفع اشکال' : 'Troubleshooting')));
 
   const q = (summary, ...children) => h('details', { class: 'guide' }, h('summary', {}, summary), ...children);
 
@@ -135,6 +176,7 @@ npx wrangler deploy`);
     ),
   );
 
+  view.append(searchCard);
   view.append(shortcuts);
   view.append(content);
   root.append(view);
