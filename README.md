@@ -116,6 +116,20 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
+## What's new in 3.2.1 — the seal earns its face, the context menu returns, and the lock shuts tighter
+
+3.2.1 answers three reports from the first days on paper — and all three turned out to be honest bugs worth telling in full.
+
+- 🪧 **The context menu is back — it had been buried under one broken character.** Right-clicking a letter did open the menu, but the CSS rule that makes it float had been swallowed by the stylesheet parser: a merge had eaten the `/*` of a comment banner above it, and everything up to the next rule folded into one invalid selector. The menu existed in the DOM and rendered nowhere — exactly the "nothing happens" report. Found by diffing the browser's parsed stylesheet against the file on disk, fixed with one character, and verified by measuring the menu's `position: fixed` live on a real page.
+- 🖨️ **The printed letter now wears the real insignia.** The hand-drawn round stamp is gone; in its corner sits the **official house seal** — the worn royal-blue rubber stamp with the Cmail mark inside, the name, the OFFICIAL ribbon, the laurel branches and the stars, exactly like the sample. The letterhead carries **Cmail's own logo** (or the admin's uploaded mark, as before). The certificate block grew a double frame, a ghost watermark of the mark, and the full paperwork: parties, mailbox, type, size, route, the SPF · DKIM · DMARC verdicts as ink chips, attachments with their sizes, and the letter's note. The date-and-time plaque is drawn in isolated HTML cells now, so Persian digits never reorder themselves, and the document speaks the panel's language on both sides — a Persian panel prints a fully RTL certificate even for an English letter.
+- 🔒 **The lock stopped having a spare key under the mat.** The server gate was always solid — a locked session gets `403` on every data endpoint, re-verified 111/111 — but the browser side had two soft spots. The password field invited the browser to pour the **saved panel password** into the lock screen on its own (`current-password` autofill); it asks for `new-password` now, so autofill stays out and the inspect-reveal trick starves. And deleting the overlay in the inspector used to leave an empty shell until the next navigation — a `MutationObserver` puts the lock straight back now, and the shell around it goes dark: blurred, dead to the pointer, not even the unread count showing.
+- 🧬 **The cache buster grew a fingerprint.** Every release stamped its asset URLs with the package version (`?v=3.2.0`) — and a rebuild under the same number could leave some browsers on the old css/js for good; that same-version cache was the quiet hand behind the first two reports. Asset URLs now carry a fingerprint of every embedded file's bytes — any content change anywhere mints a fresh URL by itself.
+
+Tested: `tsc` clean, i18n parity **893/893**, the security matrix **111/111** on a fresh install, the v3.2 feature E2E **22/22**, and the print document walked live in both languages — seal, plaque, certificate, note and watermark all on the page.
+
+<details>
+<summary><b>3.2.0 — the paper release: letters become paperwork</b></summary>
+
 ## What's new in 3.2.0 — the paper release
 
 This one began with a question nobody had answered for Cmail yet: **why does a letter have to stay glass?** Mail is paperwork. 3.2.0 lets it finally touch paper — and along the way it fixes the three things you actually reported, rebuilds the composer, and gives the app an honest answer about its own version.
@@ -130,6 +144,8 @@ This one began with a question nobody had answered for Cmail yet: **why does a l
 - 🎛️ **Appearance, tightened.** The background presence picker retired (the living stage is the one backdrop — it doesn't need a settings row), the theme/language cards are icon-led and tighter, and every settings pane shares one card language: gradient-tile headers, dashed row rules, less padding, more signal.
 
 Tested: `tsc` clean, i18n parity **886/886**, the full security matrix green on a live worker, and the whole flow exercised through `wrangler dev` — version stamp, print doc, attachments in and out, the doors, the star.
+
+</details>
 
 <details>
 <summary><b>3.1.5 — the right-click inbox, the first PDF export, the domain dossier, D1 errors as sentences</b></summary>
@@ -377,9 +393,9 @@ Verified end-to-end, 21/21 checks: the second install came up with its own empty
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v3.2.0:** [`CMail-v3.2.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.0/CMail-v3.2.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
-- The zip mirrors the v3.2.0 tag — the print studio, real outgoing attachments, the rebuilt composer and update center, the inbox's right-click menu, the full domain dossier with live DNS troubleshooting, the TOTP replay wall and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.1/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v3.2.1:** [`CMail-v3.2.1.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.1/CMail-v3.2.1.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- The zip mirrors the v3.2.1 tag — the official house seal and the richer print paperwork, the hardened lock screen, the fingerprinted asset cache, real outgoing attachments, the rebuilt composer and update center, the inbox's right-click menu, the full domain dossier with live DNS troubleshooting, the TOTP replay wall and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 

@@ -22,6 +22,7 @@ import { h, clear, icon, toast, vibrate } from './ui.js';
 
 const KEY = 'cmail_locked'; // cosmetic hint only — the server row is the truth
 let overlayEl = null;
+let overlayWatch = null; // v3.2.1 — re-spawn the overlay the instant inspect deletes it
 
 // locked as far as anyone can see: the server said so (state.sessionLocked,
 // set from /me or a 403 session_locked) or the tab carries the local hint
@@ -86,7 +87,10 @@ function render() {
     class: `input ${m === 'totp' ? 'mono' : ''}`,
     type: m === 'password' ? 'password' : 'text',
     inputmode: m === 'totp' ? 'numeric' : undefined,
-    autocomplete: m === 'totp' ? 'one-time-code' : 'current-password',
+    // v3.2.1 — 'new-password', never 'current-password': the browser must not
+    // pour the SAVED panel password into the lock field on its own (autofill
+    // used to hand the lock screen its own key — the inspect reveal followed).
+    autocomplete: m === 'totp' ? 'one-time-code' : 'new-password',
     maxlength: m === 'totp' ? '8' : undefined,
     placeholder: m === 'totp' ? '••••••' : '••••••••',
     style: { textAlign: 'center', fontSize: m === 'totp' ? '20px' : '16px', letterSpacing: m === 'totp' ? '7px' : '2px' },
@@ -102,6 +106,19 @@ function render() {
   overlayEl = h('div', { class: 'lock', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('lockTitle') }, card);
   requestAnimationFrame(() => overlayEl?.classList.add('is-on'));
   document.body.append(overlayEl);
+  document.body.classList.add('is-locked');
+  // v3.2.1 — the inspector-proof hinge: deleting the overlay node puts it
+  // right back, before the eye can land on the wiped shell behind it.
+  if (!overlayWatch) {
+    overlayWatch = new MutationObserver(() => {
+      if (!isLocked()) return;
+      if (overlayEl && !document.body.contains(overlayEl)) {
+        overlayEl = null;
+        render();
+      }
+    });
+    overlayWatch.observe(document.body, { childList: true, subtree: false });
+  }
 
   // pointer devices get the field focused immediately; phones wait a beat so
   // the keyboard does not yank the overlay up mid-animation
@@ -163,6 +180,9 @@ function render() {
 function unlockDone() {
   sessionStorage.removeItem(KEY);
   state.sessionLocked = false;
+  document.body.classList.remove('is-locked');
+  overlayWatch?.disconnect();
+  overlayWatch = null;
   const el = overlayEl;
   overlayEl = null;
   if (el) {

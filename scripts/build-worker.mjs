@@ -57,7 +57,19 @@ const APP_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 // detached nodes (the "inbox loads nothing / two sections open at once"
 // bug family). Every relative import therefore gets the SAME version query,
 // so the graph stays one single instance per release.
-const VER = `?v=${APP_VERSION}`;
+//
+// v3.2.1 — the query is no longer the package version alone. A release that
+// ships twice under the same number (a hot rebuild, a re-deployed worker)
+// used to leave some browsers on the OLD css/js forever: same URL, cached
+// response, same ?v. The buster now carries a fingerprint of every embedded
+// file's raw bytes — any content change anywhere mints a fresh URL by itself.
+const FINGERPRINT_SEEDS = [];
+for (const p of walk(PUB)) {
+  const buf0 = readFileSync(p);
+  FINGERPRINT_SEEDS.push(`${relative(PUB, p).split('\\').join('/')}|${buf0.length}|${djb2(buf0.toString('latin1'))}`);
+}
+const VER_HASH = djb2(FINGERPRINT_SEEDS.join('§')).replace(/^W\//, '');
+const VER = `?v=${APP_VERSION}.${VER_HASH}`;
 const stampImports = (code) => code
   // static: from './x.js'  /  import '../x.js'
   .replace(/(from\s+|import\s+)'((?:\.\.?\/)[^']*\.js)'/g, (_m, kw, spec) => `${kw}'${spec}${VER}'`)
@@ -73,10 +85,11 @@ for (const p of files) {
   if (!type) throw new Error(`no mime for ${key}`);
   let buf = readFileSync(p);
   // every release gets a fresh asset URL: the __CM_VER__ stamp in index.html
-  // becomes the package version, so no browser can ever serve an old
-  // app.js/app.css from its cache after an update
+  // becomes the package version + the content fingerprint — the SAME query the
+  // internal imports carry, so no browser can ever serve an old app.js/app.css
+  // from its cache after an update (not even after a same-number rebuild)
   if (key === 'index.html') {
-    buf = Buffer.from(buf.toString('utf8').replaceAll('__CM_VER__', APP_VERSION), 'utf8');
+    buf = Buffer.from(buf.toString('utf8').replaceAll('__CM_VER__', `${APP_VERSION}.${VER_HASH}`), 'utf8');
   }
   if (ext === '.js' && key.startsWith('assets/js/')) {
     buf = Buffer.from(stampImports(buf.toString('utf8')), 'utf8');

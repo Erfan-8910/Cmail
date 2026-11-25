@@ -3439,6 +3439,15 @@ html[data-accent='crimson'] { --acc-l: #eda9a4; --acc-d: #bb4a42; --acc-ink: #2d
   opacity: 0; transition: opacity .32s var(--ease);
 }
 .lock.is-on { opacity: 1; }
+/* v3.2.1 — while the lock is on stage the shell around it goes dark too:
+   deleting the overlay in the inspector must not reveal even the top bar
+   (the unread count is a fact about the mailbox). */
+body.is-locked .pillbar,
+body.is-locked .side,
+body.is-locked .fab-shell {
+  filter: blur(10px) saturate(.8); opacity: .35; pointer-events: none;
+  user-select: none; transition: filter .3s var(--ease), opacity .3s var(--ease);
+}
 .lock__card {
   width: min(380px, 100%); text-align: center;
   padding: 30px 26px 24px; border-radius: 24px;
@@ -3832,7 +3841,8 @@ html[data-accent='crimson'] { --acc-l: #eda9a4; --acc-d: #bb4a42; --acc-ink: #2d
 .glass.card .set-row + .set-row { border-top: 1px dashed var(--stroke); }
 .glass.card .set-row:first-of-type { margin-top: 2px; }
 .glass.card > .field { margin-top: 6px; }
-=======
+
+/* ============================================================
    v3.1.5 — the context menu, the update card, the domain dossier,
    the health ring, the compact share form
    ============================================================ */

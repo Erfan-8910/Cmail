@@ -33,7 +33,7 @@ ok('schema initialized', init.status === 200 && init.data?.ok === true, JSON.str
 
 const st = await req('GET', '/api/setup/status');
 ok('worker answers on 8791', st.status === 200 && st.data?.ok === true);
-ok('setup status reports 3.2.0', st.data?.version === '3.2.0', String(st.data?.version));
+ok('setup status reports 3.2.1', st.data?.version === '3.2.1', String(st.data?.version));
 
 let cookie = '';
 if (!st.data?.admin_created) {
