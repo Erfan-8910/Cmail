@@ -1,7 +1,7 @@
 // Cmail — admin: overview, users, settings, deep health report
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
-import { uid, now, clean, getSettings, setSetting, hashPassword, passwordStrong, sealText, RE_LOCAL_PART, randomLocalPart } from '../util';
+import { uid, now, clean, getSettings, setSetting, hashPassword, passwordStrong, sealText, RE_LOCAL_PART, randomLocalPart, appVersion } from '../util';
 import { requireAdmin, tokenFrom, clientIp, rateLimit } from '../auth';
 import { testProvider } from '../emailout';
 import { TABLES, EXPECTED } from '../tables';
@@ -75,7 +75,7 @@ app.get('/settings', requireAdmin, async (c) => {
   const s = await getSettings(c.env, [
     'app_name', 'login_username', 'temp_ttl_default', 'max_addresses', 'session_days',
     'sending_provider', 'sending_api_key', 'sending_from_email', 'sending_from_name', 'retention_days',
-    'totp_grace_min', 'lock_mode',
+    'totp_grace_min', 'lock_mode', 'print_logo',
   ]);
   return c.json({
     ok: true,
@@ -92,6 +92,9 @@ app.get('/settings', requireAdmin, async (c) => {
       retention_days: parseInt(s.retention_days ?? '0', 10) || 0,
       totp_grace_min: parseInt(s.totp_grace_min ?? '0', 10) || 0,
       lock_mode: s.lock_mode === 'password' ? 'password' : 'totp',
+      // v3.2.0 — the letterhead mark rides the printed letter and the stamp
+      print_logo_set: !!s.print_logo,
+      print_logo: s.print_logo || null,
     },
   });
 });
@@ -129,6 +132,19 @@ app.put('/settings', requireAdmin, async (c) => {
   }
   if (body.sending_from_email !== undefined) await setSetting(c.env, 'sending_from_email', clean(String(body.sending_from_email), 120));
   if (body.sending_from_name !== undefined) await setSetting(c.env, 'sending_from_name', clean(String(body.sending_from_name), 60) || 'Cmail');
+
+  // v3.2.0 — the letterhead mark for the print studio: a data-URL image
+  // (PNG/JPG) that replaces the Cmail mark on the stamp and the paper.
+  // Budget: ~400 KB of base64 — enough for a crisp mark, far under any row
+  // limit. `null` (not undefined) removes it.
+  if (body.print_logo !== undefined) {
+    const v = body.print_logo;
+    if (v === null || v === '') {
+      await setSetting(c.env, 'print_logo', '');
+    } else if (typeof v === 'string' && /^data:image\/(png|jpe?g|webp|svg\+xml);base64,[A-Za-z0-9+/=\s]+$/.test(v) && v.length <= 550_000) {
+      await setSetting(c.env, 'print_logo', v);
+    }
+  }
 
   return c.json({ ok: true });
 });
@@ -339,7 +355,7 @@ app.get('/health', requireAdmin, async (c) => {
   const status = issues.some((i) => i.severity === 'err') ? 'err' : issues.length ? 'warn' : 'ok';
   return c.json({
     ok: true,
-    version: env.APP_VERSION ?? '',
+    version: appVersion(env),
     time: now(),
     status,
     issues,

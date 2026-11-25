@@ -101,7 +101,6 @@ export function renderLogin(root) {
 
   const logo = h('img', { class: 'auth-logo', src: 'assets/img/logo-dark.png', alt: 'Cmail' });
   wrap.append(logo);
-  wrap.append(h('p', { class: 'auth-foot' }, t('tagline')));
 
   const firstRun = !state.setup?.admin_created;
   const withUsername = state.setup?.login_username !== false;
@@ -111,11 +110,14 @@ export function renderLogin(root) {
   let door = 'account';
 
   const card = h('div', { class: 'auth-card glass' });
-  wrap.append(card);
 
   // ---------- the two doors: account ↔ shared access ----------
-  // a slim segmented control above the card; the guest door only exists once
-  // the admin account exists (before that there is nothing to share yet)
+  // a slim segmented control that rides ABOVE the card (v3.2.0 layout fix:
+  // it used to be appended after the card, so on desktop the two doors
+  // landed BELOW the form — the page read bottom-first and the .auth-card
+  // margin assumed a neighbour that was never there). Fixed order:
+  // logo → doors → card → tagline. The guest door only exists once the
+  // admin account exists (before that there is nothing to share yet)
   let seg = null;
   if (!firstRun) {
     const accBtn = h('button', { class: 'auth-seg__btn is-on', type: 'button' }, icon('user'), t('loginTabAccount'));
@@ -133,8 +135,13 @@ export function renderLogin(root) {
       drawShareLogin();
     });
     seg = h('div', { class: 'auth-seg', role: 'tablist' }, accBtn, shareBtn);
-    wrap.append(seg);
   }
+
+  // paint the stage in the honest order: logo, then the two doors, then the
+  // card, and the tagline trails at the bottom like a signature
+  if (seg) wrap.append(seg);
+  wrap.append(card);
+  wrap.append(h('p', { class: 'auth-foot' }, t('tagline')));
 
   function field(label, type, name, value, autofocus) {
     const input = h('input', { class: 'input', type, name, value, autocomplete: type === 'password' ? (firstRun ? 'new-password' : 'current-password') : 'username', required: true });

@@ -359,7 +359,10 @@ ok('COOP reaches API answers too (v3.1.2)', health.headers.get('cross-origin-ope
 // ---------- phase 13: mail frame hardening (static, in the built bundle) ----------
 const bundle = (await import('node:fs')).readFileSync('worker.js', 'utf8');
 ok('mail frame ships its own strict CSP', bundle.includes("default-src 'none'; img-src"), '');
-ok('meta-refresh is stripped by the sanitizer', (await import('node:fs')).readFileSync('public/assets/js/views/mail.js','utf8').includes('meta[ht'.concat('tp-equiv="refresh"]')), '');
+ok('meta-refresh is stripped by the sanitizer',
+  // v3.2.0 — the sanitizer lives in mailtext.js now (the print studio shares it)
+  (await import('node:fs')).readFileSync('public/assets/js/mailtext.js', 'utf8').includes('meta[ht'.concat('tp-equiv="refresh"]')),
+  '');
 ok('server-enforced lock gate in the bundle', bundle.includes('session_locked'), '');
 ok('no global recovery constant in the bundle', !bundle.includes('Recover-Cmail-2026') && !bundle.includes('lvVylyVdxsS9'), '');
 ok('peppered hash scheme in the bundle', bundle.includes('pbkdf2mac'), '');

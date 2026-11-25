@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import type { Env, AppEnv, SessionUser } from '../util';
 import { createSession, setSessionCookie, clientIp, rateLimit, requireUser } from '../auth';
-import { usernameValid, passwordStrong, hashPassword, uid, now, getSettings, setSetting, RE_DOMAIN } from '../util';
+import { usernameValid, passwordStrong, hashPassword, uid, now, getSettings, setSetting, RE_DOMAIN, appVersion } from '../util';
 import { SCHEMA } from '../generated/schema';
 import { TABLES, EXPECTED } from '../tables';
 
@@ -116,7 +116,7 @@ app.get('/status', async (c) => {
     sending_from: settings.sending_from_email || '',
     sending_ready: sending,
     app_name: settings.app_name || 'Cmail',
-    version: c.env.APP_VERSION || '',
+    version: appVersion(c.env),
   });
 });
 

@@ -1,15 +1,150 @@
 // Cmail — About view: the story, the features, the numbers, the maker.
 // Liquid-glass polish: count-up numbers, pointer tilt, mood-tinted glow.
+// v3.2.0 — the Update center: installed build vs the latest GitHub release,
+// one honest check, and an answer that either celebrates or escorts you
+// through the two-minute update. No more guessing which build is deployed.
 import { state } from '../api.js';
 import { t, lang } from '../i18n.js';
-import { h, icon } from '../ui.js';
+import { h, clear, icon, vibrate } from '../ui.js';
 
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+const REPO_RELEASES = 'https://github.com/Erfan-8910/Cmail/releases';
+const REPO_API = 'https://api.github.com/repos/Erfan-8910/Cmail/releases/latest';
+const UPD_CACHE_KEY = 'cmail_upd_check';
+const UPD_CACHE_TTL = 600_000; // a ten-minute truce with the GitHub API
+
+const verParts = (s) => String(s || '').trim().replace(/^v/i, '').split(/[.\-+]/).map((n) => parseInt(n, 10) || 0);
+function cmpVer(a, b) {
+  const pa = verParts(a), pb = verParts(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+// ---------- the update center ----------
+function updateCenter() {
+  const VERSION = state.setup?.version || '3.2.0';
+  const FA = (n) => lang === 'fa' ? String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : String(n);
+
+  const card = h('section', { class: 'upd glass' }, h('span', { class: 'upd__glow', 'aria-hidden': 'true' }));
+  const head = h('div', { class: 'upd__head' },
+    h('div', { class: 'upd__title' }, icon('zap'), h('b', {}, t('updTitle'))),
+    h('p', { class: 'upd__sub' }, t('updSub')));
+  const stage = h('div', { class: 'upd__stage' });
+  card.append(head, stage);
+
+  const verPill = (label, value, cls = '') => h('div', { class: `upd__pill ${cls}` },
+    h('span', { class: 'upd__pill-k' }, label),
+    h('b', { class: 'upd__pill-v' }, FA(value)));
+  const row = h('div', { class: 'upd__row' });
+  const checkBtn = h('button', { class: 'btn btn--primary upd__btn' }, icon('refresh'), t('updCheckBtn'));
+
+  function drawIdle() {
+    clear(stage);
+    clear(row);
+    row.append(verPill(t('updCurrent'), `v${VERSION}`, 'is-now'));
+    stage.append(row, h('div', { class: 'upd__acts' }, checkBtn));
+  }
+
+  function drawChecking() {
+    clear(stage);
+    const spin = h('div', { class: 'upd__state upd--checking' },
+      h('span', { class: 'upd__spin' }), h('span', {}, t('updChecking')));
+    stage.append(spin);
+  }
+
+  function drawUpToDate(rel) {
+    clear(stage);
+    clear(row);
+    row.append(
+      verPill(t('updCurrent'), `v${VERSION}`, 'is-now'),
+      h('span', { class: 'upd__eq', 'aria-hidden': 'true' }, '='),
+      verPill(t('updLatest'), `v${(rel.tag_name || '').replace(/^v/, '')}`, 'is-ok'));
+    const published = rel.published_at ? new Date(rel.published_at).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-GB') : '';
+    const state1 = h('div', { class: 'upd__state upd--ok' },
+      h('span', { class: 'upd__sigil' }, icon('check')),
+      h('div', {}, h('b', {}, t('updUpToDate')), h('span', { class: 'upd__stated' }, t('updUpToDateSub'))));
+    stage.append(row, state1);
+    if (!reducedMotion) {
+      // one quiet celebratory pulse — the good news deserves a heartbeat
+      card.classList.remove('upd--pulse'); void card.offsetWidth; card.classList.add('upd--pulse');
+    }
+  }
+
+  function drawNew(rel) {
+    clear(stage);
+    clear(row);
+    const latest = String(rel.tag_name || '').replace(/^v/, '');
+    row.append(
+      verPill(t('updCurrent'), `v${VERSION}`, 'is-old'),
+      h('span', { class: 'upd__arrow', 'aria-hidden': 'true' }, icon('arrow')),
+      verPill(t('updLatest'), `v${latest}`, 'is-new'));
+    const steps = h('ol', { class: 'upd__steps' },
+      h('li', {}, t('updHow1')),
+      h('li', {}, t('updHow2')),
+      h('li', {}, t('updHow3')));
+    const notes = rel.body ? h('div', { class: 'upd__notes' },
+      h('b', {}, t('updViewChg')),
+      h('p', {}, String(rel.body).slice(0, 420))) : '';
+    const state1 = h('div', { class: 'upd__state upd--new' },
+      h('span', { class: 'upd__sigil upd__sigil--new' }, icon('spark')),
+      h('div', {}, h('b', {}, t('updNew')), h('span', { class: 'upd__stated' }, t('updNewSub').replace('{v}', latest))));
+    stage.append(row, state1, steps, notes,
+      h('div', { class: 'upd__acts' },
+        h('a', { class: 'btn btn--primary', href: REPO_RELEASES, target: '_blank', rel: 'noopener' }, icon('external'), t('updReleaseBtn')),
+        h('a', { class: 'btn', href: 'docs/DEPLOY.' + (lang === 'fa' ? 'fa' : 'en') + '.md', target: '_blank', rel: 'noopener' }, icon('code'), t('updDeployGuide'))));
+    vibrate([8, 60, 8]);
+  }
+
+  function drawErr() {
+    clear(stage);
+    stage.append(h('div', { class: 'upd__state upd--err' },
+      h('span', { class: 'upd__sigil upd__sigil--err' }, icon('info')),
+      h('div', {}, h('b', {}, t('updErr')))),
+      h('div', { class: 'upd__acts' }, checkBtn));
+  }
+
+  async function check(manual = true) {
+    checkBtn.disabled = true;
+    clear(checkBtn);
+    checkBtn.append(h('span', { class: 'upd__btnspin' }, icon('refresh')), h('span', {}, t('updChecking')));
+    drawChecking();
+    try {
+      const res = await fetch(REPO_API, { headers: { accept: 'application/vnd.github+json' } });
+      if (!res.ok) throw new Error(String(res.status));
+      const rel = await res.json();
+      sessionStorage.setItem(UPD_CACHE_KEY, JSON.stringify({ at: Date.now(), rel }));
+      if (cmpVer(String(rel.tag_name || ''), VERSION) > 0) drawNew(rel); else drawUpToDate(rel);
+    } catch {
+      drawErr();
+    }
+    checkBtn.disabled = false;
+    clear(checkBtn);
+    checkBtn.append(icon('refresh'), t('updCheckBtn'));
+  }
+  checkBtn.addEventListener('click', () => check(true));
+
+  // a fresh cache answers instantly — the check is a promise, not a ritual
+  let cached = null;
+  try { cached = JSON.parse(sessionStorage.getItem(UPD_CACHE_KEY) ?? 'null'); } catch { cached = null; }
+  if (cached && cached.rel && Date.now() - cached.at < UPD_CACHE_TTL) {
+    if (cmpVer(String(cached.rel.tag_name || ''), VERSION) > 0) drawNew(cached.rel); else drawUpToDate(cached.rel);
+    // repaint the button into its normal shape (draw* paths above may leave it pristine)
+    clear(checkBtn); checkBtn.append(icon('refresh'), t('updCheckBtn'));
+  } else {
+    drawIdle();
+    sessionStorage.removeItem(UPD_CACHE_KEY);
+  }
+  return card;
+}
 
 export function renderAbout(root) {
   const app = root;
   const FA = (n) => lang === 'fa' ? String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : String(n);
-  const VERSION = state.setup?.version || '3.0.0';
+  const VERSION = state.setup?.version || '3.2.0';
 
   // ---------- hero ----------
   const hero = h('section', { class: 'ab-hero glass' },
@@ -107,7 +242,7 @@ export function renderAbout(root) {
       h('div', {},
         h('div', { class: 'eyebrow' }, icon('heart'), t('eyebrowAbout')),
         h('h1', { class: 'page-title' }, t('navAbout')))),
-    hero, ribbon, grid, stats, stackRow, creator, made,
+    hero, updateCenter(), ribbon, grid, stats, stackRow, creator, made,
   );
 
   // ---------- effects ----------

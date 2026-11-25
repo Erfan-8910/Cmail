@@ -630,11 +630,9 @@ export function setAccent(accent) {
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', (MOOD_META[accent] ?? MOOD_META.green)[theme === 'dark' ? 'dark' : 'light']);
 }
 
-// the ambient stage behind the whole app: aurora (alive) · halo (still) · pure (flat)
-export function setBg(mode) {
-  document.documentElement.dataset.bg = mode;
-  localStorage.setItem('cmail_bg', mode);
-}
+// v3.2.0 — setBg retired: the living color stage is the one and only backdrop.
+// The old presence modes (aurora/halo/pure) are gone from the settings and
+// the code — a stale cmail_bg key in localStorage is folded away on boot.
 
 // ---------- session keepalive (refresh unread badge + new-mail notify) ----------
 setInterval(async () => {
@@ -706,7 +704,10 @@ export function updateUnreadBadge() {
   };
   const savedAccent = localStorage.getItem('cmail_accent') ?? 'green';
   setAccent(LEGACY[savedAccent] ?? savedAccent);
-  document.documentElement.dataset.bg = localStorage.getItem('cmail_bg') ?? 'aurora';
+  // v3.2.0 — the background picker retired: drop the stale key, the living
+  // stage answers for the whole backdrop now
+  localStorage.removeItem('cmail_bg');
+  delete document.documentElement.dataset.bg;
   // scenes are gone — the living color stage is the one and only backdrop
   if (localStorage.getItem('cmail_scene')) localStorage.removeItem('cmail_scene');
   delete document.documentElement.dataset.scene;

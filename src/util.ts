@@ -2,6 +2,23 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
+// v3.2.0 — the version lives in the BUNDLE, not only in the environment.
+// scripts/build-worker.mjs stamps the package.json version into this global
+// at build time (esbuild --define). A worker pasted by hand into the Cloudflare
+// dashboard has no wrangler.jsonc vars — APP_VERSION is undefined there — and
+// before this constant existed every manual install reported the UI's old
+// fallback (3.0.0) no matter what actually shipped. Now the build itself
+// tells the truth.
+declare const __CM_BUILD_VERSION__: string;
+const BUILT_VERSION: string = typeof __CM_BUILD_VERSION__ === 'string' ? __CM_BUILD_VERSION__ : '3.2.0';
+
+// the honest version: the env var wins when the deployment pipeline set it,
+// the build-time stamp answers everywhere else (dashboard paste, wrangler
+// dev, tests) — the two are written from the same source in the build
+export function appVersion(env?: { APP_VERSION?: string }): string {
+  return env?.APP_VERSION || BUILT_VERSION;
+}
+
 export type Env = {
   // D1 — the ONLY binding Cmail needs. If a deployment ships without it the
   // diagnostics layer answers with setup guidance instead of a raw 500.

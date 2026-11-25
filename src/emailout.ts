@@ -16,7 +16,8 @@ async function sendingKey(env: Env, stored: string): Promise<string> {
 
 export async function sendViaProvider(
   env: Env,
-  opts: { to: string; toName?: string; subject: string; text: string; html?: string; replyTo?: string }
+  opts: { to: string; toName?: string; subject: string; text: string; html?: string; replyTo?: string;
+          attachments?: { filename: string; content_type: string; content_b64: string }[] }
 ): Promise<SendResult> {
   const cfg = await getSettings(env, ['sending_provider', 'sending_api_key', 'sending_from_email', 'sending_from_name']);
   const provider = cfg.sending_provider ?? 'none';
@@ -26,6 +27,12 @@ export async function sendViaProvider(
 
   if (provider === 'none') return { ok: false, error: 'sending_not_configured' };
   if (!apiKey || !fromEmail) return { ok: false, error: 'sending_not_configured' };
+
+  // v3.2.0 — attachments ride along: base64 payloads accepted by both
+  // provider APIs (Brevo: attachment[{name,content}], Resend:
+  // attachments[{filename,content}]). The stored copy in D1 keeps the
+  // original content-type so the reader's download row stays honest.
+  const atts = (opts.attachments ?? []).filter((a) => a && a.content_b64).slice(0, 4);
 
   try {
     if (provider === 'brevo') {
@@ -39,6 +46,7 @@ export async function sendViaProvider(
           textContent: opts.text,
           htmlContent: opts.html || `<pre style="font:14px/1.6 sans-serif;white-space:pre-wrap">${escapeHtml(opts.text)}</pre>`,
           replyTo: opts.replyTo ? { email: opts.replyTo } : undefined,
+          attachment: atts.length ? atts.map((a) => ({ name: a.filename, content: a.content_b64 })) : undefined,
         }),
       });
       if (!res.ok) {
@@ -60,6 +68,7 @@ export async function sendViaProvider(
           text: opts.text,
           html: opts.html,
           reply_to: opts.replyTo,
+          attachments: atts.length ? atts.map((a) => ({ filename: a.filename, content: a.content_b64 })) : undefined,
         }),
       });
       if (!res.ok) {

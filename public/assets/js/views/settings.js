@@ -2,7 +2,8 @@
 import { api, state, errText } from '../api.js';
 import { t, lang, setLang } from '../i18n.js';
 import { h, clear, icon, toast, modal, confirmBox, copyText, fmtBytes, fmtDate, timeAgo, vibrate } from '../ui.js';
-import { setTheme, setAccent, setBg, updateLockBadge, refreshLockBadge } from '../app.js';
+import { setTheme, setAccent, updateLockBadge, refreshLockBadge } from '../app.js';
+import { invalidatePrintLogo } from '../print.js';
 import { healthPane } from '../health.js';
 import { sharePane } from './share.js';
 
@@ -72,27 +73,25 @@ export async function renderSettings(root, arg) {
 }
 
 // ---------- appearance ----------
+// v3.2.0 — rebuilt tighter and cooler: one look card (theme + language as
+// icon-led segmented rows), the palette wall, and the print identity card
+// where the maker's own mark replaces the Cmail logo on the stamp and the
+// paper. The background presence picker retired — the living stage is the
+// one and only backdrop now, no settings row for it anymore.
 async function appearancePane() {
   const pane = h('div', { class: 'settings-grid' });
+  const isAdmin = state.user?.role === 'admin';
 
-  // the stage behind everything: three presence modes, named by what they do
-  const bgMode = document.documentElement.dataset.bg || 'aurora';
-  const bgRow = h('div', { class: 'set-row' },
-    h('div', {}, h('div', { class: 'set-row__t' }, t('bgTitle')), h('div', { class: 'set-row__d' }, t('bgSub'))),
+  // theme — the whole panel follows, saved on the spot
+  const themeRow = h('div', { class: 'set-row set-row--tight' },
+    h('div', {}, h('div', { class: 'set-row__t' }, t('lookThemeT')), h('div', { class: 'set-row__d' }, t('lookThemeD'))),
     h('div', { class: 'row' },
-      ...[['aurora', 'bgAurora', 'spark'], ['halo', 'bgHalo', 'sun'], ['pure', 'bgPure', 'flat']].map(([m, key, ic]) =>
-        h('button', { class: `chip ${bgMode === m ? 'is-on' : ''}`, onclick: () => { vibrate(5); setBg(m); redraw(); } }, icon(ic), t(key)))));
+      h('button', { class: `chip chip--iconed ${document.documentElement.dataset.theme === 'dark' ? 'is-on' : ''}`, onclick: () => { setTheme('dark'); redraw(); } }, icon('moon'), t('dark')),
+      h('button', { class: `chip chip--iconed ${document.documentElement.dataset.theme === 'light' ? 'is-on' : ''}`, onclick: () => { setTheme('light'); redraw(); } }, icon('sun'), t('light'))));
 
-  // theme
-  const themeRow = h('div', { class: 'set-row' },
-    h('div', {}, h('div', { class: 'set-row__t' }, t('theme'))),
-    h('div', { class: 'row' },
-      h('button', { class: `chip ${document.documentElement.dataset.theme === 'dark' ? 'is-on' : ''}`, onclick: () => { setTheme('dark'); redraw(); } }, icon('moon'), t('dark')),
-      h('button', { class: `chip ${document.documentElement.dataset.theme === 'light' ? 'is-on' : ''}`, onclick: () => { setTheme('light'); redraw(); } }, icon('sun'), t('light'))));
-
-  // language
-  const langRow = h('div', { class: 'set-row' },
-    h('div', {}, h('div', { class: 'set-row__t' }, t('language'))),
+  // language — one pick repaints every word
+  const langRow = h('div', { class: 'set-row set-row--tight' },
+    h('div', {}, h('div', { class: 'set-row__t' }, t('lookLangT')), h('div', { class: 'set-row__d' }, t('lookLangD'))),
     h('div', { class: 'row' },
       h('button', { class: `chip ${lang === 'fa' ? 'is-on' : ''}`, onclick: () => { setLang('fa'); location.reload(); } }, t('persian')),
       h('button', { class: `chip ${lang === 'en' ? 'is-on' : ''}`, onclick: () => { setLang('en'); location.reload(); } }, t('english'))));
@@ -100,12 +99,68 @@ async function appearancePane() {
   function redraw() { appearancePane().then((p) => { pane.replaceWith(p); }); }
 
   pane.append(
-    h('div', { class: 'glass card' }, h('h3', { style: { margin: '0 0 6px', fontSize: '15px' } }, t('appearance')),
+    h('div', { class: 'glass card set-card' },
+      h('h3', { class: 'set-card__t' }, icon('sun'), t('appearance')),
       themeRow,
-      bgRow,
       langRow),
     paletteCard(),
   );
+
+  // ---------- print identity — the mark on the stamp and the paper ----------
+  if (isAdmin) {
+    let s = null;
+    try { s = (await api.get('/api/admin/settings')).settings; } catch { /* offline — draw without */ }
+    let curLogo = s?.print_logo || null;
+    const preview = h('span', { class: 'print-logo__preview', style: curLogo ? { backgroundImage: `url(${curLogo})` } : {} },
+      curLogo ? '' : icon('printer'));
+    const previewWrap = h('div', { class: 'print-logo__plate' }, preview);
+    const fileIn = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', style: { display: 'none' } });
+    const pickBtn = h('button', { class: 'btn btn--sm btn--primary' }, icon('plus'), t('printLogoPick'));
+    const rmBtn = h('button', { class: `btn btn--sm ${curLogo ? '' : 'is-hidden-btn'}` }, icon('trash'), t('printLogoRemove'));
+
+    fileIn.addEventListener('change', async () => {
+      const f = fileIn.files?.[0];
+      fileIn.value = '';
+      if (!f) return;
+      const url = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result || '')); fr.readAsDataURL(f); });
+      if (!/^data:image\/(png|jpe?g|webp);base64,/.test(url) || url.length > 550_000) { toast(t('printLogoInvalid'), 'err'); return; }
+      try {
+        await api.put('/api/admin/settings', { print_logo: url });
+        curLogo = url;
+        invalidatePrintLogo();
+        preview.style.backgroundImage = `url(${url})`;
+        preview.textContent = '';
+        rmBtn.classList.remove('is-hidden-btn');
+        toast(t('printLogoSaved'), 'ok', 1800);
+      } catch (e) { toast(errText(e), 'err'); }
+    });
+    pickBtn.addEventListener('click', () => fileIn.click());
+    rmBtn.addEventListener('click', async () => {
+      try {
+        await api.put('/api/admin/settings', { print_logo: null });
+        curLogo = null;
+        invalidatePrintLogo();
+        preview.style.backgroundImage = '';
+        preview.textContent = '';
+        preview.append(icon('printer'));
+        rmBtn.classList.add('is-hidden-btn');
+        toast(t('printLogoRemoved'), 'ok', 1600);
+      } catch (e) { toast(errText(e), 'err'); }
+    });
+
+    pane.append(h('div', { class: 'glass card set-card' },
+      h('h3', { class: 'set-card__t' }, icon('printer'), t('printCardTitle')),
+      h('p', { class: 'small muted set-card__d' }, t('printCardSub')),
+      h('div', { class: 'set-row set-row--tight' },
+        previewWrap,
+        h('div', { class: 'grow set-row__txt' },
+          h('div', { class: 'set-row__t' }, t('printLogoTitle')),
+          h('div', { class: 'set-row__d' }, t('printLogoSub')),
+          h('div', { class: 'row', style: { marginTop: '8px', gap: '6px' } }, pickBtn, rmBtn)),
+        fileIn),
+    ));
+  }
+
   return pane;
 }
 

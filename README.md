@@ -30,6 +30,8 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 | | |
 |---|---|
+| 🖨️ **The print studio — letters become paperwork** | Every letter wears a **Print / PDF** button. One press builds a real sheet: textured paper with grain and laid lines, a letterhead with **your own mark** (upload it in Settings), and an official round stamp drawn live in SVG — double ring, star arc, laurel, the ribbon, and a plaque carrying the **exact date and time from your device**. Wavy cancellation lines cross the corner; *Save as PDF* and it's paperwork. |
+| 📎 **Real outgoing attachments** | The composer takes **files and images** — four files, ~650 KB each — with live image thumbnails and desktop-style drag-and-drop onto the body. They go out through your provider *and* stay in the sent copy, downloadable exactly like incoming mail. |
 | ⭕ **The account circle — the only switcher** | Every mailbox is its own account. The circle at the top of the page is the one and only place accounts switch — each account shows its tiny details before you even enter: how many mails it received, how many 2FA codes it holds, what's unread. Add another account from the same panel. Nothing inside the inbox, the sidebar or the folders ever jumps accounts by accident. |
 | 📂 **The identity oval and the one big card** | The inbox reads the way a grown-up mail client reads: the account's **identity oval** — its face, its name and its full address with a one-tap copy button — sits above one living card that holds the entire mailbox. A toolbar with a select-all box, a refresh and a breathing auto-refresh dot; single-line rows (face · sender · subject — preview · star · time); the folder rail beside it with **All · Unread · Starred · Noted** and live counts — plus **your own folders per account**, each with a color dot, a counter and an optional sender rule that files incoming mail by itself. |
 | 📄 **Every email gets its own page** | Opening a message navigates to a real page of its own — its own URL, its own back button, older/newer arrows — never a popup floating over your list. HTML mail renders sanitized inside a sandboxed frame; plain text has its own toggle. |
@@ -37,8 +39,7 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 | 🩺 **System health, on stage** | A full health report in Settings: D1 connection with live latency, every table with its row count and column state, the cron heartbeat, and the mail flow — each with its own fix button. |
 | 🚨 **Problems announce themselves** | When something serious breaks — D1 unreachable, tables missing, schema outdated, mail stalled — a banner appears above the app with the cause and the one-press fix. You hear it from your app first, never from a broken inbox. |
 | 🌐 **Domain connect wizard** | Add a domain and it takes your hand: a crisp connect guide, then a verification code you mail to your own domain. The screen re-checks itself every few seconds until the loop proves itself — and mailboxes unlock. Walked away mid-way? The draft waits in the setup screen and on the domains page with a **Continue** button — nobody ever retypes a domain. |
-| 🏞️ **Scenes behind the glass** | Pick a living backdrop for the whole app: **Green hills** with drifting clouds, **Aurora** ribbons over a starry dark, a warm **Dusk**, or a quiet **Starry night** — five stages, all hand-drawn, all animated gently, all gone the instant your system asks for reduced motion. |
-| 🎨 **A room that matches your color** | The whole environment repaints with the palette you pick — **Green · Blue · Purple · Amber**, each named after its actual color, each one re-tinting the background glow, the glass and every accent in one breath. Three presence modes — **Animated**, **Still**, **Plain** — pick how much life the background has. |
+| 🎨 **A room that matches your color** | The whole environment repaints with the palette you pick — **twelve palettes named after their actual color**, each one re-tinting the stage glow, the beams, the glass and every accent in one breath. One living backdrop, always alive — no settings row needed. |
 | 🔎 **D1 inspector** | The setup screen lists every expected table with its row count; build the missing ones with a button, drop the strays, keep your database honest. The health tab carries the same inspector, forever. |
 | 🗒️ **Notes on emails** | A colored personal note under any message — order numbers, tracking links, anything. Search finds it instantly. |
 | 👤 **Every inbox is an account** | Each mailbox behaves like a standalone account: its mail, its private notes and its own 2FA codes stay inside that space. |
@@ -49,7 +50,7 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 | 📤 **Outgoing mail — optional** | Connect Brevo or Resend with one API key and send from your own domain, with a real test probe. It never gates the rest of the app. |
 | ⌘ **Command palette** | Press <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> anywhere: jump to anything, run actions, search mail live as you type. |
 | 🧹 **Auto-cleanup** | An hourly cron expires temporary inboxes and purges old mail — and its heartbeat shows up in the health tab. |
-| 🌙 **Liquid-glass UI** | Dark & Daylight themes, 4 color palettes named by their color, background presence modes, Persian (RTL) + English. |
+| 🌙 **Liquid-glass UI** | Dark & Daylight themes, twelve color palettes named by their color, one living backdrop, Persian (RTL) + English. |
 | 📱 **Truly responsive** | From a 320px phone to a 1920px desktop — panes fold into drawers and bottom sheets. |
 | 🔒 **Your data, your rules** | Your D1, your keys, your domain. Nobody else holds your mail. |
 
@@ -107,7 +108,24 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 </div>
 
-## What's new in 3.1.3
+## What's new in 3.2.0 — the paper release
+
+This one began with a question nobody had answered for Cmail yet: **why does a letter have to stay glass?** Mail is paperwork. 3.2.0 lets it finally touch paper — and along the way it fixes the three things you actually reported, rebuilds the composer, and gives the app an honest answer about its own version.
+
+- 🖨️ **The print studio.** Every letter now has a **Print / PDF** button. It builds a real sheet of paper inside a hidden frame: warm textured stock with grain and laid lines, a letterhead with your mark, and — the ceremony — an **official round stamp** drawn live in SVG: double ring, star arc, laurel branches, the mark in the middle, a ribbon that says OFFICIAL, and a plaque that carries the **exact date and time from your device**, the second you press print. Wavy cancellation lines drag across the corner like the postman just left. Choose *Save as PDF* and the letter becomes paperwork.
+- 🖋️ **Your mark, not ours.** Settings → Appearance → *Letter paper & stamp* takes any PNG/JPG and puts **your image** where the Cmail logo used to sit — in the center of the stamp and on the letterhead. No image? The drawn Cmail mark stands in.
+- 📎 **Real attachments, outgoing.** The composer now takes **files and images** — up to four, ~650 KB each. Images ride as live thumbnails; drop a file straight onto the body like the desktop clients taught you. Attachments go out through Brevo/Resend *and* stay in the sent copy, downloadable exactly like incoming mail.
+- ✈️ **The composer, rebuilt.** A gradient paper-plane sigil, icon rails beside the fields, a tool rail in the footer (attach · discard draft), a `Ctrl ↵` hint that says what it does, and errors inline instead of shouted.
+- 🔄 **The Update center.** About → Update center compares your installed build against the latest GitHub release in one honest check — pills, states, release notes, and the three steps to update when a new version lands. It celebrates when you're current. No more digging through dashboards to guess what's deployed.
+- 🧭 **The version lie is dead.** Builds now carry their version **stamped into the bundle** (`scripts/build-worker.mjs` → esbuild `--define`). A worker pasted by hand into the Cloudflare dashboard — where `wrangler.jsonc` vars don't exist — used to fall back to a stale `3.0.0` in the UI. The build itself tells the truth now: deploy 3.2.0 and every surface says 3.2.0.
+- 🚪 **The sign-in doors sit where they belong.** The Account / Shared-access switch was being painted *below* the card it controls. Fixed: logo → doors → card, the way the margin always assumed.
+- ⭐ **The hover star tells the truth and stops flickering.** The quick-action star never showed a mail's starred state, and tapping it repainted the whole list under your pointer — the pill vanished mid-click. Stars flip in place now, filled amber when on, with a pop; the list only reloads when the Starred box really changes membership.
+- 🎛️ **Appearance, tightened.** The background presence picker retired (the living stage is the one backdrop — it doesn't need a settings row), the theme/language cards are icon-led and tighter, and every settings pane shares one card language: gradient-tile headers, dashed row rules, less padding, more signal.
+
+Tested: `tsc` clean, i18n parity **844/844**, the full security matrix green on a live worker, and the whole flow exercised through `wrangler dev` — version stamp, print doc, attachments in and out, the doors, the star.
+
+<details>
+<summary><b>3.1.3 — the last step of the Deploy button goes green, and a spent code stays spent</b></summary>
 
 The report that built this release was specific: the last step of the Deploy button failed with an error that pointed nowhere. Replaying the whole pipeline from a fresh clone showed nothing in Cmail was broken — the account had simply run out of room. Cloudflare's free plan allows 10 D1 databases per account, and leftover test databases had quietly filled it. 3.1.3 turns that dead end into a clear message:
 
@@ -125,7 +143,9 @@ Security work this time targets the one-time codes themselves:
 - Attachments a browser could execute (HTML, SVG, XHTML, XML) always download as `application/octet-stream` with an explicit `nosniff` — they never render.
 - The session cookie moved to SameSite=Strict; it no longer travels with cross-site navigation.
 
-Tested: the security matrix stands at **111/111** on a live worker, with eleven new checks covering the replay wall — the spent code refused, the older step refused, the drifted current step accepted, and the per-door isolation kept. `tsc` clean, i18n parity 799/799. The version badge, download links, single-file worker and one-click installer all ship on 3.1.3.
+Tested: the security matrix stands at **111/111** on a live worker, with eleven new checks covering the replay wall — the spent code refused, the older step refused, the drifted current step accepted, and the per-door isolation kept. `tsc` clean, i18n parity 799/799. The version badge, download links, single-file worker and one-click installer all shipped on 3.1.3.
+
+</details>
 
 <details>
 <summary><b>3.1.2 — icon placement fixed, outbound-mail rate limits, COOP/CORP headers</b></summary>
@@ -299,7 +319,7 @@ Verified end-to-end, 21/21 checks: the second install came up with its own empty
 <summary><b>2.4 — a tidier setup screen and a tunable living background</b></summary>
 
 - Setup forms are genuinely centered on desktop at any window size — the double-padded stage that nudged the cards aside is gone. Every saved domain keeps its seat with a status chip and a Continue-setup button; re-adding an existing domain is a soft notice that opens its own wizard, never an error; and unverified domains offer Verify-with-code whenever you come back.
-- The room behind the app re-tints with the active mood, with three presence modes in Settings → Appearance: Aurora (slow drifting light), Halo (still glow), Pure (flat).
+- The room behind the app re-tints with the active mood — one living stage (drifting glows, turning light beams, film grain), always alive unless the system asks for reduced motion.
 - The sidebar quote card retired; the space belongs to your inboxes. The About page introduces the maker with a proper gradient-ring card.
 - TypeScript compiles with zero errors; fresh screenshots everywhere and the hero banners carry the 2.4 chip.
 
@@ -327,9 +347,9 @@ Verified end-to-end, 21/21 checks: the second install came up with its own empty
 
 ## Downloads — no clone needed
 
-- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.3/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
-- **Full package v3.1.3:** [`CMail-v3.1.3.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.1.3/CMail-v3.1.3.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
-- The zip mirrors the v3.1.3 tag — the deploy step that explains itself (the free plan's 10-database ceiling, caught early and explained in plain words), the one-tidy-line D1 inspector on phones, the TOTP replay wall and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
+- **Prebuilt [`worker.js`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.0/worker.js)** — the entire application in one file (~1.3 MB, ~470 KB gzipped). This is all the graphical install needs.
+- **Full package v3.2.0:** [`CMail-v3.2.0.zip`](https://github.com/Erfan-8910/Cmail/releases/download/v3.2.0/CMail-v3.2.0.zip) — sources, [`schema.sql`](schema.sql), [`migrations/`](migrations) and scripts.
+- The zip mirrors the v3.2.0 tag — the deploy step that explains itself (the free plan's 10-database ceiling, caught early and explained in plain words), the one-tidy-line D1 inspector on phones, the TOTP replay wall and the whole 3.1.x security legacy are inside; the Deploy button and a fresh clone always carry the newest of everything.
 - All versions: [Releases](https://github.com/Erfan-8910/Cmail/releases)
 - Just here for the database shape? It is one file: [`schema.sql`](schema.sql) — console-proof and re-runnable.
 

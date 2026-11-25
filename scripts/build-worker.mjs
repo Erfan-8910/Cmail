@@ -216,8 +216,16 @@ writeFileSync(join(GEN, 'schema.ts'), schemaTs);
 // ---------- 3) bundle ----------
 rmSync(join(ROOT, 'dist-worker'), { recursive: true, force: true });
 mkdirSync(join(ROOT, 'dist-worker'), { recursive: true });
+// v3.2.0 — the version is STAMPED into the bundle itself (esbuild --define).
+// A worker pasted by hand into the Cloudflare dashboard has no wrangler.jsonc
+// vars, so src/util.ts answers with this constant instead of a stale UI
+// fallback — the reported version always matches the built file.
 execSync(
-  'npx esbuild src/worker.ts --bundle --format=esm --target=es2022 --legal-comments=none --outfile=dist-worker/worker.js',
+  `npx esbuild src/worker.ts --bundle --format=esm --target=es2022 --legal-comments=none` +
+  // the define value must be valid JSON *after shell parsing* — hence the
+  // single-quoted string around JSON.stringify's own double quotes
+  ` --define:__CM_BUILD_VERSION__='${JSON.stringify(APP_VERSION)}'` +
+  ` --outfile=dist-worker/worker.js`,
   { cwd: ROOT, stdio: 'inherit' },
 );
 copyFileSync(join(ROOT, 'dist-worker', 'worker.js'), join(ROOT, 'worker.js'));

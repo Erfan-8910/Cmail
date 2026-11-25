@@ -114,6 +114,15 @@ app.get('/stats', requireUser, async (c) => {
   });
 });
 
+// v3.2.0 — the print studio's letterhead mark: any signed-in reader may print,
+// so the mark rides a dedicated endpoint instead of the admin-only settings GET.
+// Registered BEFORE /:id — Hono matches in order and an "print-identity" email
+// id would otherwise answer 404 here.
+app.get('/print-identity', requireUser, async (c) => {
+  const logo = await getSetting(c.env, 'print_logo');
+  return c.json({ ok: true, logo: logo || null });
+});
+
 // full message (marks as read)
 app.get('/:id', requireUser, async (c) => {
   const u = c.get('user') as SessionUser;
@@ -294,13 +303,37 @@ app.post('/send', requireUser, async (c) => {
   // session (or one over-privileged guest) could pump unlimited mail through
   // the owner's provider account until it gets suspended. 20 / 10 min / IP.
   if (!(await rateLimit(c.env, clientIp(c), 'send', 20))) return c.json({ ok: false, error: 'rate_limited' }, 429);
-  const body = await c.req.json<{ from_address_id?: string; to?: string; subject?: string; text?: string; html?: string }>().catch(() => null);
+  const body = await c.req.json<{
+    from_address_id?: string; to?: string; subject?: string; text?: string; html?: string;
+    attachments?: { filename?: string; content_type?: string; content_b64?: string }[];
+  }>().catch(() => null);
   const to = clean(body?.to, 120);
   const subject = clean(body?.subject, 200) || '(no subject)';
   const text = typeof body?.text === 'string' ? body.text.slice(0, 100_000) : '';
   const html = typeof body?.html === 'string' ? body.html.slice(0, 300_000) : '';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return c.json({ ok: false, error: 'invalid_recipient' }, 400);
   if (!text && !html) return c.json({ ok: false, error: 'empty_body' }, 400);
+
+  // v3.2.0 — outgoing attachments. Same storage discipline as the incoming
+  // path (emailin.ts): base64 payload per file stays under the row budget
+  // (900 KB b64 ≈ 650 KB raw), at most 4 files. A file over the budget is
+  // rejected with attachment_too_big — the composer says so before sending,
+  // so this is the server's double-check, not the user's first surprise.
+  const MAX_ATT_B64 = 900_000;
+  const MAX_ATT_COUNT = 4;
+  const rawAtts = Array.isArray(body?.attachments) ? body!.attachments!.slice(0, MAX_ATT_COUNT) : [];
+  const attachments: { filename: string; content_type: string; content_b64: string; size: number }[] = [];
+  for (const a of rawAtts) {
+    const b64 = typeof a?.content_b64 === 'string' ? a.content_b64.replace(/^data:[^;]*;base64,/, '') : '';
+    if (!b64) continue;
+    if (!/^[A-Za-z0-9+/=\s]+$/.test(b64) || b64.length > MAX_ATT_B64) return c.json({ ok: false, error: 'attachment_too_big' }, 413);
+    attachments.push({
+      filename: clean(a.filename ?? 'attachment', 120) || 'attachment',
+      content_type: clean(a.content_type ?? 'application/octet-stream', 80) || 'application/octet-stream',
+      content_b64: b64,
+      size: Math.floor(b64.length * 0.75),
+    });
+  }
 
   // the guest sends AS one of the shared addresses — the from field is not theirs to pick
   const sendScope = shareScope(u);
@@ -313,7 +346,10 @@ app.post('/send', requireUser, async (c) => {
   const provider = (await getSetting(c.env, 'sending_provider')) ?? 'none';
   if (provider === 'none') return c.json({ ok: false, error: 'sending_not_configured' }, 409);
 
-  const res = await sendViaProvider(c.env, { to, subject, text, html, replyTo: from.address });
+  const res = await sendViaProvider(c.env, {
+    to, subject, text, html, replyTo: from.address,
+    attachments: attachments.map(({ filename, content_type, content_b64 }) => ({ filename, content_type, content_b64 })),
+  });
   if (!res.ok) return c.json({ ok: false, error: 'send_failed', detail: res.error }, 502);
 
   // the message becomes a real row of this account (direction='out') — it
@@ -336,10 +372,17 @@ app.post('/send', requireUser, async (c) => {
       emailId, fromId, u.id, from.address, to, subject,
       (typeof body?.text === 'string' ? body.text : '').slice(0, 180) || '(no preview)',
       text.slice(0, 400_000), html.slice(0, 900_000),
-      text.length + html.length, now(),
+      text.length + html.length + attachments.reduce((n, a) => n + a.size, 0), now(),
       JSON.stringify(sentHeaders).slice(0, 24_000),
       provider,
     ).run();
+    // the sent copy carries its own attachments — the reader lists them and
+    // the download endpoint serves them exactly like received mail
+    for (const a of attachments) {
+      await c.env.DB.prepare(
+        'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(uid('att_'), emailId, a.filename, a.content_type, a.size, a.content_b64).run();
+    }
   } catch { /* an older schema without direction must never fail a sent mail */ }
 
   return c.json({ ok: true, id: emailId });

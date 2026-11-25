@@ -156,9 +156,9 @@ img { max-width: 100%; }
 
 /* ---------- the stage (ambient environment behind the whole app) ----------
    the room the app lives in: big soft glows tinted by the active mood, a
-   slow light-beam sweeping the room, a gentle drift, film grain. Three
-   presence modes via html[data-bg]:
-   aurora = alive · halo = still glow · pure = flat */
+   slow light-beam sweeping the room, a gentle drift, film grain.
+   v3.2.0 — the presence modes (aurora/halo/pure) retired: the living stage
+   is the one and only backdrop, always alive (reduced-motion still quiets it) */
 .bg-stage { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
 .bg-stage::before, .bg-stage::after, .bg-stage i {
   content: ''; position: absolute; border-radius: 50%; filter: blur(110px);
@@ -210,11 +210,7 @@ img { max-width: 100%; }
   from { transform: translate3d(0, 0, 0) scale(1); }
   to   { transform: translate3d(3.5vmax, 2.5vmax, 0) scale(1.07); }
 }
-/* presence modes */
-html[data-bg='halo'] .bg-stage::before, html[data-bg='halo'] .bg-stage::after,
-html[data-bg='halo'] .bg-stage i, html[data-bg='halo'] .bg-stage b, html[data-bg='halo'] .bg-stage b::before { animation: none; }
-html[data-bg='pure'] .bg-stage::before, html[data-bg='pure'] .bg-stage::after,
-html[data-bg='pure'] .bg-stage i, html[data-bg='pure'] .bg-stage b { opacity: 0; }
+/* presence modes — retired in v3.2.0 (the stage is always alive) */
 @media (prefers-reduced-motion: reduce) {
   .bg-stage::before, .bg-stage::after, .bg-stage i, .bg-stage b, .bg-stage b::before { animation: none; }
 }
@@ -1097,6 +1093,19 @@ html[data-theme='light'] .auth-logo { content: url('../img/logo-dark.png'); }
 .email-row__star:active { transform: scale(.85); }
 .email-row:hover .email-row__star { opacity: 1; }
 @media (hover: none) { .email-row__star { opacity: 1; } }
+/* v3.2.0 — the hover-pill star carries its own state: a starred mail shows
+   the filled amber star inside the quick-actions pill, and every flip pops */
+.email-row__qa-star.is-on { color: var(--warn); }
+.email-row__qa-star.is-on svg { fill: currentColor; }
+.email-row__qa button.star-pop, .email-row__star.star-pop { animation: starPop .32s var(--spring); }
+@keyframes starPop {
+  0% { transform: scale(.55) rotate(-20deg); }
+  55% { transform: scale(1.28) rotate(8deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .email-row__qa button.star-pop, .email-row__star.star-pop { animation: none; }
+}
 .email-row__kebab {
   display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
   color: var(--muted); transition: opacity .15s, transform .2s var(--spring);
@@ -3028,6 +3037,60 @@ button.note-panel__head { cursor: pointer; }
 }
 
 /* ============================================================
+   v3.2.0 — compose, the studio cut: attachment chips with live
+   image thumbs, a tool rail in the footer, a kbd hint on the end
+   ============================================================ */
+.compose__atts {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 10px 2px 2px; border-bottom: 1px solid var(--stroke);
+}
+.att-chip--new {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px 6px 6px; border-radius: 12px;
+  background: var(--field); border: 1px solid var(--stroke);
+  animation: attIn .25s var(--spring);
+  max-width: 240px;
+}
+@keyframes attIn { from { opacity: 0; transform: translateY(6px) scale(.92); } to { opacity: 1; transform: none; } }
+.att-chip__thumb {
+  width: 34px; height: 34px; flex: none; border-radius: 9px;
+  background-size: cover; background-position: center;
+  border: 1px solid var(--stroke); background-color: var(--panel-2);
+}
+.att-chip__glyph {
+  width: 34px; height: 34px; flex: none; border-radius: 9px; display: grid; place-items: center;
+  color: var(--acc); background: color-mix(in srgb, var(--acc) 12%, transparent);
+}
+.att-chip__glyph svg { width: 16px; height: 16px; }
+.att-chip__meta { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.att-chip__meta b { font-size: 11.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.att-chip__meta .faint { font-size: 10px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.att-chip__x {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--muted); transition: all .15s;
+}
+.att-chip__x:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.att-chip__x svg { width: 12px; height: 12px; }
+.compose__att-hint { font-size: 10px; color: var(--faint); align-self: center; }
+.compose__body.is-drop {
+  background: color-mix(in srgb, var(--acc) 7%, transparent);
+  border-radius: 10px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--acc) 45%, transparent);
+}
+.compose__tools { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: 2px; }
+.compose__tool { width: 34px; height: 34px; border-radius: 11px; color: var(--muted); transition: all .2s var(--spring); }
+.compose__tool:hover { color: var(--acc); background: color-mix(in srgb, var(--acc) 12%, transparent); transform: translateY(-1px); }
+.compose__tool--discard:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.compose__cancel { margin-inline-start: 4px; }
+.compose__kbd {
+  margin-inline-start: 8px; padding: 2px 7px; border-radius: 7px;
+  font: 700 10px/1.4 var(--font-mono, ui-monospace, monospace);
+  color: var(--faint); background: var(--field); border: 1px solid var(--stroke);
+}
+/* the modal head carries a sigil plate: the paper plane rides a gradient tile */
+.modal--compose .modal__title svg { width: 15px; height: 15px; }
+.modal--compose .modal__head { padding-bottom: 10px; border-bottom: 1px solid var(--stroke); margin-bottom: 2px; }
+
+/* ============================================================
    v2.9.5 — the living color room · soft controls · dynamic island
    ============================================================ */
 
@@ -3615,3 +3678,156 @@ html[data-accent='crimson'] { --acc-l: #eda9a4; --acc-d: #bb4a42; --acc-ink: #2d
   .share-cred .chip .mono { max-width: 150px; }
   .share-dev__t .small { display: none; }
 }
+
+/* ============================================================
+   v3.2.0 — settings, the tight studio cut: icon-led card titles,
+   tighter rows, the print-identity plate. One shared language for
+   every pane: less padding, more signal.
+   ============================================================ */
+.set-card { padding: 16px 18px 14px; }
+.set-card__t {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 14.5px; font-weight: 800; margin: 0 0 4px;
+  letter-spacing: -.2px;
+}
+.set-card__t .icn, .set-card__t svg {
+  width: 17px; height: 17px; flex: none;
+  color: var(--acc-ink);
+  background: linear-gradient(135deg, var(--acc-l), var(--acc-d));
+  border-radius: 8px; padding: 3.5px;
+  box-shadow: 0 4px 10px -6px color-mix(in srgb, var(--acc) 65%, transparent);
+}
+.set-card__d { margin: 0 0 10px; }
+.set-row--tight { padding-block: 9px; }
+.set-row--tight + .set-row--tight { border-top: 1px dashed var(--stroke); }
+.chip--iconed svg { width: 13px; height: 13px; }
+/* the print-identity plate: the mark preview, checked like a stamp corner */
+.print-logo__plate { flex: none; }
+.print-logo__preview {
+  display: grid; place-items: center; width: 64px; height: 64px;
+  border-radius: 14px; border: 1.5px dashed var(--stroke-2);
+  background-size: cover; background-position: center;
+  background-color: var(--field); color: var(--faint);
+  transition: border-color .2s;
+}
+.print-logo__preview svg { width: 20px; height: 20px; }
+.print-logo__plate:hover .print-logo__preview { border-color: color-mix(in srgb, var(--acc) 55%, transparent); }
+.is-hidden-btn { display: none !important; }
+.set-row__txt { min-width: 0; }
+@media (max-width: 640px) {
+  .print-logo__preview { width: 54px; height: 54px; }
+}
+
+/* ============================================================
+   v3.2.0 — the Update center (About page): installed vs latest,
+   one honest check. A card that either celebrates or escorts.
+   ============================================================ */
+.upd {
+  position: relative; overflow: hidden;
+  border-radius: 20px; padding: 18px 20px 16px; margin-top: 16px;
+}
+.upd__glow {
+  position: absolute; inset-inline-end: -60px; top: -70px; width: 240px; height: 240px;
+  border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--acc) 22%, transparent), transparent 65%);
+  filter: blur(30px);
+}
+.upd__head { position: relative; margin-bottom: 12px; }
+.upd__title { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 800; }
+.upd__title svg {
+  width: 17px; height: 17px; flex: none; color: var(--acc-ink);
+  background: linear-gradient(135deg, var(--acc-l), var(--acc-d));
+  border-radius: 8px; padding: 3.5px;
+  box-shadow: 0 4px 10px -6px color-mix(in srgb, var(--acc) 65%, transparent);
+}
+.upd__sub { margin: 3px 0 0; font-size: 11.5px; color: var(--muted); }
+.upd__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.upd__pill {
+  display: flex; flex-direction: column; gap: 1px; min-width: 128px;
+  padding: 8px 14px; border-radius: 13px;
+  background: var(--field); border: 1px solid var(--stroke);
+  transition: border-color .25s, box-shadow .25s;
+}
+.upd__pill-k { font-size: 9.8px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
+.upd__pill-v { font-size: 16.5px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.2px; }
+.upd__pill.is-now { border-color: color-mix(in srgb, var(--acc) 40%, transparent); }
+.upd__pill.is-ok { border-color: color-mix(in srgb, var(--ok, #58a06a) 55%, transparent); box-shadow: 0 4px 14px -8px color-mix(in srgb, var(--ok, #58a06a) 60%, transparent); }
+.upd__pill.is-ok .upd__pill-v { color: var(--ok, #58a06a); }
+.upd__pill.is-new { border-color: color-mix(in srgb, var(--acc) 60%, transparent); box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--acc) 70%, transparent); animation: updNewPop .4s var(--spring); }
+.upd__pill.is-old { opacity: .75; }
+@keyframes updNewPop { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+.upd__eq, .upd__arrow {
+  display: grid; place-items: center; width: 24px; height: 24px; flex: none;
+  color: var(--muted); font-weight: 800;
+}
+.upd__arrow svg { width: 15px; height: 15px; }
+.upd__state { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; }
+.upd__state b { display: block; font-size: 13.5px; font-weight: 800; }
+.upd__stated { font-size: 11.8px; color: var(--muted); line-height: 1.7; }
+.upd__sigil {
+  display: grid; place-items: center; width: 30px; height: 30px; flex: none;
+  border-radius: 10px; color: #eef7ef;
+  background: linear-gradient(135deg, #7cbf8a, #3f7f5a);
+  box-shadow: 0 6px 14px -8px rgba(70, 140, 90, .8);
+}
+.upd__sigil svg { width: 15px; height: 15px; }
+.upd__sigil--new {
+  color: var(--acc-ink);
+  background: linear-gradient(135deg, var(--acc-l), var(--acc-d));
+  box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--acc) 75%, transparent);
+}
+.upd__sigil--err { background: linear-gradient(135deg, #d8a08c, #b05a44); }
+.upd--checking { color: var(--muted); font-size: 12.5px; font-weight: 700; }
+.upd__spin, .upd__btnspin {
+  display: inline-flex; width: 15px; height: 15px; margin-inline-end: 8px;
+  border-radius: 50%; border: 2px solid var(--stroke-2); border-top-color: var(--acc);
+  animation: updSpin .8s linear infinite;
+}
+.upd__btnspin { margin-inline-end: 0; }
+@keyframes updSpin { to { transform: rotate(360deg); } }
+.upd__steps {
+  margin: 12px 0 0; padding: 12px 16px 12px 30px; border-radius: 13px;
+  background: var(--field); border: 1px solid var(--stroke);
+  font-size: 12px; color: var(--muted); line-height: 1.9;
+}
+.upd__steps li::marker { color: var(--acc); font-weight: 800; }
+.upd__notes {
+  margin-top: 10px; padding: 10px 14px; border-radius: 13px;
+  background: color-mix(in srgb, var(--acc) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--acc) 26%, transparent);
+  font-size: 11.8px;
+}
+.upd__notes b { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--acc); }
+.upd__notes p { margin: 3px 0 0; white-space: pre-wrap; max-height: 130px; overflow: hidden; color: var(--muted); line-height: 1.7; }
+.upd__acts { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.upd--pulse { animation: updPulse 1.4s var(--spring); }
+@keyframes updPulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok, #58a06a) 45%, transparent); }
+  70% { box-shadow: 0 0 0 16px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .upd--pulse, .upd__pill.is-new { animation: none; }
+}
+
+/* v3.2.0 — one card language for every settings pane: the h3 icon becomes
+   the same gradient tile the rest of the studio wears, headings sit tighter,
+   and the rows inside cards breathe a little less. Scoped to .glass.card h3
+   so no other view's headings are touched. */
+.glass.card h3 { font-size: 14px !important; margin: 0 0 8px !important; letter-spacing: -.2px; }
+.glass.card h3 svg {
+  width: 17px; height: 17px; flex: none;
+  color: var(--acc-ink);
+  background: linear-gradient(135deg, var(--acc-l), var(--acc-d));
+  border-radius: 8px; padding: 3.5px;
+  box-shadow: 0 4px 10px -6px color-mix(in srgb, var(--acc) 65%, transparent);
+}
+.glass.card h3 .icon-btn { pointer-events: none; width: 26px; height: 26px; border-radius: 8px; }
+.glass.card h3 .icon-btn svg {
+  background: none; border-radius: 0; padding: 0; box-shadow: none;
+  width: 15px; height: 15px; color: var(--acc);
+}
+.glass.card .set-row { padding-block: 8px; }
+.glass.card .set-row + .set-row { border-top: 1px dashed var(--stroke); }
+.glass.card .set-row:first-of-type { margin-top: 2px; }
+.glass.card > .field { margin-top: 6px; }

@@ -8,6 +8,8 @@ import { h, clear, icon, toast, modal, confirmBox, copyText, timeAgo, esc, avata
 import { entryModal, tempGuard, tempAuthorized, grantTempAuth } from './vault.js';
 import { invalidateAccounts } from '../app.js';
 import * as island from '../island.js';
+import { sanitizeEmailHtml, detectDir, mailFrameCss, MAIL_FRAME_CSP } from '../mailtext.js';
+import { openPrint } from '../print.js';
 
 let box = 'inbox';
 let search = '';
@@ -975,16 +977,18 @@ function emailRow(em) {
   const bulkable = can('star') || can('archive') || can('delete');
 
   // hover quick actions — replace the time slot on pointer devices.
-  // every action the credential does not grant is simply not there
+  // every action the credential does not grant is simply not there.
+  // v3.2.0 — the star now wears its own truth: an already-starred mail
+  // shows the filled amber star in the pill too (the old pill star looked
+  // unstarred even when it was), and clicking it flips the row in place
+  // instead of repainting the whole list under the pointer — the flicker
+  // that made the pill vanish mid-click and the tap land on nothing
   const qaBtns = [];
-  if (can('star')) qaBtns.push(h('button', {
+  const qaStar = can('star') ? h('button', {
+    class: `email-row__qa-star ${em.starred ? 'is-on' : ''}`,
     title: t('star'), 'aria-label': t('star'),
-    onclick: async (e) => {
-      e.stopPropagation(); vibrate(6);
-      const on = !em.starred;
-      try { await api.patch(`/api/emails/${em.id}`, { starred: on }); em.starred = on ? 1 : 0; loadEmails(true); } catch (err) { toast(errText(err), 'err'); }
-    },
-  }, icon('star')));
+  }, icon('star')) : null;
+  if (qaStar) qaBtns.push(qaStar);
   if (can('delete')) qaBtns.push(h('button', {
     title: t('delete'), 'aria-label': t('delete'),
     onclick: async (e) => {
@@ -1001,10 +1005,33 @@ function emailRow(em) {
     class: `email-row__star ${em.starred ? 'is-on' : ''}`, title: t('star'), 'aria-label': t('star'),
     onclick: async (e) => {
       e.stopPropagation(); vibrate(6);
-      const on = !em.starred;
-      try { await api.patch(`/api/emails/${em.id}`, { starred: on }); em.starred = on ? 1 : 0; e.currentTarget.classList.toggle('is-on', on); loadEmails(true); } catch (err) { toast(errText(err), 'err'); }
+      flipStar(em, { qaStar, slot: e.currentTarget });
     },
   }, icon('star')) : null;
+
+  // one honest star flip, shared by every surface (hover pill · time-slot
+  // star · keyboard s): PATCH fires once, the row answers instantly, and
+  // the list only reloads when membership really changed (the Starred box)
+  function flipStar(em, hints = {}) {
+    const on = !em.starred;
+    em.starred = on ? 1 : 0;
+    // paint now — network latency never holds the star hostage
+    const paint = (root) => {
+      if (!root) return;
+      root.classList.toggle('is-on', on);
+      root.classList.remove('star-pop'); void root.offsetWidth; root.classList.add('star-pop');
+    };
+    paint(hints.slot);
+    paint(hints.qaStar);
+    vibrate(6);
+    api.patch(`/api/emails/${em.id}`, { starred: on })
+      .then(() => { if (box === 'starred') loadEmails(true); })
+      .catch((err) => { em.starred = on ? 0 : 1; paint(hints.slot); paint(hints.qaStar); toast(errText(err), 'err'); });
+  }
+  if (qaStar) qaStar.addEventListener('click', (e) => {
+    e.stopPropagation();
+    flipStar(em, { qaStar, slot: starSlot });
+  });
 
   // per-row overflow menu — the touch-proof way to star / mark / delete
   const kebab = h('button', {
@@ -1107,9 +1134,10 @@ function emailRow(em) {
       row.style.transition = 'transform .3s var(--spring)';
       row.style.transform = '';
       setTimeout(() => { row.style.transition = ''; }, 320);
-      api.patch(`/api/emails/${em.id}`, { starred: !em.starred })
-        .then(() => { em.starred = em.starred ? 0 : 1; loadEmails(true); })
-        .catch((e2) => toast(errText(e2), 'err'));
+      em.starred = em.starred ? 0 : 1;
+      api.patch(`/api/emails/${em.id}`, { starred: !!em.starred })
+        .then(() => { if (box === 'starred') loadEmails(true); })
+        .catch((e2) => { em.starred = em.starred ? 0 : 1; toast(errText(e2), 'err'); });
     } else {
       row.style.transition = 'transform .3s var(--spring)';
       row.style.transform = '';
@@ -1142,7 +1170,8 @@ function rowMenu(em) {
   const items = [];
   if (can('star')) {
     items.push(act(em.starred ? t('unstar') : t('star'), 'star', async () => {
-      try { await api.patch(`/api/emails/${em.id}`, { starred: !em.starred }); loadEmails(true); } catch (e) { toast(errText(e), 'err'); }
+      em.starred = em.starred ? 0 : 1;
+      try { await api.patch(`/api/emails/${em.id}`, { starred: !!em.starred }); if (box === 'starred') loadEmails(true); else drawList(); } catch (e) { em.starred = em.starred ? 0 : 1; toast(errText(e), 'err'); }
     }));
   }
   items.push(act(em.is_read ? t('markUnread') : t('markRead'), 'eye', async () => {
@@ -1208,7 +1237,10 @@ document.addEventListener('keydown', (e) => {
     const em = visibleEmails()[cursorIdx];
     if (em) {
       e.preventDefault(); vibrate(6);
-      api.patch(`/api/emails/${em.id}`, { starred: !em.starred }).then(() => { em.starred = em.starred ? 0 : 1; loadEmails(true); }).catch(() => {});
+      em.starred = em.starred ? 0 : 1;
+      api.patch(`/api/emails/${em.id}`, { starred: !!em.starred })
+        .then(() => { if (box === 'starred') loadEmails(true); else drawList(); })
+        .catch(() => { em.starred = em.starred ? 0 : 1; });
     }
   }
   else if (e.key === 'Escape') {
@@ -1334,6 +1366,8 @@ async function drawReader(wrap, r) {
       }, icon('arrow'), h('span', { class: 'hide-sm' }, t('reply')), sendReady() ? '' : lockBadge('frozen', t('sendLockedTitle'))));
   }
   actions.append(
+    h('button', { class: 'btn btn--sm btn--ghost', title: t('printBtn'), onclick: () => openPrint(em, r.attachments ?? null) },
+      icon('printer'), h('span', { class: 'hide-sm' }, t('printBtn'))),
     h('button', { class: 'btn btn--sm btn--ghost', title: t('markUnread'), onclick: async () => {
       try {
         await api.patch(`/api/emails/${em.id}`, { is_read: false });
@@ -1528,78 +1562,26 @@ function buildMailx(r, em) {
   return details;
 }
 
-/* ---------- HTML email sanitizing & rendering ---------- */
-
-// strip scripts / event handlers / dangerous urls — keep full visual structure.
-// v3.1.0: meta-refresh joins the ban list (a letter must not be able to swap
-// its own frame for an external page), and the rendered frame carries its own
-// strict CSP so even a future sanitizer gap can never run script inside it.
-function sanitizeEmailHtml(raw) {
-  const doc = new DOMParser().parseFromString(String(raw ?? ''), 'text/html');
-  doc.querySelectorAll('script, iframe, object, embed, link[rel="import"], base, form, input, button, textarea, select, meta[http-equiv="refresh"], meta[charset]').forEach((n) => n.remove());
-  for (const el of [...doc.querySelectorAll('*')]) {
-    for (const attr of [...el.attributes]) {
-      const name = attr.name.toLowerCase();
-      const val = String(attr.value ?? '');
-      if (name.startsWith('on')) { el.removeAttribute(attr.name); continue; }
-      if (name === 'http-equiv' || name === 'content' && el.tagName === 'META') { el.removeAttribute(attr.name); continue; }
-      if (['href', 'src', 'srcset', 'xlink:href', 'action', 'formaction', 'background', 'poster'].includes(name)
-        && /^\s*(javascript|vbscript|data\s*:\s*text\/html)/i.test(val)) { el.removeAttribute(attr.name); continue; }
-      if (name === 'style' && /expression\s*\(|javascript\s*:/i.test(val)) el.removeAttribute(attr.name);
-    }
-  }
-  // the email's own CSP metas cannot survive (a META with content but no
-  // http-equiv is noise) — ours is the only policy the frame ever sees
-  doc.querySelectorAll('meta').forEach((n) => n.remove());
-  return doc;
-}
-
-// the frame's own policy — injected AFTER sanitization so the email cannot
-// influence it: no script, no objects, no forms, no frames, images/styles
-// still render exactly like a letter should
-const MAIL_FRAME_CSP = "default-src 'none'; img-src data: blob: https: http:; style-src 'unsafe-inline' https: http: data:; font-src data: https: http:; media-src data: blob: https: http:; form-action 'none'; frame-src 'none'; object-src 'none'; base-uri 'none';";
-
-function detectDir(doc) {
-  const html = doc.documentElement;
-  const langAttr = (html.getAttribute('lang') || doc.body?.getAttribute('dir') || html.getAttribute('dir') || '').toLowerCase();
-  if (html.getAttribute('dir') === 'rtl' || langAttr.startsWith('fa') || langAttr.startsWith('ar') || langAttr.startsWith('he')) return 'rtl';
-  const text = (doc.body?.textContent || '').slice(0, 800);
-  const rtlChars = (text.match(/[\u0600-\u06FF]/g) || []).length;
-  return rtlChars > text.length * 0.25 ? 'rtl' : 'ltr';
-}
-
-// the base stylesheet injected into every rendered email
-function mailFrameCss() {
-  return `
-    :root { color-scheme: light; }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; }
-    body {
-      font: 14.5px/1.7 -apple-system, 'Segoe UI', 'Vazirmatn', Tahoma, sans-serif;
-      color: #20261f; background: transparent;
-      padding: 18px 20px 26px;
-      word-break: break-word; overflow-wrap: break-word;
-      -webkit-text-size-adjust: 100%;
-    }
-    img, video { max-width: 100% !important; height: auto; border-radius: 6px; }
-    table { max-width: 100% !important; border-collapse: collapse; }
-    td, th { word-break: break-word; }
-    a { color: #4a7a5a; }
-    hr { border: 0; border-top: 1px solid #e4e8e0; margin: 18px 0; }
-    blockquote { margin: 12px 0; padding: 4px 14px; border-inline-start: 3px solid #cdd8c6; color: #5a655a; }
-    pre, code { font-family: ui-monospace, monospace; font-size: 12.5px; background: #f4f6f1; border-radius: 6px; }
-    pre { padding: 12px 14px; overflow-x: auto; }
-    code { padding: 1.5px 6px; }
-    h1, h2, h3 { line-height: 1.4; }
-    p { margin: 0 0 10px; }
-    [data-cmail-removed] { display: none; }
-  `;
-}
-
 // ---------- compose — the writing table, done the way the big clients do it ----------
 // one honest window: inline rows instead of stacked labels, a body that grows
 // with the message, a draft that survives a closed tab, mistakes said out loud
-// next to the field instead of shouted from a toast
+// next to the field instead of shouted from a toast.
+// v3.2.0 — the composer grew teeth: files and images ride along as real
+// attachments (image chips carry a live thumbnail), the whole sheet carries
+// the studio polish — a gradient paper-plane sigil, icon rails beside the
+// fields, a footer where the send key leads and the tools trail behind it.
+const ATT_MAX_B64 = 900_000;   // matches the server's per-file budget (~650 KB raw)
+const ATT_MAX_COUNT = 4;
+
+function fileToB64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ''));
+    fr.onerror = () => reject(new Error('read_failed'));
+    fr.readAsDataURL(file);
+  });
+}
+
 export async function openCompose(prefill = {}) {
   // a double-click used to stack two composers — one is enough
   if (document.querySelector('.modal--compose')) return;
@@ -1629,7 +1611,55 @@ export async function openCompose(prefill = {}) {
   if (useSaved) body.value = saved.body ?? '';
   const toErr = h('div', { class: 'compose__err hidden' }, icon('x'), h('span', {}, ''));
 
+  // ---------- attachments — files and images ride along ----------
+  const atts = []; // { name, type, b64 (dataURL), size, isImg }
+  const attList = h('div', { class: 'compose__atts', 'aria-label': t('attachTitle') });
+  const fileInput = h('input', { type: 'file', multiple: true, style: { display: 'none' }, accept: '*/*' });
+
+  function drawAtts() {
+    clear(attList);
+    if (!atts.length) { attList.style.display = 'none'; return; }
+    attList.style.display = '';
+    for (const a of atts) {
+      const chip = h('div', { class: `att-chip--new ${a.isImg ? 'has-thumb' : ''}` },
+        a.isImg
+          ? h('span', { class: 'att-chip__thumb', style: { backgroundImage: `url(${a.b64})` } }, '')
+          : h('span', { class: 'att-chip__glyph' }, icon('paperclip')),
+        h('span', { class: 'att-chip__meta' },
+          h('b', {}, a.name.length > 28 ? `${a.name.slice(0, 26)}…` : a.name),
+          h('span', { class: 'faint' }, fmtBytes(a.size))),
+        h('button', {
+          class: 'att-chip__x', title: t('attachRemove'), 'aria-label': t('attachRemove'),
+          onclick: () => { atts.splice(atts.indexOf(a), 1); drawAtts(); vibrate(5); },
+        }, icon('x')));
+      attList.append(chip);
+    }
+    attList.append(h('span', { class: 'compose__att-hint' }, t('attachHint')));
+  }
+
+  async function addFiles(list) {
+    for (const f of Array.from(list ?? [])) {
+      if (atts.length >= ATT_MAX_COUNT) { toast(t('attachHint'), 'err'); break; }
+      try {
+        const url = await fileToB64(f);
+        const b64 = url.split(',')[1] ?? '';
+        if (!b64) continue;
+        if (b64.length > ATT_MAX_B64) { toast(t('attachTooBig').replace('{n}', f.name), 'err'); continue; }
+        atts.push({ name: f.name || 'file', type: f.type || 'application/octet-stream', b64: url, size: f.size || Math.floor(b64.length * .75), isImg: /^image\//.test(f.type) });
+      } catch { /* unreadable file — skip it */ }
+    }
+    drawAtts();
+  }
+  fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+  // drop a file straight on the body — the same gesture the desktop mail
+  // clients taught the world
+  ['dragover', 'dragenter'].forEach((ev) => body.addEventListener(ev, (e) => { e.preventDefault(); body.classList.add('is-drop'); }));
+  ['dragleave', 'drop'].forEach((ev) => body.addEventListener(ev, (e) => { e.preventDefault(); body.classList.remove('is-drop'); }));
+  body.addEventListener('drop', (e) => { if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files); });
+
   // the draft rides in localStorage — closed tab, reload, nothing is lost
+  // (attachments stay session-local on purpose: no multi-megabyte base64
+  // blobs parked in localStorage behind the user's back)
   const dNote = h('span', { class: 'compose__draft' }, useSaved ? t('draftRestored') : '');
   let dT = null;
   function saveDraft() {
@@ -1651,9 +1681,8 @@ export async function openCompose(prefill = {}) {
   const btn = h('button', { class: 'btn btn--primary compose__send', type: 'button' }, icon('send'), h('span', {}, t('send')));
 
   // the footer is the send row: the send button LEADS the row (the first
-  // thing the eye meets in RTL and LTR alike), the quiet cancel follows,
-  // and the draft note trails at the far end — the old order buried the
-  // send key in the corner where nobody looks
+  // thing the eye meets in RTL and LTR alike), the attach tool rides beside
+  // it, the quiet cancel follows, and the draft note trails at the far end
   const m = modal({
     title: t('composeTitle'), iconName: 'send', wide: true, cls: 'modal--compose',
     body: [
@@ -1667,13 +1696,32 @@ export async function openCompose(prefill = {}) {
         h('div', { class: 'compose__line' },
           h('span', { class: 'compose__k' }, t('subject')),
           subj),
-        body),
+        attList,
+        body,
+        fileInput),
     ],
     footer: [
       h('div', { class: 'compose__foot' },
         btn,
-        h('button', { class: 'btn btn--ghost', onclick: () => m.close() }, t('cancel')),
-        h('span', { class: 'compose__foot-note' }, dNote)),
+        h('div', { class: 'compose__tools' },
+          h('button', {
+            class: 'icon-btn compose__tool', title: t('attachAdd'), 'aria-label': t('attachAdd'),
+            onclick: () => fileInput.click(),
+          }, icon('paperclip')),
+          h('button', {
+            class: 'icon-btn compose__tool compose__tool--discard', title: t('discardDraft'), 'aria-label': t('discardDraft'),
+            onclick: () => {
+              confirmBox(t('discardDraft'), () => {
+                localStorage.removeItem(DRAFT_KEY);
+                to.value = subj.value = body.value = '';
+                atts.length = 0; drawAtts();
+                dNote.textContent = t('draftDiscarded');
+                toast(t('draftDiscarded'), 'ok', 1400);
+              }, true);
+            },
+          }, icon('trash')),
+          h('button', { class: 'btn btn--ghost compose__cancel', onclick: () => m.close() }, t('cancel'))),
+        h('span', { class: 'compose__foot-note' }, dNote, h('kbd', { class: 'compose__kbd' }, 'Ctrl ↵'))),
     ],
   });
 
@@ -1695,9 +1743,11 @@ export async function openCompose(prefill = {}) {
     try {
       const r = await api.post('/api/emails/send', {
         from_address_id: fromSel.value, to: toVal, subject: subj.value, text: body.value,
+        attachments: atts.map((a) => ({ filename: a.name, content_type: a.type, content_b64: a.b64 })),
       });
       localStorage.removeItem(DRAFT_KEY);
       island.sent(r.id ?? '', toVal);
+      if (atts.length) toast(t('attachSent').replace('{n}', lang === 'fa' ? String(atts.length).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : String(atts.length)), 'ok', 2600);
       m.close();
       // the sent mail joins the account immediately — the list tells the truth
       window.dispatchEvent(new CustomEvent('cmail:refresh-mail'));

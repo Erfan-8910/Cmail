@@ -3,6 +3,7 @@
 // initialized, unexpected crash) the worker still answers with a calm,
 // bilingual guide instead of a bare "internal server error".
 import type { Env } from './util';
+import { appVersion } from './util';
 
 type Mode = 'binding' | 'tables' | 'generic';
 
@@ -155,7 +156,7 @@ export function diagnosticResponse(req: Request, env: Env, err: unknown): Respon
     : /fa|pe/i.test(accept) ? 'fa' : 'en';
   const mode = detect(env, err);
   const detail = String((err as Error)?.message ?? err ?? '');
-  const html = page(mode, lang, env?.APP_VERSION ?? '', detail, new Date().toISOString());
+  const html = page(mode, lang, appVersion(env), detail, new Date().toISOString());
   return new Response(html, {
     status: mode === 'generic' ? 500 : 503,
     headers: {
