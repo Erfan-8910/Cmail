@@ -112,7 +112,7 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 | **The whole cockpit, in a shirt pocket** — and the player rides along: a letter's songs play right there, the risen bar docked above the rail |
 |---|
-| <img src="docs/img/en/mobile.png" width="300" alt="Mobile inbox"> <img src="docs/img/en/mobile-player.png" width="300" alt="Mobile reader with the risen audio player">
+| <img src="docs/img/en/mobile.png" width="300" alt="Mobile inbox"> <img src="docs/img/en/mobile-player.png" width="300" alt="Mobile reader with the risen audio player"> |
 
 | **The front door** — centered card, living aurora, recovery guide built in |
 |---|
