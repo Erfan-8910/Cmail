@@ -4167,12 +4167,45 @@ button.att-card { cursor: pointer; color: var(--fg); }
 .cmplayer__speed:hover { color: var(--acc); border-color: color-mix(in srgb, var(--acc) 40%, transparent); }
 .cmplayer__dl { color: var(--faint); text-decoration: none; }
 .cmplayer__dl:hover { color: var(--fg); background: var(--hover); }
-@media (max-width: 620px) {
-  .cmplayer { inset-inline: 8px; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); gap: 7px; padding: 8px 9px; }
-  .cmplayer__t { max-width: 110px; }
-  .cmplayer__sub { display: none; }
-  .cmplayer__vol, .cmplayer__count { display: none; }
-  .cmplayer__eq { display: none; }
+/* v3.2.3 mobile rethink — on phones the bar folds into a two-row card:
+   row 1 carries the play key, the dancing equalizer, the song + artist line
+   and the two quick actions; row 2 hands the seek a full thumb-wide wave
+   with a glowing knob, flanked by the playlist steps, the clock and speed.
+   The 700px cut also keeps small tablets from crushing the one-row bar. */
+@media (max-width: 700px) {
+  .cmplayer {
+    inset-inline: 10px; bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+    flex-wrap: wrap; column-gap: 8px; row-gap: 0;
+    padding: 10px 12px 11px; border-radius: 20px; max-width: none;
+  }
+  /* row 1 — the identity line */
+  .cmplayer__play { order: 1; width: 44px; height: 44px; }
+  .cmplayer__play svg { width: 17px; height: 17px; }
+  .cmplayer__eq { order: 2; display: inline-flex; height: 18px; }
+  .cmplayer__t { order: 3; flex: 1 1 12px; max-width: none; }
+  .cmplayer__t b { font-size: 13px; }
+  .cmplayer__sub { display: block; font-size: 10.5px; }  /* the artist line rides along again */
+  .cmplayer__dl { order: 4; width: 38px; height: 38px; }
+  .cmplayer > .icon-btn:not(.cmplayer__dl) { order: 5; width: 38px; height: 38px; }  /* close */
+  .cmplayer__speed { order: 6; height: 38px; padding-block: 0; padding-inline: 10px; }
+  /* row 2 — the thumb line: the playlist steps flank the wide wave */
+  .cmplayer__rail { order: 7; flex: 1 1 calc(100% - 190px); min-width: 0; height: 30px; margin-top: 3px; }
+  .cmplayer__step { order: 8; width: 30px; height: 30px; border-radius: 9px; }
+  .cmplayer__step svg { width: 14px; height: 14px; }
+  .cmplayer__time { order: 9; }
+  .cmplayer__step--next { order: 10; }
+  /* the counter and the volume fold away — hardware keys own loudness and
+     the steps themselves tell which song is on */
+  .cmplayer__count, .cmplayer__vol { display: none; }
+  /* a glowing knob rides the head of the fill — the song's own comet */
+  .cmplayer__fill::after {
+    content: ''; position: absolute; inset-inline-end: -5px; top: 50%;
+    transform: translateY(-50%); width: 11px; height: 11px; border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 38%, transparent), 0 1px 6px rgba(0, 0, 0, .45);
+    opacity: .95;
+  }
+  .cmplayer__rail:active .cmplayer__fill::after { transform: translateY(-50%) scale(1.3); }
 }
 
 /* ---------- the storage fuel gauge (settings → general) ---------- */

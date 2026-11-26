@@ -69,16 +69,21 @@ export function playTrack(opts) {
     return;
   }
 
+  // v3.2.3 fix — the old bar must be torn down BEFORE any new state is
+  // written: closePlayer() nulls cur/list/idx, and the fresh build paints
+  // its title, counter and steps from them. The old order left the first
+  // song on the bar nameless, with its playlist chrome amputated.
+  if (!sameBar) closePlayer();
+
   cur = track;
   list = Array.isArray(opts.list) && opts.list.length ? opts.list : null;
   idx = Number.isInteger(opts.index) ? Math.max(0, opts.index ?? 0) : (list ? list.findIndex((x) => x.url === track.url) : -1);
   if (idx < 0 && list) idx = 0;
 
   if (!sameBar) {
-    closePlayer();
     audio = new Audio();
     audio.preload = 'metadata';
-    audio.src = track.url;   // v3.2.3 fix — the fresh bar must carry its own source
+    audio.src = track.url;   // the fresh bar carries its own source
     build(track);
   } else {
     // a new track takes the old one's seat in place — the bar never blinks
