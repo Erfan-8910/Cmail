@@ -10,7 +10,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 // fallback (3.0.0) no matter what actually shipped. Now the build itself
 // tells the truth.
 declare const __CM_BUILD_VERSION__: string;
-const BUILT_VERSION: string = typeof __CM_BUILD_VERSION__ === 'string' ? __CM_BUILD_VERSION__ : '3.2.0';
+const BUILT_VERSION: string = typeof __CM_BUILD_VERSION__ === 'string' ? __CM_BUILD_VERSION__ : '3.2.3';
 
 // the honest version: the env var wins when the deployment pipeline set it,
 // the build-time stamp answers everywhere else (dashboard paste, wrangler

@@ -342,13 +342,14 @@ app.post('/send', requireUser, async (c) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return c.json({ ok: false, error: 'invalid_recipient' }, 400);
   if (!text && !html) return c.json({ ok: false, error: 'empty_body' }, 400);
 
-  // v3.2.2 — outgoing attachments grew up with the incoming path: 8 files,
-  // 6 MB each, 20 MB per letter. A file over the budget is rejected with
+  // v3.2.3 — outgoing attachments caught up with the incoming path and with
+  // Gmail: 20 files, 20 MB each, 20 MB per letter (Brevo's own total ceiling).
+  // A file over the budget is rejected with
   // attachment_too_big — the composer says so before sending, so this is
   // the server's double-check, not the user's first surprise.
-  const MAX_ATT_B64 = 8_000_000;      // ~6 MB raw per file
-  const MAX_ATT_COUNT = 8;
-  const MAX_TOTAL_B64 = 24_000_000;   // ~18 MB raw per letter
+  const MAX_ATT_B64 = 26_666_668;     // ~20 MB raw per file (Gmail's ceiling)
+  const MAX_ATT_COUNT = 20;
+  const MAX_TOTAL_B64 = 26_666_668;   // ~20 MB raw per letter (Brevo's ceiling)
   const rawAtts = Array.isArray(body?.attachments) ? body!.attachments!.slice(0, MAX_ATT_COUNT) : [];
   const attachments: { filename: string; content_type: string; content_b64: string; size: number }[] = [];
   let totalB64 = 0;

@@ -60,11 +60,15 @@ app.post('/autoclean', requireAdmin, async (c) => {
 });
 
 // one-press cleanup — the same rules as the automatic pass (oldest first,
-// never starred, the newest ten untouched), down to 85% of the quota
+// never starred, the newest ten untouched), trimming usage back down to 85%
+// of the quota. v3.2.3 — the target was inverted (quota*0.85 - used): the
+// fuller the disk, the more negative the number — the button did NOTHING
+// exactly when the disk was fullest. Now it frees how many bytes stand
+// ABOVE the 85% line.
 app.post('/clean', requireAdmin, async (c) => {
   const env = c.env;
   const [c0, u] = await Promise.all([cfg(env), usage(env)]);
-  const target = c0.quota_bytes * 0.85 - u.used_bytes;
+  const target = u.used_bytes - c0.quota_bytes * 0.85;
   if (target <= 0) return c.json({ ok: true, freed: 0, deleted: 0, note: 'already_under_target' });
   const r = await freeSpace(env, target, c0.quota_bytes);
   if (r.deleted > 0) {

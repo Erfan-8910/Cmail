@@ -4057,10 +4057,33 @@ button.att-card { cursor: pointer; color: var(--fg); }
   border: 1px solid color-mix(in srgb, var(--acc) 26%, var(--stroke));
   box-shadow: var(--shadow), 0 18px 50px -18px color-mix(in srgb, var(--acc) 40%, rgba(0,0,0,.5));
   -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
-  transform: translateY(90px); opacity: 0; transition: transform .34s var(--spring), opacity .3s var(--ease);
+  transform: translateY(130%) scale(.96); opacity: 0;
+  transition: transform .5s cubic-bezier(.22,1.45,.36,1), opacity .3s var(--ease);
   max-width: 720px; margin-inline: auto;
+  overflow: hidden; isolation: isolate;
 }
-.cmplayer.is-in { transform: translateY(0); opacity: 1; }
+.cmplayer.is-in { transform: translateY(0) scale(1); opacity: 1; }
+/* v3.2.3 — the Climind-W aurora: two slow hues breathing behind the glass,
+   waking up the moment the music plays */
+.cmplayer::before {
+  content: ''; position: absolute; inset: -42%; z-index: -1;
+  background:
+    radial-gradient(42% 55% at 22% 60%, color-mix(in srgb, var(--acc) 34%, transparent), transparent 70%),
+    radial-gradient(38% 50% at 76% 30%, color-mix(in srgb, #7c6cff 26%, transparent), transparent 72%);
+  filter: blur(14px);
+  opacity: .3; transform: rotate(0deg) scale(1);
+  transition: opacity .6s var(--ease);
+  animation: cmAurora 14s linear infinite;
+}
+.cmplayer.is-playing::before { opacity: .62; }
+@keyframes cmAurora {
+  0%   { transform: rotate(0deg) scale(1); }
+  50%  { transform: rotate(180deg) scale(1.14); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmplayer::before { animation: none; }
+}
 .cmplayer__play {
   width: 36px; height: 36px; border-radius: 50%; flex: none;
   display: inline-flex; align-items: center; justify-content: center;
@@ -4077,6 +4100,52 @@ button.att-card { cursor: pointer; color: var(--fg); }
 .cmplayer__t { display: flex; flex-direction: column; min-width: 0; max-width: 200px; line-height: 1.3; }
 .cmplayer__t b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmplayer__sub { font-size: 10.5px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* v3.2.3 — the dancing equalizer: four bars that breathe with the sound,
+   and stand still (honest, dimmed) the moment the music stops */
+.cmplayer__eq {
+  display: inline-flex; align-items: flex-end; gap: 2.5px; height: 16px; flex: none;
+}
+.cmplayer__eq i {
+  width: 3px; height: 24%; border-radius: 2px; background: var(--acc); opacity: .4;
+  transform-origin: bottom; transition: opacity .3s;
+}
+.cmplayer.is-playing .cmplayer__eq i { opacity: .95; animation: cmEq 1.05s ease-in-out infinite; }
+.cmplayer.is-playing .cmplayer__eq i:nth-child(1) { animation-delay: 0s; height: 55%; }
+.cmplayer.is-playing .cmplayer__eq i:nth-child(2) { animation-delay: .18s; height: 90%; }
+.cmplayer.is-playing .cmplayer__eq i:nth-child(3) { animation-delay: .09s; height: 40%; }
+.cmplayer.is-playing .cmplayer__eq i:nth-child(4) { animation-delay: .27s; height: 70%; }
+@keyframes cmEq {
+  0%, 100% { transform: scaleY(.35); }
+  35%      { transform: scaleY(1.12); }
+  62%      { transform: scaleY(.55); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmplayer.is-playing .cmplayer__eq i { animation: none; }
+}
+/* v3.2.3 — the playlist steps and the track counter */
+.cmplayer__step {
+  flex: none; width: 24px; height: 24px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 0; color: var(--faint); cursor: pointer; transition: all .16s;
+}
+.cmplayer__step:hover { color: var(--acc); background: var(--hover); }
+.cmplayer__step:active { transform: scale(.9); }
+.cmplayer__step svg { width: 12px; height: 12px; }
+.cmplayer__count { font-size: 10px; color: var(--faint); flex: none; }
+/* v3.2.3 — the volume rail (folds away on narrow phones) */
+.cmplayer__vol {
+  flex: none; width: 62px; height: 14px; cursor: pointer;
+  accent-color: var(--acc); background: transparent;
+}
+.cmplayer__vol.is-mute { opacity: .5; }
+/* v3.2.3 — the honest buffering pulse while the song finds its bytes */
+.cmplayer.is-buffer .cmplayer__play {
+  animation: cmBuffer 1.1s ease-in-out infinite;
+}
+@keyframes cmBuffer {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--acc) 45%, transparent); }
+  50%      { box-shadow: 0 0 0 7px transparent; }
+}
 .cmplayer__rail {
   flex: 1; height: 22px; display: flex; align-items: center; cursor: pointer; min-width: 80px;
   position: relative; border-radius: 8px; touch-action: none;
@@ -4102,6 +4171,8 @@ button.att-card { cursor: pointer; color: var(--fg); }
   .cmplayer { inset-inline: 8px; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); gap: 7px; padding: 8px 9px; }
   .cmplayer__t { max-width: 110px; }
   .cmplayer__sub { display: none; }
+  .cmplayer__vol, .cmplayer__count { display: none; }
+  .cmplayer__eq { display: none; }
 }
 
 /* ---------- the storage fuel gauge (settings → general) ---------- */
@@ -4158,6 +4229,66 @@ button.att-card { cursor: pointer; color: var(--fg); }
 }
 .st-big__row:hover { background: var(--hover); }
 .st-big__subj { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+/* v3.2.3 — the fuel gauge learns to move: the ring draws itself in, the
+   segmented bar grows from zero, every kind row carries its own live mini
+   rail, the state glow breathes behind the card and a full disk PULSES. */
+.st-card { position: relative; overflow: hidden; isolation: isolate; }
+.st-card::before {
+  content: ''; position: absolute; inset: -30% -18% auto; height: 130px; z-index: -1;
+  background: radial-gradient(46% 74% at 30% 0%, color-mix(in srgb, var(--acc) 20%, transparent), transparent 74%);
+  filter: blur(10px); opacity: .55;
+  animation: stGlow 7s ease-in-out infinite;
+}
+.st-card--low::before { background: radial-gradient(46% 74% at 30% 0%, color-mix(in srgb, var(--warn) 24%, transparent), transparent 74%); }
+.st-card--full::before { background: radial-gradient(46% 74% at 30% 0%, color-mix(in srgb, var(--danger) 28%, transparent), transparent 74%); }
+@keyframes stGlow {
+  0%, 100% { opacity: .4; transform: translateY(0); }
+  50%      { opacity: .75; transform: translateY(6px); }
+}
+.st-card--full::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent); border-radius: inherit;
+  animation: stPulse 2s ease-in-out infinite;
+}
+@keyframes stPulse {
+  0%, 100% { opacity: .15; }
+  50%      { opacity: .75; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-card::before, .st-card--full::after { animation: none; }
+}
+/* the ring draws itself in on mount (JS sets the target offset one frame later) */
+.st-ring circle { transition: stroke-dashoffset 1.1s var(--ease); }
+/* the segmented bar grows from zero once the card mounts */
+.st-bar__seg { transition: width .8s var(--ease); }
+.st-card:not(.is-mounted) .st-bar__seg { width: 0% !important; min-width: 0; }
+/* every kind row: its own mini rail that fills with the kind's color */
+.st-kind { position: relative; padding-bottom: 9px; }
+.st-kind__mini {
+  position: absolute; inset-inline: 4px; bottom: 3px; height: 3px; border-radius: 3px;
+  background: var(--field); overflow: hidden; opacity: .9;
+}
+.st-kind__mini i {
+  display: block; height: 100%; border-radius: 3px; width: 0%;
+  transition: width .9s var(--ease);
+}
+.st-card.is-mounted .st-kind__mini i { width: var(--w, 0%); }
+.st-kind:hover .st-kind__icn { transform: scale(1.12); }
+.st-kind__icn { transition: transform .18s var(--spring); }
+/* the warning strip keeps breathing while the disk is tight */
+.st-warn--full { animation: stWarnPulse 2.4s ease-in-out infinite; }
+@keyframes stWarnPulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 0%, transparent); }
+  50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--danger) 14%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-warn--full { animation: none; }
+  .st-ring circle, .st-bar__seg, .st-kind__mini i { transition: none; }
+}
+/* the one-press cleanup earns its own busy spinner */
+.st-clean.is-busy { pointer-events: none; opacity: .7; }
+.st-clean.is-busy .icn { animation: spinOnce .9s linear infinite; }
 
 /* ---------- the compose attachment meter ---------- */
 .compose__meter { display: flex; align-items: center; gap: 8px; padding: 4px 2px 0; }

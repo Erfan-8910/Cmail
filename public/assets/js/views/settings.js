@@ -505,7 +505,9 @@ const ST_KIND_META = {
   other:   { icn: 'paperclip', cls: 'k-other' },
 };
 
-// the donut ring — same honest gauge family the health hero uses
+// the donut ring — same honest gauge family the health hero uses.
+// v3.2.3 — it DRAWS itself in now: the circle starts empty and one frame
+// after mount glides to its true share (the CSS transition does the work).
 function storageRing(pct, state) {
   const R = 30, C = 2 * Math.PI * R;
   const svgNS = 'http://www.w3.org/2000/svg';
@@ -514,8 +516,11 @@ function storageRing(pct, state) {
   circle.setAttribute('fill', 'none'); circle.setAttribute('stroke', 'currentColor');
   circle.setAttribute('stroke-width', '6'); circle.setAttribute('stroke-linecap', 'round');
   circle.setAttribute('stroke-dasharray', String(C));
-  circle.setAttribute('stroke-dashoffset', String(C * (1 - Math.max(0, Math.min(100, pct)) / 100)));
+  circle.setAttribute('stroke-dashoffset', String(C));
   circle.style.transform = 'rotate(-90deg)'; circle.style.transformOrigin = 'center';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    circle.style.strokeDashoffset = String(C * (1 - Math.max(0, Math.min(100, pct)) / 100));
+  }));
   const track = circle.cloneNode();
   track.setAttribute('stroke', 'var(--field)'); track.removeAttribute('style');
   const svg = document.createElementNS(svgNS, 'svg');
@@ -526,7 +531,23 @@ function storageRing(pct, state) {
   lbl.setAttribute('font-size', '14'); lbl.setAttribute('font-weight', '700'); lbl.setAttribute('fill', 'currentColor');
   lbl.textContent = `${lang === 'fa' ? String(Math.round(pct)).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : Math.round(pct)}٪`.replace('٪', lang === 'fa' ? '٪' : '%');
   svg.append(lbl);
+  // v3.2.3 — the number in the middle counts up with the ring
+  countUp(lbl, 0, Math.round(pct), 1000, (v) => `${lang === 'fa' ? String(Math.round(v)).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : Math.round(v)}${lang === 'fa' ? '٪' : '%'}`);
   return svg;
+}
+
+// v3.2.3 — one tiny ease-out counter, shared by the ring label and the used
+// bytes line: the gauge's numbers glide up instead of teleporting
+function countUp(el, from, to, ms, fmt) {
+  if (!el || !Number.isFinite(to)) return;
+  const t0 = performance.now();
+  const tick = (t) => {
+    const p = Math.min(1, (t - t0) / ms);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(from + (to - from) * eased);
+    if (p < 1 && el.isConnected) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 async function storageCard() {
@@ -550,19 +571,20 @@ async function storageCard() {
       h('span', {}, st.full ? t('storageFullWarn') : t('storageLowWarn'))));
   }
 
-  // ----- gauge row: ring + numbers -----
-  const used = fmtBytes(st.used_bytes);
+  // ----- gauge row: ring + numbers (v3.2.3 — the used bytes count up too) -----
   const quota = fmtBytes(st.quota_bytes);
+  const usedB = h('b', {}, fmtBytes(0));
+  countUp(usedB, 0, st.used_bytes, 1100, (v) => fmtBytes(Math.max(0, Math.floor(v))));
   const gauge = h('div', { class: 'st-gauge' },
     storageRing(st.pct, state),
     h('div', { class: 'grow' },
-      h('div', { class: 'st-gauge__n' }, h('b', {}, used), h('span', { class: 'muted' }, ` ${t('storageOf')} ${quota}`)),
+      h('div', { class: 'st-gauge__n' }, usedB, h('span', { class: 'muted' }, ` ${t('storageOf')} ${quota}`)),
       h('div', { class: 'small muted' }, t('storageD1Note')),
       h('div', { class: 'st-gauge__meta' },
         h('span', {}, `${faNum(st.emails)} ${t('navMail')}`),
         h('span', {}, `${faNum(st.stored_attachments)} ${t('attachTitle')}`))));
 
-  // ----- the segmented bar: every kind in its own color -----
+  // ----- the segmented bar: every kind in its own color, growing from zero -----
   const kinds = st.kinds ?? [];
   if (kinds.length && st.used_bytes > 0) {
     const bar = h('div', { class: 'st-bar', role: 'img', 'aria-label': t('storageTitle') });
@@ -574,18 +596,20 @@ async function storageCard() {
   }
   card.append(gauge);
 
-  // ----- per-kind rows -----
+  // ----- per-kind rows (v3.2.3 — each with its own live mini rail) -----
   if (kinds.length) {
     const rows = h('div', { class: 'st-kinds' });
     for (const k of kinds) {
       const meta = ST_KIND_META[k.kind] ?? ST_KIND_META.other;
+      const share = st.used_bytes ? Math.max(1, Math.round((k.bytes / st.used_bytes) * 100)) : 0;
       rows.append(h('div', { class: 'st-kind' },
         h('span', { class: `st-kind__icn ${meta.cls}` }, icon(meta.icn)),
         h('b', {}, t('stKind_' + k.kind)),
         h('span', { class: 'small muted' }, `${faNum(k.count)} ×`),
         h('span', { style: { flex: '1' } }),
         h('b', { class: 'mono' }, fmtBytes(k.bytes)),
-        h('span', { class: 'small muted mono st-kind__pct' }, `${faNum(st.used_bytes ? Math.round((k.bytes / st.used_bytes) * 100) : 0)}%`)));
+        h('span', { class: 'small muted mono st-kind__pct' }, `${faNum(st.used_bytes ? Math.round((k.bytes / st.used_bytes) * 100) : 0)}%`),
+        h('span', { class: 'st-kind__mini' }, h('i', { class: meta.cls, style: { '--w': `${share}%` } }))));
     }
     card.append(rows);
   }
@@ -604,15 +628,16 @@ async function storageCard() {
       toast(t('settingsSaved'), 'ok', 1200);
     } catch (e) { toast(errText(e), 'err'); }
   });
-  const cleanBtn = h('button', { class: 'btn btn--sm' }, icon('trash'), t('storageCleanNow'));
+  const cleanBtn = h('button', { class: 'btn btn--sm st-clean' }, icon('trash'), t('storageCleanNow'));
   cleanBtn.addEventListener('click', async () => {
     cleanBtn.disabled = true;
+    cleanBtn.classList.add('is-busy');
     try {
       const r = await api.post('/api/storage/clean');
       toast(r.deleted > 0 ? t('storageCleaned').replace('{n}', faNum(r.deleted)).replace('{s}', fmtBytes(r.freed)) : t('storageCleanNone'), 'ok', 3000);
       const fresh = await storageCard();
       if (fresh) card.replaceWith(fresh);
-    } catch (e) { toast(errText(e), 'err'); cleanBtn.disabled = false; }
+    } catch (e) { toast(errText(e), 'err'); cleanBtn.disabled = false; cleanBtn.classList.remove('is-busy'); }
   });
 
   card.append(h('div', { class: 'st-controls' },
@@ -649,6 +674,10 @@ async function storageCard() {
     }
     card.append(list);
   }
+
+  // v3.2.3 — two frames after mount the gauge lets go: the segmented bar
+  // grows from zero and every kind's mini rail fills with its color
+  requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('is-mounted')));
   return card;
 }
 

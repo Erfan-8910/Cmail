@@ -93,9 +93,9 @@ const noAuth = await req('GET', '/api/emails/print-identity');
 ok('print-identity refuses the anonymous', noAuth.status === 401, String(noAuth.status));
 
 // ---------- outgoing attachments ----------
-// v3.2.2 budgets: 8 files, 8 MB b64 per file, 24 MB b64 per letter.
-// too big (over 8 MB b64) → 413 BEFORE the provider check
-const bigB64 = 'A'.repeat(8_500_000);
+// v3.2.3 budgets: 20 files, ~20 MB raw (26.67 MB b64) per file and per letter.
+// too big (over the budget) → 413 BEFORE the provider check
+const bigB64 = 'A'.repeat(30_000_000);
 const big = await sendAs({
   to: 'someone@probe32.test', subject: 'big', text: 'x',
   attachments: [{ filename: 'big.bin', content_type: 'application/octet-stream', content_b64: bigB64 }],

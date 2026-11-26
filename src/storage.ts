@@ -178,7 +178,13 @@ export async function ensureRoom(env: Env, needBytes: number): Promise<RoomResul
       if (!u.full_at) await setSetting(env, 'storage_full_at', String(now()));
       return out;
     }
-    const r = await freeSpace(env, c.quota_bytes * (TARGET_PCT / 100) - u.used_bytes, c.quota_bytes);
+    // v3.2.3 — the free-target was INVERTED here (quota*0.85 - used): at ≥97%
+    // of the quota the number is always negative, so freeSpace() bowed out
+    // and the auto-clean deleted NOTHING — the feature was silently inert
+    // since v3.2.2 ("the disk is full and nothing steps aside"). The honest
+    // target is how many bytes stand ABOVE the 85% line: used - quota*0.85.
+    const overLine = u.used_bytes - c.quota_bytes * (TARGET_PCT / 100);
+    const r = await freeSpace(env, overLine, c.quota_bytes);
     out.freed = r.freed; out.deleted = r.deleted; out.cleaned = r.deleted > 0;
     // room made (or nothing left to delete) — refresh the full flag honestly
     if (out.cleaned) {

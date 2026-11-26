@@ -150,9 +150,15 @@ for (let i = 0; i < 12; i++) {
   });
 }
 d1(filler);
-await req('POST', '/api/storage/quota', { quota_mb: 10 });
+// v3.2.3 — the quota follows the REAL current usage (fillers included, plus
+// whatever older mail the long-lived local install carries) so the gauge
+// lands in the low band (80–97%) instead of jumping straight to full
+const stAfterFill = await req('GET', '/api/storage');
+const usedNow = stAfterFill.data?.storage?.used_bytes ?? 0;
+const quotaMb = Math.max(10, Math.round((usedNow * 1.15) / 1048576));
+await req('POST', '/api/storage/quota', { quota_mb: quotaMb });
 const stLow = await req('GET', '/api/storage');
-ok(stLow.data?.storage?.pct > 80 && stLow.data?.storage?.low, `tiny quota flags low (pct=${stLow.data?.storage?.pct})`);
+ok(stLow.data?.storage?.pct > 80 && stLow.data?.storage?.low && !stLow.data?.storage?.full, `in-band quota flags low (pct=${stLow.data?.storage?.pct}, quota=${quotaMb} MB)`);
 const health = await req('GET', '/api/admin/health');
 ok((health.data?.issues ?? []).some((i) => i.code === 'storage_low' && i.detail), 'health raises storage_low with the pct detail');
 
@@ -176,8 +182,9 @@ const ac2 = await req('POST', '/api/storage/autoclean', { on: true });
 ok(ac2.data?.auto_clean === true, 'auto-clean toggle back on');
 
 // ---------- 7. send-path caps (server-side double-check, no provider needed) ----------
-const tooBig = await req('POST', '/api/emails/send', { to: 'x@y.com', text: 'hi', from_address_id: addr.id, attachments: [{ filename: 'a.bin', content_type: 'application/octet-stream', content_b64: 'A'.repeat(9_000_000) }] });
-ok(tooBig.status === 413 && tooBig.data?.error === 'attachment_too_big', '9 MB b64 file rejected server-side');
+// v3.2.3 — the budget grew to 20 MB raw (26.67 MB b64); the probe grew with it
+const tooBig = await req('POST', '/api/emails/send', { to: 'x@y.com', text: 'hi', from_address_id: addr.id, attachments: [{ filename: 'a.bin', content_type: 'application/octet-stream', content_b64: 'A'.repeat(30_000_000) }] });
+ok(tooBig.status === 413 && tooBig.data?.error === 'attachment_too_big', '30 MB b64 file rejected server-side');
 
 // ---------- cleanup ----------
 d1("DELETE FROM emails WHERE id=?", [emailId]);

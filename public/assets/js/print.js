@@ -7,9 +7,14 @@
 // DKIM · DMARC verdicts lifted from the delivery headers.
 // Everything lives in the iframe's own <style>, so the app's glass UI can
 // never leak into the page and the print dialog sees a pure paper world.
+// v3.2.3 — the paper finally shows the letter's own pictures: cid: references
+// are rewritten into the same real attachment URLs the reader uses, so
+// embedded images print in the letter instead of broken boxes, and a
+// plain-text letter's image attachments ride as a gallery strip in their
+// own place under the body.
 import { api } from './api.js';
 import { t, lang } from './i18n.js';
-import { sanitizeEmailHtml } from './mailtext.js';
+import { sanitizeEmailHtml, rewriteCidRefs } from './mailtext.js';
 
 // ---------- the letterhead mark (admin-uploaded, cached a minute) ----------
 let logoCache = { at: 0, logo: null };
@@ -101,6 +106,18 @@ function fmtBytes(n) {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+// the inline images the letter's own body references by cid — the same map
+// the reader builds, keyed by the bare Content-ID (angle brackets stripped)
+function cidMapOf(atts) {
+  const m = new Map();
+  for (const a of (atts || [])) {
+    if (!a.available) continue;
+    const k = String(a.content_id ?? '').toLowerCase().replace(/(^\s*cid:)|[<>\s]/g, '').trim();
+    if (k) m.set(k, `/api/emails/attachment/${a.id}?disp=inline`);
+  }
+  return m;
+}
+
 // ---------- the document ----------
 function buildPrintDoc(em, atts, note, logo, headers) {
   const now = new Date();
@@ -119,19 +136,30 @@ function buildPrintDoc(em, atts, note, logo, headers) {
     ? FA(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`)
     : `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-  // body: rendered text for plain letters; sanitized html for rich ones
+  // body: rendered text for plain letters; sanitized html for rich ones.
+  // v3.2.3 — the cid map rides along in BOTH shapes: the embedded pictures
+  // render in place inside the rich letter, and a plain-text letter's image
+  // attachments get their own gallery strip under the body.
+  const cids = cidMapOf(atts);
+  const attList = atts || [];
+  const imgAtts = attList.filter((a) => a.available && /^image\/(png|jpeg|jpg|gif|webp|bmp|avif)/.test(String(a.content_type ?? '').toLowerCase()));
   let bodyHtml = '';
   if (em.html_body) {
-    const doc = sanitizeEmailHtml(em.html_body);
+    const doc = rewriteCidRefs(sanitizeEmailHtml(em.html_body), cids);
     bodyHtml = `<div class="letter-body">${doc.body.innerHTML}</div>`;
   } else {
     bodyHtml = `<div class="letter-body letter-body--plain">${esc(em.text_body || t('printNoBody'))}</div>`;
+    if (imgAtts.length) {
+      const figs = imgAtts.map((a) =>
+        `<figure class="att-fig"><img src="/api/emails/attachment/${a.id}?disp=inline" alt="" loading="eager"/><figcaption>${esc(a.filename || 'image')}${a.size ? ` · ${esc(fmtBytes(a.size))}` : ''}</figcaption></figure>`).join('');
+      bodyHtml += `<div class="att-gallery">${figs}</div>`;
+    }
   }
 
   const outgoing = em.direction === 'out';
   const authHtml = authChips(headers);
   const attChips = (atts || []).map((a) =>
-    `<span class="att-chip">${esc(a.filename || 'file')}${a.size ? `<i>${esc(fmtBytes(a.size))}</i>` : ''}</span>`).join('');
+    `<span class="att-chip${a.available ? '' : ' att-chip--dead'}">${esc(a.filename || 'file')}${a.available ? (a.size ? `<i>${esc(fmtBytes(a.size))}</i>` : '') : `<i>${esc(t('attRefused'))}</i>`}</span>`).join('');
   const attRow = attChips ? `<div class="cert__row cert__row--wide"><span class="cert__k">${esc(t('printAtts'))}</span><span class="att-list">${attChips}</span></div>` : '';
   const noteRow = note?.body
     ? `<div class="note-block"><span class="note-block__k">${esc(t('printNote'))}</span><p>${esc(note.body)}</p></div>`
@@ -243,6 +271,12 @@ function buildPrintDoc(em, atts, note, logo, headers) {
   .att-list { display: flex; flex-wrap: wrap; gap: 6px; }
   .att-chip { display: inline-flex; gap: 6px; align-items: baseline; background: #f1efe7; border: 1px solid var(--line-soft); border-radius: 7px; padding: 2px 9px; font-size: 11px; }
   .att-chip i { font-style: normal; color: var(--ink-soft); font-size: 10px; }
+  .att-chip--dead { border-style: dashed; color: var(--ink-soft); }
+  /* v3.2.3 — the plain-text letter's own picture gallery, in place */
+  .att-gallery { margin: 14px 0 6px; display: flex; flex-wrap: wrap; gap: 10px; page-break-inside: avoid; }
+  .att-fig { margin: 0; max-width: 62mm; }
+  .att-fig img { width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line-soft); }
+  .att-fig figcaption { font-size: 9.6px; color: var(--ink-soft); padding-top: 3px; text-align: center; }
   .note-block { margin: 0 0 14px; border-inline-start: 3px solid var(--line); background: #f3f0e6; border-radius: 8px; padding: 8px 13px; }
   .note-block__k { font-size: 10.4px; font-weight: 800; color: var(--ink-soft); letter-spacing: .04em; display: block; margin-bottom: 2px; }
   .note-block p { margin: 0; font-size: 12.6px; }

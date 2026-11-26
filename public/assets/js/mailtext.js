@@ -49,12 +49,19 @@ export function detectDir(doc) {
 // pictures listed beside it. The reader hands in a map of Content-ID →
 // same-origin attachment URL and every reference becomes a real image —
 // inside the frame's CSP (img-src https:), with the session cookie, sandboxed.
+// v3.2.3 — the lookup hardened: Content-ID values arrive in MANY dresses —
+// postal-mime keeps the raw header's angle brackets ("<part1@host>"), some
+// composers send bare ids, some send "cid:part1@host" inside the attribute.
+// The old code normalized only the REFERENCE side, so the bracketed map key
+// never matched and the image was DELETED from the body (the bug the user
+// reported: "attachments show separately, never inside the letter"). Now
+// every candidate key is stripped to its bare form before the match.
+const bareCid = (v) => String(v ?? '').toLowerCase().replace(/^\s*cid:/i, '').replace(/[<>\s]/g, '').trim();
 export function rewriteCidRefs(doc, cidMap) {
   if (!cidMap || !cidMap.size) return doc;
-  const resolve = (cid) => {
-    const k = String(cid ?? '').replace(/^\s*cid:/i, '').replace(/^<|>$/g, '').trim();
-    return cidMap.get(k) ?? cidMap.get(k.toLowerCase()) ?? null;
-  };
+  const norm = new Map();
+  for (const [k, v] of cidMap) norm.set(bareCid(k), v);
+  const resolve = (cid) => norm.get(bareCid(cid)) ?? null;
   for (const el of [...doc.querySelectorAll('*')]) {
     for (const a of ['src', 'poster', 'background']) {
       const v = el.getAttribute?.(a);

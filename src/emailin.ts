@@ -9,15 +9,19 @@ import { ensureRoom } from './storage';
 
 const MAX_HTML = 900_000;      // ~0.9 MB html stored
 const MAX_TEXT = 400_000;
-// v3.2.2 — the attachment budget grew up. Within the inline budget the
-// payload still rides the attachments row itself; anything bigger is split
-// into ordered chunk rows (attachment_chunks, 0014), each slice far below
-// every platform limit. A letter may carry 8 files up to 6 MB each — the
-// photos, voice notes and PDFs real mail actually brings.
+// v3.2.2 — the attachment budget grew up; v3.2.3 — it caught up with Gmail.
+// Music arrived and vanished: a song is 5–12 MB and the old 6 MB per-file cap
+// silently dropped it AFTER the letter itself had landed ("text came, song
+// didn't"). Within the inline budget the payload still rides the attachments
+// row itself; anything bigger is split into ordered chunk rows
+// (attachment_chunks, 0014), each slice far below every platform limit. A
+// letter may now carry 20 files up to 20 MB each — the songs, voice notes,
+// photos and PDFs real mail actually brings.
 const MAX_INLINE_B64 = 900_000;       // stored base64 cap for the single-row form
-const MAX_FILE_B64 = 8_000_000;       // ~6 MB raw per file
-const MAX_TOTAL_RAW = 20_000_000;     // ~20 MB of attachments per letter
-const MAX_FILES = 8;
+const MAX_FILE_B64 = 26_666_668;      // ~20 MB raw per file (Gmail's own ceiling)
+const MAX_TOTAL_RAW = 20_000_000;     // ~20 MB of attachments per letter (the 25 MB
+                                      // Email-Routing envelope leaves ~5 MB for MIME)
+const MAX_FILES = 20;
 const CHUNK_B64 = 1_200_000;          // one chunk row holds ~1.2 MB of base64
 
 export async function handleEmail(message: ForwardableEmailMessage, env: Env): Promise<void> {
@@ -136,11 +140,31 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
     else if (typeof c0 === 'string') bytes = new TextEncoder().encode(c0);
     else if (c0 instanceof ArrayBuffer) bytes = new Uint8Array(c0);
     if (!bytes || !bytes.length) continue;
-    if (attTotalRaw + bytes.length > MAX_TOTAL_RAW) break; // the 20 MB letter budget
+    // v3.2.3 — a refused file is no longer INVISIBLE. The old code `continue`d
+    // (or `break`ed) before writing any row: the song the user sent never
+    // appeared anywhere — not even as an honest "refused" chip. Now every
+    // file past the budget gets its metadata row (available = 0), the studio
+    // names it with the dead chip, and the letter still always lands.
+    const overBudget = bytes.length * 1.34 > MAX_FILE_B64;      // base64 inflation
+    const overTotal = attTotalRaw + bytes.length > MAX_TOTAL_RAW;
+    if (overBudget || overTotal) {
+      try {
+        await db.prepare(
+          'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64, chunks, content_id) VALUES (?, ?, ?, ?, ?, NULL, 0, ?)'
+        ).bind(uid('att_'), emailId, att.filename ?? 'attachment', att.mimeType ?? 'application/octet-stream',
+          bytes.length, att.contentId ?? null).run();
+      } catch {
+        try {
+          await db.prepare(
+            'INSERT INTO attachments (id, email_id, filename, content_type, size, content_b64) VALUES (?, ?, ?, ?, ?, NULL)'
+          ).bind(uid('att_'), emailId, att.filename ?? 'attachment', att.mimeType ?? 'application/octet-stream', bytes.length).run();
+        } catch { /* even the metadata row refused — the letter still lands */ }
+      }
+      if (overTotal) break;   // the 20 MB letter budget — the rest is named too
+      continue;               // this one file alone was too big — keep counting the rest
+    }
     attTotalRaw += bytes.length;
     const b64 = arrToB64(bytes);
-    const overBudget = b64.length > MAX_FILE_B64;
-    if (overBudget) continue; // bigger than 6 MB raw — named in the reader as refused
     const attId = uid('att_');
     try {
       if (b64.length <= MAX_INLINE_B64) {
@@ -172,7 +196,7 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
       } catch { /* even the metadata row refused — the letter still lands */ }
     }
   }
-  // anything past the 8-file cap is not silently gone: it is counted into
+  // anything past the 20-file cap is not silently gone: it is counted into
   // the letter's size (the raw message always was), the reader shows the
   // files it stored, and the sender's copy rides complete via forwarding
 

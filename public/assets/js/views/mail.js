@@ -1488,11 +1488,20 @@ async function drawReader(wrap, r) {
   // Images preview right here and open in a lightbox; audio gets the panel's
   // own player; video and pdf/text open in the viewer; everything downloads.
   // The cid: map rides along so embedded pictures render inside the letter.
+  // v3.2.3 — the map keys are stripped to bare ids (postal-mime keeps the
+  // header's angle brackets, so the old keys never matched the references)
+  // and the audio files travel as ONE playlist — the player's next/prev
+  // walks every sound the letter brought, not just the tapped one.
   const cidMap = new Map();
   const attList = r.attachments ?? [];
   for (const a of attList) {
-    if (a.available && a.content_id) cidMap.set(String(a.content_id).toLowerCase(), `/api/emails/attachment/${a.id}?disp=inline`);
+    if (!a.available) continue;
+    const cidKey = String(a.content_id ?? '').toLowerCase().replace(/(^\s*cid:)|[<>\s]/g, '').trim();
+    if (cidKey) cidMap.set(cidKey, `/api/emails/attachment/${a.id}?disp=inline`);
   }
+  const playlist = attList.filter((a) => a.available && attKind(a) === 'audio')
+    .map((a) => ({ url: attUrl(a, 'inline'), dl: attUrl(a), title: a.filename ?? 'audio' }));
+  lastPlaylist = playlist;
   if (attList.length) card.append(buildAttArea(attList));
 
   // ----- render mode state -----
@@ -1718,7 +1727,7 @@ function buildAttArea(atts) {
       h('span', { class: `att-card__glyph att-card__glyph--${kind}` }, icon(glyph)),
       h('span', { class: 'att-card__meta' }, h('b', {}, name), h('span', { class: 'faint small' }, fmtBytes(a.size ?? 0))));
     if (kind === 'audio') {
-      card.append(h('button', { class: 'att-card__act att-card__act--go', title: t('playerTitle'), 'aria-label': t('playerTitle'), onclick: () => playTrack({ url: attUrl(a, 'inline'), title: name, subtitle: emPeerLabel() }) }, icon('play')));
+      card.append(h('button', { class: 'att-card__act att-card__act--go', title: t('playerTitle'), 'aria-label': t('playerTitle'), onclick: () => playTrack({ url: attUrl(a, 'inline'), dl: attUrl(a), title: name, subtitle: emPeerLabel(), list: lastPlaylist, index: lastPlaylist.findIndex((x) => x.url === attUrl(a, 'inline')) }) }, icon('play')));
     } else if (kind === 'video') {
       card.append(h('button', { class: 'att-card__act att-card__act--go', title: t('attOpen'), 'aria-label': t('attOpen'), onclick: () => openVideoViewer(a) }, icon('play')));
     } else if (kind === 'pdf' || kind === 'text') {
@@ -1734,6 +1743,9 @@ function buildAttArea(atts) {
 // the peer label under the player's title — whose letter this sound came in with
 let lastReaderPeer = '';
 function emPeerLabel() { return lastReaderPeer; }
+// the letter's audio playlist (v3.2.3) — the player's next/prev walks it;
+// drawReader fills it in, the studio's play keys hand it to the player
+let lastPlaylist = [];
 
 // ---------- the lightbox: a letter's pictures, edge to edge ----------
 let lbEl = null;
@@ -1857,9 +1869,9 @@ window.addEventListener('hashchange', () => { closeLightbox(); closePlayer(); })
 // attachments (image chips carry a live thumbnail), the whole sheet carries
 // the studio polish — a gradient paper-plane sigil, icon rails beside the
 // fields, a footer where the send key leads and the tools trail behind it.
-const ATT_MAX_B64 = 8_000_000;    // matches the server's per-file budget (~6 MB raw)
-const ATT_MAX_COUNT = 8;
-const ATT_MAX_TOTAL_B64 = 24_000_000; // ~18 MB of attachments per letter
+const ATT_MAX_B64 = 26_666_668;   // matches the server's per-file budget (~20 MB raw)
+const ATT_MAX_COUNT = 20;
+const ATT_MAX_TOTAL_B64 = 26_666_668; // ~20 MB of attachments per letter
 
 function fileToB64(file) {
   return new Promise((resolve, reject) => {
