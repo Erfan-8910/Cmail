@@ -15288,18 +15288,19 @@ var mailfolders_default = app6;
 
 // src/routes/admin.ts
 init_util();
+init_storage();
 var app7 = new Hono3();
 app7.get("/overview", requireAdmin, async (c) => {
-  const [users, addresses, emails, temp, storage, domains, notes, totp2] = await Promise.all([
+  const [users, addresses, emails, temp, domains, notes, totp2] = await Promise.all([
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM users").first(),
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM addresses").first(),
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM emails").first(),
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM addresses WHERE kind='temp'").first(),
-    c.env.DB.prepare("SELECT COALESCE(SUM(size),0) AS n FROM emails").first(),
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM domains WHERE active=1").first(),
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM email_notes").first(),
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM totp_entries").first()
   ]);
+  const used = await usage(c.env);
   return c.json({
     ok: true,
     overview: {
@@ -15307,7 +15308,7 @@ app7.get("/overview", requireAdmin, async (c) => {
       addresses: addresses?.n ?? 0,
       emails: emails?.n ?? 0,
       temp_addresses: temp?.n ?? 0,
-      storage_bytes: storage?.n ?? 0,
+      storage_bytes: used.used_bytes,
       domains: domains?.n ?? 0,
       notes: notes?.n ?? 0,
       totp_entries: totp2?.n ?? 0

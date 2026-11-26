@@ -70,9 +70,17 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 |---|
 | <img src="docs/img/en/switcher.png" width="620" alt="Account switcher — per-account mails, 2FA codes, unread badge, add account"> |
 
-| **One email, one page** — its own URL, back button and action bar; never a popup |
+| **One email, one page** — its own URL, back button and action bar; never a popup. The letter's own pictures render **in their place** — `cid:` references become real images, the cover art sits exactly where the sender put it |
 |---|
-| <img src="docs/img/en/reader.png" width="620" alt="Dedicated email page — back to inbox, older/newer, star, Print / PDF, note"> |
+| <img src="docs/img/en/reader.png" width="620" alt="Dedicated email page — back to inbox, older/newer, star, Print / PDF, note, inline cover art"> |
+
+| **The player takes the stage** — a song starts and the bar **rises from the bottom edge with a spring**: an aurora breathing behind the glass, an equalizer dancing with the sound, the letter's audio files as one playlist with next/prev, a wave seek, speed cycling, volume and the honest download — all from the bar itself |
+|---|
+| <img src="docs/img/en/player.png" width="620" alt="The audio player risen from the bottom edge — aurora glow, dancing equalizer, playlist, wave seek, speed and volume"> |
+
+| **The fuel gauge** — one D1 database is the whole disk, and the card owns it: a ring that draws itself in, bytes and percentage counting up, a segmented bar growing from zero, a live mini rail per kind, and the quota editor with the auto-clean permission |
+|---|
+| <img src="docs/img/en/storage.png" width="620" alt="Storage management — animated ring gauge, segmented bar, per-kind rows, quota editor"> |
 
 | **Mission control for your database** — a score ring that reads the database itself, connection, tables, cron heartbeat, mail flow; every problem carries its own fix button |
 |---|
@@ -102,9 +110,9 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 |---|
 | <img src="docs/img/en/light.png" width="620" alt="Daylight theme"> |
 
-| **The whole cockpit, in a shirt pocket** |
+| **The whole cockpit, in a shirt pocket** — and the player rides along: a letter's songs play right there, the risen bar docked above the rail |
 |---|
-| <img src="docs/img/en/mobile.png" width="300" alt="Mobile inbox"> |
+| <img src="docs/img/en/mobile.png" width="300" alt="Mobile inbox"> <img src="docs/img/en/mobile-player.png" width="300" alt="Mobile reader with the risen audio player">
 
 | **The front door** — centered card, living aurora, recovery guide built in |
 |---|
@@ -118,12 +126,13 @@ What you get is a personal mail space you genuinely own: the domain, the data, t
 
 ## What's new in 3.2.3 — the song finally lands, and the letter shows its own pictures
 
-3.2.3 finishes what 3.2.2's attachment rebuild started: two reports that survived the rebuild — the song that vanished on arrival, the letter's own pictures that never rendered in place — plus a player and a fuel gauge that learned to perform.
+3.2.3 finishes what 3.2.2's attachment rebuild started: two reports that survived the rebuild — the song that vanished on arrival, the letter's own pictures that never rendered in place — plus a player and a fuel gauge that learned to perform, and a dashboard that learned to tell one truth.
 
 - 🎵 **Music no longer vanishes on arrival.** 3.2.2 grew the storage to 8 files × 6 MB — and a song is 5–12 MB: the mail landed, the text was there, and the song was dropped AFTER the letter existed (the over-budget branch just `continue`d — not even a "refused" chip survived). The budget now matches Gmail's own ceiling: **20 files up to 20 MB each, 20 MB per letter** — songs, voice notes, long videos. And a file past the budget is no longer invisible: it gets its honest metadata row, and the studio names it with the dead chip. The composer and the server double-check the same numbers (Brevo's 20 MB total ceiling sets the out path).
 - 🖼️ **The letter's own pictures render in place — and on paper.** Two fixes to the 3.2.2 pipeline. First: the cid map keys kept the angle brackets postal-mime preserves (`<part1@host>`) while the lookup normalized only the reference side — the match never fired and the image was DELETED from the body ("attachments show separately, never inside the letter"). Both sides are stripped to bare ids now, whatever dress the Content-ID wears. Second: the print studio never rewrote cid refs at all, so the printed PDF kept broken boxes — the paper gets the same map now, plus a **gallery strip**: a plain-text letter's image attachments render as real figures in their own place under the body, and the certificate names a refused attachment honestly.
 - 🎛️ **The player learned to perform.** The audio bar rebuilt the Climind-W way: it **rises from the bottom edge with a spring**, an **aurora breathes behind the glass while the music plays**, a tiny **equalizer dances** with the sound (and stands still, honest, when paused), a **volume rail** joins on desktop, and the letter's audio files travel as **one playlist** — next/prev buttons, a ۲/۵ counter, and a song that ends hands the stage to the next one. Speed cycling, the wave seek and the honest download stay.
 - ⛽ **The fuel gauge learned to move.** The storage card is animated now: the **ring draws itself in** on mount, the **used bytes and the percentage count up**, the segmented bar **grows from zero**, every kind row carries its own **live mini rail** in its color, the state glow breathes behind the card, the full-disk border **pulses**, and the cleanup button spins while it works — all of it respectful of `prefers-reduced-motion`.
+- 🧭 **One truth for “storage used”.** The Settings tiles and the fuel gauge told two different stories about the same disk: the tile summed the **raw wire size** of every letter — a refused 30 MB FLAC that never touched D1 still weighed 30 MB — while the card measured what actually lives in the database. The tile now reads the **same honest bytes** the gauge does (bodies + stored payloads), so the number on top and the number in the card can never disagree again.
 
 Tested: `tsc` clean, i18n parity **938/938**, the security matrix **111/111** on a fresh install, the v3.2 feature E2E **22/22**, the v3.2.2 suite **29/29**, and the new v3.2.3 suite — a 20 MB chunked read-back byte-exact, refused files named honestly, cid matching across every dress of Content-ID, and the print document built with the cid map.
 

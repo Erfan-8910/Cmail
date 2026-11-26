@@ -137,12 +137,14 @@ ok(kinds.some((k) => k.kind === 'image' && k.bytes >= 100), 'image kind carries 
 ok(Array.isArray(st.data?.storage?.biggest), 'biggest letters listed');
 
 // ---------- 6. quota → low flag → banner → auto-clean ----------
-// plant 12 filler letters (~600 KB bodies each, staggered age) so a 10 MB
-// quota really pushes the gauge into the low zone and cleanup has targets
+// plant 24 filler letters (~600 KB bodies each, staggered age) so a quota of
+// used × 1.15 really pushes the gauge into the low band (80–97%) AND above
+// the 85% cleanup line — on a freshly wiped install the 10 MB quota floor
+// would otherwise clamp pct to ~81% and the cleanup would honestly free 0
 const oldQuota = st.data?.storage?.quota_mb;
 d1("DELETE FROM emails WHERE id LIKE 'eml_e2e_fill%'");
 const filler = [];
-for (let i = 0; i < 12; i++) {
+for (let i = 0; i < 24; i++) {
   filler.push({
     sql: `INSERT INTO emails (id, address_id, user_id, from_name, from_addr, to_addr, subject, preview, text_body, size, is_read, received_at, direction)
           VALUES (?, ?, ?, 'Filler', 'filler@example.net', ?, ?, 'f', ?, 600000, 1, ?, 'in')`,

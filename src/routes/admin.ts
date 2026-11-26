@@ -5,25 +5,31 @@ import { uid, now, clean, getSettings, setSetting, hashPassword, passwordStrong,
 import { requireAdmin, tokenFrom, clientIp, rateLimit } from '../auth';
 import { testProvider } from '../emailout';
 import { TABLES, EXPECTED } from '../tables';
+import { usage } from '../storage';
 
 const app = new Hono<AppEnv>();
 
 app.get('/overview', requireAdmin, async (c) => {
-  const [users, addresses, emails, temp, storage, domains, notes, totp] = await Promise.all([
+  const [users, addresses, emails, temp, domains, notes, totp] = await Promise.all([
     c.env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>(),
     c.env.DB.prepare('SELECT COUNT(*) AS n FROM addresses').first<{ n: number }>(),
     c.env.DB.prepare('SELECT COUNT(*) AS n FROM emails').first<{ n: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM addresses WHERE kind='temp'").first<{ n: number }>(),
-    c.env.DB.prepare('SELECT COALESCE(SUM(size),0) AS n FROM emails').first<{ n: number }>(),
     c.env.DB.prepare('SELECT COUNT(*) AS n FROM domains WHERE active=1').first<{ n: number }>(),
     c.env.DB.prepare('SELECT COUNT(*) AS n FROM email_notes').first<{ n: number }>(),
     c.env.DB.prepare('SELECT COUNT(*) AS n FROM totp_entries').first<{ n: number }>(),
   ]);
+  // v3.2.3 — the overview's "storage used" tile now reads the SAME honest
+  // metric the fuel gauge does: bytes actually stored in D1 (bodies + stored
+  // attachment payloads), not the raw wire size of letters. A refused 30 MB
+  // FLAC never touched the disk — summing its nominal size made the tile
+  // claim 31.9 MB while the card said 1.7 MB. One truth, two places.
+  const used = await usage(c.env);
   return c.json({
     ok: true,
     overview: {
       users: users?.n ?? 0, addresses: addresses?.n ?? 0, emails: emails?.n ?? 0,
-      temp_addresses: temp?.n ?? 0, storage_bytes: storage?.n ?? 0,
+      temp_addresses: temp?.n ?? 0, storage_bytes: used.used_bytes,
       domains: domains?.n ?? 0, notes: notes?.n ?? 0, totp_entries: totp?.n ?? 0,
     },
   });
